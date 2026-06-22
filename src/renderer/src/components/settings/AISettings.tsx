@@ -5,8 +5,12 @@ import {
 import { useTranslation } from 'react-i18next'
 import {
   AI_PROVIDERS,
+  DEFAULT_AGENT_MAX_TOKENS,
+  DEFAULT_AGENT_TEMPERATURE,
   DEFAULT_SETTINGS,
+  MAX_AGENT_MAX_TOKENS,
   MAX_AGENT_RUN_TIMEOUT_SECONDS,
+  MAX_AGENT_TEMPERATURE,
   type AIConfig,
   type AIProvider,
 } from '../../../../shared/types'
@@ -318,6 +322,24 @@ export function AISettings() {
       runTimeoutSeconds: Number.isFinite(seconds)
         ? seconds
         : DEFAULT_SETTINGS.agent.runTimeoutSeconds,
+    })
+  }
+
+  const handleAgentTemperatureChange = (value: string) => {
+    const temperature = Number(value)
+    void updateSettingsSection('ai', {
+      agentTemperature: Number.isFinite(temperature)
+        ? temperature
+        : DEFAULT_AGENT_TEMPERATURE,
+    })
+  }
+
+  const handleAgentMaxTokensChange = (value: string) => {
+    const maxTokens = Number(value)
+    void updateSettingsSection('ai', {
+      agentMaxTokens: Number.isFinite(maxTokens)
+        ? maxTokens
+        : DEFAULT_AGENT_MAX_TOKENS,
     })
   }
 
@@ -696,27 +718,63 @@ export function AISettings() {
         title={t('settings.agentRuntime')}
         description={t('settings.agentRuntimeDesc')}
       >
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">
-            {t('settings.agentRunTimeout')}
-          </label>
-          <div className="flex max-w-xs items-center gap-2">
+        <div className="grid gap-4 md:grid-cols-3">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">
+              {t('settings.agentRunTimeout')}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={MAX_AGENT_RUN_TIMEOUT_SECONDS}
+                step={1}
+                value={agent.runTimeoutSeconds}
+                onChange={(e) => handleAgentRunTimeoutChange(e.target.value)}
+                className={`${inputClass} flex-1`}
+              />
+              <span className="text-text-secondary dark:text-text-dark-secondary text-sm">
+                {t('settings.agentRunTimeoutUnit')}
+              </span>
+            </div>
+            <p className="text-text-tertiary mt-1 text-xs">
+              {t('settings.agentRunTimeoutDesc')}
+            </p>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">
+              {t('settings.agentTemperature')}
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={MAX_AGENT_TEMPERATURE}
+              step={0.1}
+              value={ai.agentTemperature ?? DEFAULT_AGENT_TEMPERATURE}
+              onChange={(e) => handleAgentTemperatureChange(e.target.value)}
+              className={inputClass}
+            />
+            <p className="text-text-tertiary mt-1 text-xs">
+              {t('settings.agentTemperatureDesc')}
+            </p>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">
+              {t('settings.agentMaxTokens')}
+            </label>
             <input
               type="number"
               min={1}
-              max={MAX_AGENT_RUN_TIMEOUT_SECONDS}
-              step={1}
-              value={agent.runTimeoutSeconds}
-              onChange={(e) => handleAgentRunTimeoutChange(e.target.value)}
-              className={`${inputClass} flex-1`}
+              max={MAX_AGENT_MAX_TOKENS}
+              step={256}
+              value={ai.agentMaxTokens ?? DEFAULT_AGENT_MAX_TOKENS}
+              onChange={(e) => handleAgentMaxTokensChange(e.target.value)}
+              className={inputClass}
             />
-            <span className="text-text-secondary dark:text-text-dark-secondary text-sm">
-              {t('settings.agentRunTimeoutUnit')}
-            </span>
+            <p className="text-text-tertiary mt-1 text-xs">
+              {t('settings.agentMaxTokensDesc')}
+            </p>
           </div>
-          <p className="text-text-tertiary mt-1 text-xs">
-            {t('settings.agentRunTimeoutDesc')}
-          </p>
         </div>
       </SectionCard>
 

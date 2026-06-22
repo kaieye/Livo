@@ -49,6 +49,8 @@ const TRANSLATION_LANGUAGE_VALUES = [
   'ru',
   'ar',
 ]
+const AGENT_TEMPERATURE_MAX = 2
+const AGENT_MAX_TOKENS_MAX = 32000
 
 function hasAnyArg(args: AgentToolArgs): boolean {
   return Object.keys(args).length > 0
@@ -66,6 +68,8 @@ function sanitizeAISettings(ai: AIConfig): Record<string, unknown> {
     model: ai.model,
     baseUrl: ai.baseUrl || '',
     enableSystemPrompt: !!ai.enableSystemPrompt,
+    agentTemperature: ai.agentTemperature,
+    agentMaxTokens: ai.agentMaxTokens,
     apiKeyConfigured,
   }
 }
@@ -97,7 +101,7 @@ export function buildGetSettingsTool(): AgentTool {
       const message =
         `通用设置：语言 ${s.general.language}，主题 ${s.general.theme}，强调色 ${s.general.accentColor}，刷新间隔 ${s.general.refreshInterval} 分钟，图片代理 ${s.general.imageProxy ? '开启' : '关闭'}。\n` +
         `翻译：${s.translation.enabled ? '开启' : '关闭'}，目标语言 ${s.translation.targetLanguage}，自动翻译 ${s.translation.autoTranslate ? '开启' : '关闭'}。\n` +
-        `AI 运行配置：${s.ai.provider} / ${s.ai.model}，API Key ${((s.ai.apiKeys?.[s.ai.provider] || s.ai.apiKey || '') as string).trim() ? '已配置' : '未配置'}。\n` +
+        `AI 运行配置：${s.ai.provider} / ${s.ai.model}，Agent temperature ${s.ai.agentTemperature ?? 0.5}，Agent max tokens ${s.ai.agentMaxTokens ?? 2000}，API Key ${((s.ai.apiKeys?.[s.ai.provider] || s.ai.apiKey || '') as string).trim() ? '已配置' : '未配置'}。\n` +
         `Agent 权限：读取 ${s.agentPermissions.allowRead ? '开' : '关'}，导航 ${s.agentPermissions.allowNavigate ? '开' : '关'}，写入 ${s.agentPermissions.allowMutate ? '开' : '关'}，破坏性 ${s.agentPermissions.allowDestructive ? '开' : '关'}，外部 ${s.agentPermissions.allowExternal ? '开' : '关'}。`
       return {
         status: 'success',
@@ -316,6 +320,18 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
         description: 'AI 对话人格提示，不应包含密钥',
         maxLength: LONG_TEXT_MAX_LENGTH,
       },
+      agentTemperature: {
+        type: 'number',
+        description: 'Agent 模型采样温度，0 更稳定，2 更发散',
+        minimum: 0,
+        maximum: AGENT_TEMPERATURE_MAX,
+      },
+      agentMaxTokens: {
+        type: 'number',
+        description: 'Agent 单次模型回复最大 token 数',
+        minimum: 1,
+        maximum: AGENT_MAX_TOKENS_MAX,
+      },
     }),
     confirmationTitle: '确认更新 AI 运行配置',
     confirmationMessage:
@@ -389,6 +405,14 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
           typeof args['chatPersonaPrompt'] === 'string'
             ? (args['chatPersonaPrompt'] as string)
             : current.chatPersonaPrompt,
+        agentTemperature:
+          typeof args['agentTemperature'] === 'number'
+            ? (args['agentTemperature'] as number)
+            : current.agentTemperature,
+        agentMaxTokens:
+          typeof args['agentMaxTokens'] === 'number'
+            ? Math.floor(args['agentMaxTokens'] as number)
+            : current.agentMaxTokens,
       }
       const saved = await applySettingsUpdate({ ai: next })
       return {

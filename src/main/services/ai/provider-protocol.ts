@@ -45,6 +45,16 @@ export function isOpenAICompatible(config: AIConfig): boolean {
   return detectProviderFormat(config) !== 'anthropic'
 }
 
+/** Whether the configured endpoint can receive OpenAI-style function tools. */
+export function supportsToolCalls(config: AIConfig): boolean {
+  return isOpenAICompatible(config)
+}
+
+/** Whether the configured endpoint can be attempted with chat-completion streams. */
+export function supportsStreaming(config: AIConfig): boolean {
+  return isOpenAICompatible(config)
+}
+
 interface ErrorLike {
   status?: number
   code?: string

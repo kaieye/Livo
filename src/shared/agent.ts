@@ -120,16 +120,26 @@ export type AgentToolEventType =
   | 'tool_completed'
   | 'tool_failed'
   | 'confirmation_required'
+  | 'content_delta'
+  | 'round_started'
+  | 'round_finished'
 
 export interface AgentToolExecutionEvent {
   type: AgentToolEventType
-  toolCallId: string
-  toolName: string
-  args: string
+  toolCallId?: string
+  toolName?: string
+  args?: string
   message?: string
   resultSummary?: string
   elapsedMs?: number
   confirmation?: AgentConfirmationRequest
+  round?: number
+  delta?: string
+  content?: string
+  llmMs?: number
+  toolMs?: number
+  toolCalls?: number
+  firstTokenMs?: number
 }
 
 export interface AgentPendingConfirmation {
@@ -144,6 +154,7 @@ export interface AgentRoundMetric {
   llmMs: number
   toolMs: number
   toolCalls: number
+  firstTokenMs?: number
 }
 
 export interface AgentRunMetrics {

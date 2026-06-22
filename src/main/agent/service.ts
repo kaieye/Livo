@@ -6,6 +6,7 @@ import {
   type AppSettings,
 } from '@shared'
 import {
+  agentRunFailureToolRounds,
   runAgentCore,
   resumeAgentCore,
   type AgentContinuationState,
@@ -271,6 +272,7 @@ class AgentServiceImpl {
     error: unknown,
     traceId = this.createTraceId(requestId, startedAt),
   ): void {
+    const toolRounds = agentRunFailureToolRounds(error)
     const record: AgentTraceRecord = {
       traceId,
       sessionId: requestId,
@@ -279,7 +281,15 @@ class AgentServiceImpl {
       promptSummary: prompt.slice(0, 120),
       finalText: errorFinalText(error),
       status: 'failed',
-      toolCalls: [],
+      toolCalls: toolRounds.map((round, index) => ({
+        id: `${requestId}-${index}`,
+        toolName: round.name,
+        argsPreview: (round.args || '').slice(0, 200),
+        status: round.status || 'success',
+        resultSummary: round.resultSummary,
+        elapsedMs: round.elapsedMs || 0,
+        at: startedAt,
+      })),
     }
     this.saveTraceRecord(record)
   }

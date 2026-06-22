@@ -19,6 +19,9 @@ vi.mock('../services/system/settings-provider', () => ({
 vi.mock('./loop', () => ({
   runAgentCore: mocks.runAgentCore,
   resumeAgentCore: mocks.resumeAgentCore,
+  agentRunFailureToolRounds: (error: unknown) =>
+    (error as { agentToolRounds?: unknown[] } | undefined)?.agentToolRounds ??
+    [],
 }))
 
 vi.mock('./trace-store', () => ({
@@ -354,6 +357,51 @@ describe('agentService', () => {
       }),
     )
     expect(agentService.abort('request-6')).toBe(false)
+  })
+
+  it('saves failed traces with tool rounds captured before the failure', async () => {
+    const error = new Error(
+      'Agent 运行超时（已达到 1 秒上限）。请在「设置 > AI」调高 Run timeout，或缩短本次请求后重试。',
+    ) as Error & {
+      agentToolRounds: AgentRunResult['toolRounds']
+    }
+    error.name = 'AgentRunDeadlineError'
+    error.agentToolRounds = [
+      {
+        name: 'search_and_open_entry',
+        args: '{"query":"Rust async"}',
+        resultSummary: '已打开最匹配文章',
+        status: 'success',
+        elapsedMs: 42,
+      },
+    ]
+    mocks.runAgentCore.mockRejectedValueOnce(error)
+    const agentService = await loadService()
+
+    await expect(
+      agentService.run({
+        requestId: 'request-timeout-after-tool',
+        prompt: '搜索后总结',
+      }),
+    ).rejects.toThrow('Agent 运行超时')
+
+    expect(mocks.saveTrace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'request-timeout-after-tool',
+        promptSummary: '搜索后总结',
+        finalText: expect.stringContaining('Agent 运行超时'),
+        status: 'failed',
+        toolCalls: [
+          expect.objectContaining({
+            toolName: 'search_and_open_entry',
+            argsPreview: '{"query":"Rust async"}',
+            status: 'success',
+            resultSummary: '已打开最匹配文章',
+            elapsedMs: 42,
+          }),
+        ],
+      }),
+    )
   })
 
   it('saves failed resume traces under the original request and trace id', async () => {

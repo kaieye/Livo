@@ -79,6 +79,41 @@ export function buildContextFallback(
   return trimContextFallback(ctx)
 }
 
+/**
+ * Builds the small context injected for providers that can call tools. The
+ * detailed feed and entry lists remain available through get_session_overview.
+ */
+export function buildCompactContextFallback(
+  pageContext = '',
+  permissions?: AgentPermissionSettings,
+): string {
+  if (!isAgentCapabilityAllowed('read', permissions)) {
+    return '当前 Agent 权限未允许读取本地订阅上下文。'
+  }
+
+  let ctx = ''
+  const trimmedPageContext = truncateText(pageContext, MAX_PAGE_CONTEXT_CHARS)
+  if (trimmedPageContext) {
+    ctx += `当前页面上下文：\n${trimmedPageContext}\n\n`
+  }
+
+  try {
+    const feeds = getDb().feeds.getAllFeeds()
+    const stats = getDb().maintenance.getDatabaseStats()
+    const unread = Math.max(0, stats.totalEntries - stats.readEntries)
+    ctx += [
+      `订阅源总数: ${feeds.length}`,
+      `文章总数: ${stats.totalEntries}`,
+      `未读文章总计: ${unread}`,
+      '如需完整订阅列表、今日更新或文章详情，请调用 get_session_overview 或其他读取工具。',
+    ].join('\n')
+  } catch {
+    ctx += '无法获取订阅统计；如需数据请调用读取工具。'
+  }
+
+  return trimContextFallback(ctx)
+}
+
 function truncateText(value: string | undefined, maxChars: number): string {
   const text = (value || '').trim()
   if (text.length <= maxChars) return text

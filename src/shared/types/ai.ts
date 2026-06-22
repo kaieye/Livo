@@ -13,6 +13,8 @@ export interface AIConfig {
   chatPersonaPrompt?: string
   summaryPrompt?: string
   translationPrompt?: string
+  agentTemperature?: number
+  agentMaxTokens?: number
 }
 
 export interface AISemanticFilterInput {

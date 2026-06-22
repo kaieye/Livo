@@ -36,7 +36,14 @@ async function loadAIChatStore() {
   vi.stubGlobal('window', { api, localStorage: storage })
 
   const mod = await import('./ai-chat-store')
-  return { useAIChatStore: mod.useAIChatStore, api, storage, warn }
+  const settingsMod = await import('./settings-store')
+  return {
+    useAIChatStore: mod.useAIChatStore,
+    useSettingsStore: settingsMod.useSettingsStore,
+    api,
+    storage,
+    warn,
+  }
 }
 
 describe('useAIChatStore.cancelPending', () => {
@@ -202,5 +209,70 @@ describe('useAIChatStore.cancelPending', () => {
     expect(api.agent.cancelPending).toHaveBeenCalledWith('pending-load')
     expect(useAIChatStore.getState().pendingConfirmation).toBeNull()
     expect(useAIChatStore.getState().pendingId).toBeNull()
+  })
+
+  it('clears loading state and shows a stable system error when an agent run fails', async () => {
+    const { useAIChatStore, useSettingsStore, api } = await loadAIChatStore()
+    useSettingsStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        ai: {
+          ...state.settings.ai,
+          apiKey: 'sk-test',
+          model: 'gpt-test',
+        },
+      },
+    }))
+    api.agent.run.mockResolvedValueOnce({
+      success: false,
+      error:
+        'Agent 运行超时（已达到 1 秒上限）。请在「设置 > AI」调高 Run timeout，或缩短本次请求后重试。',
+    })
+
+    await useAIChatStore.getState().sendMessage('卡住的请求', 'entry context')
+
+    const state = useAIChatStore.getState()
+    expect(api.agent.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: '卡住的请求',
+        pageContext: 'entry context',
+      }),
+    )
+    expect(state.isLoading).toBe(false)
+    expect(state.isConfirming).toBe(false)
+    expect(state.timerVisible).toBe(false)
+    expect(state.currentRequestId).toBeNull()
+    expect(state.streamingContent).toBe('')
+    expect(state.messages).toHaveLength(2)
+    expect(state.messages[0]).toMatchObject({
+      role: 'user',
+      content: '卡住的请求',
+    })
+    expect(state.messages[1]).toMatchObject({
+      role: 'system',
+      content: expect.stringContaining('Agent 运行超时'),
+    })
+  })
+
+  it('applies agent content delta events directly to streaming content', async () => {
+    const { useAIChatStore } = await loadAIChatStore()
+
+    useAIChatStore.getState().applyToolEvent({
+      type: 'content_delta',
+      round: 0,
+      delta: 'hello',
+      content: 'hello',
+    })
+    useAIChatStore.getState().applyToolEvent({
+      type: 'content_delta',
+      round: 0,
+      delta: ' world',
+      content: 'hello world',
+    })
+
+    const state = useAIChatStore.getState()
+    expect(state.streamingContent).toBe('hello world')
+    expect(state.toolStatusItems).toEqual([])
+    expect(state.showToolBanner).toBe(false)
   })
 })

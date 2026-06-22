@@ -3,10 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { mergeSettings, normalizeSettings } from './settings'
 import {
   DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+  DEFAULT_AGENT_MAX_TOKENS,
+  DEFAULT_AGENT_TEMPERATURE,
   DEFAULT_SETTINGS,
   FEED_COLUMN_DEFAULTS,
   FeedViewType,
+  MAX_AGENT_MAX_TOKENS,
   MAX_AGENT_RUN_TIMEOUT_SECONDS,
+  MAX_AGENT_TEMPERATURE,
 } from './types'
 
 describe('settings normalization', () => {
@@ -42,6 +46,10 @@ describe('settings normalization', () => {
       agent: {
         runTimeoutSeconds: 0,
       } as any,
+      ai: {
+        agentTemperature: 99,
+        agentMaxTokens: Number.POSITIVE_INFINITY,
+      } as any,
       general: {
         refreshInterval: Number.POSITIVE_INFINITY,
         fontSize: -1,
@@ -62,6 +70,8 @@ describe('settings normalization', () => {
     expect(normalized.agent.runTimeoutSeconds).toBe(
       DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
     )
+    expect(normalized.ai.agentTemperature).toBe(MAX_AGENT_TEMPERATURE)
+    expect(normalized.ai.agentMaxTokens).toBe(DEFAULT_AGENT_MAX_TOKENS)
     expect(normalized.general.refreshInterval).toBe(30)
     expect(normalized.general.fontSize).toBe(12)
     expect(normalized.general.contentMaxWidth).toBe(1400)
@@ -87,6 +97,26 @@ describe('settings normalization', () => {
         agent: { runTimeoutSeconds: Number.MAX_SAFE_INTEGER },
       } as any).agent.runTimeoutSeconds,
     ).toBe(MAX_AGENT_RUN_TIMEOUT_SECONDS)
+  })
+
+  it('keeps valid custom agent model parameters and caps excessive values', () => {
+    const normalized = normalizeSettings({
+      ai: {
+        agentTemperature: 1.25,
+        agentMaxTokens: 4096.9,
+      } as any,
+    })
+    expect(normalized.ai.agentTemperature).toBe(1.25)
+    expect(normalized.ai.agentMaxTokens).toBe(4096)
+
+    const capped = normalizeSettings({
+      ai: {
+        agentTemperature: Number.MAX_SAFE_INTEGER,
+        agentMaxTokens: Number.MAX_SAFE_INTEGER,
+      } as any,
+    })
+    expect(capped.ai.agentTemperature).toBe(MAX_AGENT_TEMPERATURE)
+    expect(capped.ai.agentMaxTokens).toBe(MAX_AGENT_MAX_TOKENS)
   })
 
   it('merges nested sections without dropping unrelated keys', () => {
@@ -126,6 +156,8 @@ describe('settings normalization', () => {
     expect(DEFAULT_SETTINGS.agent.runTimeoutSeconds).toBe(
       DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
     )
+    expect(DEFAULT_SETTINGS.ai.agentTemperature).toBe(DEFAULT_AGENT_TEMPERATURE)
+    expect(DEFAULT_SETTINGS.ai.agentMaxTokens).toBe(DEFAULT_AGENT_MAX_TOKENS)
     expect(DEFAULT_SETTINGS.general.feedColumns).toEqual(FEED_COLUMN_DEFAULTS)
     expect(DEFAULT_SETTINGS.general.feedColumns).not.toBe(FEED_COLUMN_DEFAULTS)
   })

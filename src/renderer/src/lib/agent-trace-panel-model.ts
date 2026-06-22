@@ -6,9 +6,15 @@ import type {
 
 type TraceStatus = AgentTraceStatus | string
 type ToolLabeler = (toolName: string) => string
+type FailureTrace = Pick<AgentTraceRecord, 'status' | 'toolCalls'> &
+  Partial<Pick<AgentTraceRecord, 'finalText'>>
 
 function identityToolLabel(toolName: string): string {
   return toolName
+}
+
+function isTimeoutFailureText(text: string | undefined): boolean {
+  return /Agent 运行超时|timeout|timed out|超时/i.test(text || '')
 }
 
 export function formatAgentTraceTime(timestamp: number): string {
@@ -60,23 +66,28 @@ export function failedAgentTraceTool(
 export function agentTraceFailureReason(
   trace: Pick<AgentTraceRecord, 'finalText'>,
 ): string {
-  const text = trace.finalText.trim()
+  const text = trace.finalText.trim().replace(/^AgentRunDeadlineError:\s*/, '')
   return text || '未记录错误原因'
 }
 
 export function agentTraceFailureStage(
-  trace: Pick<AgentTraceRecord, 'status' | 'toolCalls'>,
+  trace: FailureTrace,
   toolLabelOf: ToolLabeler = identityToolLabel,
 ): string {
   if (trace.status !== 'failed') return ''
   const failedTool = failedAgentTraceTool(trace)
   if (failedTool) return `工具执行阶段：${toolLabelOf(failedTool.toolName)}`
-  if (trace.toolCalls.length > 0) return 'Agent 收尾阶段'
+  if (trace.toolCalls.length > 0) {
+    return isTimeoutFailureText(trace.finalText)
+      ? 'Agent 收尾超时'
+      : 'Agent 收尾阶段'
+  }
+  if (isTimeoutFailureText(trace.finalText)) return '模型调用或启动超时'
   return '模型调用或启动阶段'
 }
 
 export function agentTraceFailureContext(
-  trace: Pick<AgentTraceRecord, 'status' | 'toolCalls'>,
+  trace: FailureTrace,
   toolLabelOf: ToolLabeler = identityToolLabel,
 ): string {
   if (trace.status !== 'failed') return ''
@@ -87,7 +98,12 @@ export function agentTraceFailureContext(
     )}`
   }
   if (trace.toolCalls.length > 0) {
-    return `已记录 ${trace.toolCalls.length} 个工具调用，未定位到失败工具`
+    return isTimeoutFailureText(trace.finalText)
+      ? `已记录 ${trace.toolCalls.length} 个工具调用，模型收尾未完成`
+      : `已记录 ${trace.toolCalls.length} 个工具调用，未定位到失败工具`
+  }
+  if (isTimeoutFailureText(trace.finalText)) {
+    return '未进入工具调用，模型请求按运行超时结束'
   }
   return '未进入工具调用'
 }

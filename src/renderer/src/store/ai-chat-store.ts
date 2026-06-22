@@ -154,6 +154,25 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
 
   function finishAssistantResponse(text: string): void {
     set({ isLoading: false, isConfirming: false, currentRequestId: null })
+    const streamedContent = get().streamingContent
+    if (streamedContent) {
+      typewriter.cancel()
+      const assistantMessage: ChatMessage = {
+        id: genId(),
+        role: 'assistant',
+        content: text || streamedContent,
+        timestamp: Date.now(),
+      }
+      set((state) => ({
+        messages: [...state.messages, assistantMessage],
+        streamingContent: '',
+      }))
+      stopTimer()
+      saveCurrentSession()
+      dismissToolBannerSoon()
+      return
+    }
+
     typewriter.start(text, {
       onTick: (displayed) => set({ streamingContent: displayed }),
       onDone: () => {
@@ -248,7 +267,20 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
     currentRequestId: null,
 
     applyToolEvent: (event) => {
-      const key = event.toolCallId || `${event.toolName}-${Date.now()}`
+      if (event.type === 'content_delta') {
+        if (event.delta) {
+          set((state) => ({
+            streamingContent: `${state.streamingContent}${event.delta}`,
+          }))
+        }
+        return
+      }
+      if (event.type === 'round_started' || event.type === 'round_finished') {
+        return
+      }
+      if (!event.toolName) return
+      const toolName = event.toolName
+      const key = event.toolCallId || `${toolName}-${Date.now()}`
       const status = toolTraceStatus(event.type)
       set((state) => {
         const items = state.toolStatusItems.slice()
@@ -258,8 +290,8 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
             ? items[index]
             : {
                 key,
-                label: aiChatToolLabelOf(event.toolName),
-                name: event.toolName,
+                label: aiChatToolLabelOf(toolName),
+                name: toolName,
                 status,
               }
         const next: ToolStatusItem = {

@@ -85,6 +85,8 @@ describe('agent tool schema boundaries', () => {
       { systemPromptTemplate: 'x'.repeat(2049) },
       /长度不能大于/,
     ],
+    ['update_ai_runtime_settings', { agentTemperature: 2.1 }, /不能大于/],
+    ['update_ai_runtime_settings', { agentMaxTokens: 32001 }, /不能大于/],
   ])('rejects invalid %s args before execution', (toolName, args, expected) => {
     const tool = toolByName(toolName)
     expect(validateToolArgs(tool.inputSchema, args)).toMatch(expected)
@@ -114,7 +116,11 @@ describe('agent tool schema boundaries', () => {
     ['open_video_player', { videoUrl: 'https://example.com/movie.mp4' }],
     ['open_image_viewer', { imageUrl: 'https://example.com/image.png' }],
     ['update_general_settings', { refreshInterval: 60 }],
-    ['update_ai_runtime_settings', { model: 'gpt-4o-mini' }],
+    [
+      'update_ai_runtime_settings',
+      { model: 'gpt-4o-mini', agentTemperature: 0.7, agentMaxTokens: 4096 },
+    ],
+    ['get_session_overview', {}],
   ])('accepts boundary-valid %s args', (toolName, args) => {
     const tool = toolByName(toolName)
     expect(validateToolArgs(tool.inputSchema, args)).toBe('')

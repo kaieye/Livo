@@ -21,6 +21,7 @@ import {
   objectParams,
 } from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
+import { buildContextFallback } from '../context-builder'
 
 const VIEW_NAMES = ['文章', '社交', '视频', '图片']
 
@@ -53,6 +54,24 @@ export function buildListSubscribedFeedsTool(): AgentTool {
         status: 'success',
         message: `共订阅 ${feeds.length} 个源：\n\n${lines}`,
         data: { count: feeds.length, feeds: feeds as unknown as object },
+      }
+    },
+  })
+}
+
+export function buildGetSessionOverviewTool(): AgentTool {
+  return defineReadTool({
+    name: 'get_session_overview',
+    title: '查询会话概览',
+    description:
+      '获取当前订阅源列表、今日更新和未读统计的完整上下文。回答全局订阅、今日更新、跨源概览问题前应先调用。',
+    inputSchema: emptyParams(),
+    execute: async (context): Promise<AgentToolResult> => {
+      const overview = buildContextFallback('', context.agentPermissions)
+      return {
+        status: 'success',
+        message: overview,
+        data: { overview },
       }
     },
   })

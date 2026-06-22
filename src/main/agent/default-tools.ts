@@ -4,6 +4,7 @@ import { agentToolRegistryProvider } from './registry-provider'
 import {
   buildAddFeedTool,
   buildGetFeedEntriesTool,
+  buildGetSessionOverviewTool,
   buildListSubscribedFeedsTool,
   buildRefreshAllSubscriptionsTool,
   buildRefreshSubscriptionTool,
@@ -59,6 +60,7 @@ import { buildWebSearchTool } from './tools/external-tools'
 export function buildAllAgentTools(): AgentTool[] {
   return [
     // Feed
+    buildGetSessionOverviewTool(),
     buildListSubscribedFeedsTool(),
     buildGetFeedEntriesTool(),
     buildAddFeedTool(),

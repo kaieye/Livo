@@ -14,7 +14,8 @@ vi.mock('../services/ai/ai-client', () => ({
 }))
 
 vi.mock('./context-builder', () => ({
-  buildContextFallback: vi.fn(() => ''),
+  buildCompactContextFallback: vi.fn(() => 'COMPACT_CONTEXT'),
+  buildContextFallback: vi.fn(() => 'FULL_CONTEXT'),
 }))
 
 // `default-tools.ts` registers a real builder at import time that pulls in
@@ -45,10 +46,15 @@ vi.mock('./default-tools', () => ({
 import {
   AGENT_RUN_TIMEOUT_MS,
   MAX_AGENT_ROUNDS,
+  agentRunFailureToolRounds,
   resumeAgentCore,
   runAgentCore,
 } from './loop'
 import { createOpenAIClient } from '../services/ai/ai-client'
+import {
+  buildCompactContextFallback,
+  buildContextFallback,
+} from './context-builder'
 
 const fakeConfig: AIConfig = {
   provider: 'openai',
@@ -69,6 +75,24 @@ function makeClient(responses: unknown[]) {
         }),
       },
     },
+  }
+}
+
+async function* makeStream(chunks: unknown[]) {
+  for (const chunk of chunks) {
+    yield chunk
+  }
+}
+
+function streamChunk(delta: Record<string, unknown>): unknown {
+  return {
+    choices: [
+      {
+        delta,
+        finish_reason: null,
+        index: 0,
+      },
+    ],
   }
 }
 
@@ -210,6 +234,8 @@ const noAgentPermissions: AgentPermissionSettings = {
 beforeEach(() => {
   agentToolRegistryProvider.resetForTests()
   vi.mocked(createOpenAIClient).mockReset()
+  vi.mocked(buildCompactContextFallback).mockClear()
+  vi.mocked(buildContextFallback).mockClear()
 })
 
 describe('runAgentCore', () => {
@@ -228,6 +254,144 @@ describe('runAgentCore', () => {
     expect(result.toolRounds).toEqual([])
     expect(result.metrics.llmMs).toBeGreaterThanOrEqual(0)
     expect(result.metrics.rounds).toHaveLength(1)
+  })
+
+  it('uses compact context for tool-calling providers with read permission', async () => {
+    agentToolRegistryProvider.setBuilder(() => [makeTool()])
+    const client = makeClient([textOnlyResponse])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    await runAgentCore({
+      prompt: 'hi',
+      aiConfig: fakeConfig,
+      pageContext: 'page',
+    })
+
+    expect(buildCompactContextFallback).toHaveBeenCalledWith(
+      'page',
+      expect.any(Object),
+    )
+    expect(buildContextFallback).not.toHaveBeenCalled()
+    const firstCallOptions = client.chat.completions.create.mock
+      .calls[0]?.[0] as {
+      messages: Array<{
+        role: string
+        content?: string
+      }>
+    }
+    expect(firstCallOptions.messages[0]?.content).toContain('COMPACT_CONTEXT')
+    expect(firstCallOptions.messages[0]?.content).toContain(
+      'get_session_overview',
+    )
+  })
+
+  it('keeps the full context fallback when tools are unavailable', async () => {
+    const client = makeClient([textOnlyResponse])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    await runAgentCore({
+      prompt: 'hi',
+      aiConfig: fakeConfig,
+      permissions: noAgentPermissions,
+    })
+
+    expect(buildContextFallback).toHaveBeenCalled()
+    expect(buildCompactContextFallback).not.toHaveBeenCalled()
+  })
+
+  it('streams content deltas from a streaming model response', async () => {
+    const client = makeClient([
+      makeStream([
+        streamChunk({ role: 'assistant' }),
+        streamChunk({ content: 'hello ' }),
+        streamChunk({ content: 'back' }),
+      ]),
+    ])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const events: AgentToolExecutionEvent[] = []
+    const result = await runAgentCore({
+      prompt: 'hi',
+      aiConfig: fakeConfig,
+      onToolEvent: (event) => events.push(event),
+    })
+
+    expect(result.status).toBe('completed')
+    expect(result.text).toBe('hello back')
+    expect(
+      events
+        .filter((event) => event.type === 'content_delta')
+        .map((event) => event.delta),
+    ).toEqual(['hello ', 'back'])
+    expect(events.some((event) => event.type === 'round_started')).toBe(true)
+    expect(events.some((event) => event.type === 'round_finished')).toBe(true)
+    expect(result.metrics.rounds[0].firstTokenMs).toBeGreaterThanOrEqual(0)
+    expect(client.chat.completions.create.mock.calls[0]?.[0]).toMatchObject({
+      stream: true,
+      temperature: 0.5,
+      max_tokens: 2000,
+    })
+  })
+
+  it('passes configured agent sampling parameters to the model', async () => {
+    const client = makeClient([textOnlyResponse])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    await runAgentCore({
+      prompt: 'hi',
+      aiConfig: {
+        ...fakeConfig,
+        agentTemperature: 0.2,
+        agentMaxTokens: 4096,
+      },
+    })
+
+    expect(client.chat.completions.create.mock.calls[0]?.[0]).toMatchObject({
+      temperature: 0.2,
+      max_tokens: 4096,
+    })
+  })
+
+  it('accumulates streamed tool-call deltas before executing tools', async () => {
+    agentToolRegistryProvider.setBuilder(() => [makeTool()])
+    const client = makeClient([
+      makeStream([
+        streamChunk({
+          tool_calls: [
+            {
+              index: 0,
+              id: 'call-1',
+              type: 'function',
+              function: { name: 'read_thing', arguments: '{"id":"' },
+            },
+          ],
+        }),
+        streamChunk({
+          tool_calls: [
+            {
+              index: 0,
+              function: { arguments: 'a"}' },
+            },
+          ],
+        }),
+      ]),
+      textOnlyResponse,
+    ])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const result = await runAgentCore({
+      prompt: 'lookup a',
+      aiConfig: fakeConfig,
+      onToolEvent: () => undefined,
+    })
+
+    expect(result.status).toBe('completed')
+    expect(result.toolRounds).toHaveLength(1)
+    expect(result.toolRounds[0]).toMatchObject({
+      name: 'read_thing',
+      args: '{"id":"a"}',
+      status: 'success',
+    })
   })
 
   it('executes a tool then completes when the tool needs no confirmation', async () => {
@@ -447,6 +611,7 @@ describe('runAgentCore', () => {
       prompt,
       aiConfig: fakeConfig,
       onToolEvent: (event) => events.push(event),
+      timeoutMs: 5_000,
     })
 
     expect(result.status).toBe('completed')
@@ -457,10 +622,11 @@ describe('runAgentCore', () => {
       name: 'search_and_open_entry',
       status: 'success',
     })
-    expect(events.map((event) => event.type)).toEqual([
-      'tool_started',
-      'tool_completed',
-    ])
+    expect(
+      events
+        .filter((event) => event.type.startsWith('tool_'))
+        .map((event) => event.type),
+    ).toEqual(['tool_started', 'tool_completed'])
     const firstCallOptions = client.chat.completions.create.mock
       .calls[0]?.[0] as {
       messages: Array<{ role: string; content?: string }>
@@ -518,6 +684,7 @@ describe('runAgentCore', () => {
     const firstResult = await runAgentCore({
       prompt: '收藏这篇文章',
       aiConfig: fakeConfig,
+      timeoutMs: 5_000,
     })
 
     expect(firstResult.status).toBe('confirmation_required')
@@ -532,6 +699,7 @@ describe('runAgentCore', () => {
     const resumed = await resumeAgentCore({
       continuation: continuation!,
       aiConfig: fakeConfig,
+      timeoutMs: 5_000,
     })
 
     expect(resumed.status).toBe('completed')
@@ -596,6 +764,7 @@ describe('runAgentCore', () => {
       const firstResult = await runAgentCore({
         prompt,
         aiConfig: fakeConfig,
+        timeoutMs: 5_000,
       })
 
       expect(firstResult.status).toBe('confirmation_required')
@@ -607,6 +776,7 @@ describe('runAgentCore', () => {
       const resumed = await resumeAgentCore({
         continuation: continuation!,
         aiConfig: fakeConfig,
+        timeoutMs: 5_000,
       })
 
       expect(resumed.status).toBe('completed')
@@ -951,7 +1121,8 @@ describe('runAgentCore', () => {
       aiConfig: fakeConfig,
     })
     const assertion = expect(runPromise).rejects.toMatchObject({
-      name: 'TimeoutError',
+      name: 'AgentRunDeadlineError',
+      message: expect.stringContaining('Agent 运行超时'),
     })
     await vi.advanceTimersByTimeAsync(AGENT_RUN_TIMEOUT_MS - 1)
     expect(observedSignal?.aborted).toBe(false)
@@ -988,7 +1159,8 @@ describe('runAgentCore', () => {
       timeoutMs: 25,
     })
     const assertion = expect(runPromise).rejects.toMatchObject({
-      name: 'TimeoutError',
+      name: 'AgentRunDeadlineError',
+      message: expect.stringContaining('25ms'),
     })
     await vi.advanceTimersByTimeAsync(25)
 
@@ -1021,5 +1193,50 @@ describe('runAgentCore', () => {
     expect(result.status).toBe('completed')
     expect(observedDeadline).toBeGreaterThanOrEqual(before + 4900)
     expect(observedDeadline).toBeLessThanOrEqual(Date.now() + 5000)
+  })
+
+  it('keeps completed tool rounds on the error when a later model call times out', async () => {
+    agentToolRegistryProvider.setBuilder(() => [makeTool()])
+
+    const controller = new AbortController()
+    let caught: unknown
+    let modelCalls = 0
+    const client = {
+      chat: {
+        completions: {
+          create: vi.fn(
+            (_options: unknown, requestOptions?: { signal?: AbortSignal }) => {
+              modelCalls += 1
+              if (modelCalls === 1) return Promise.resolve(toolCallResponse)
+              controller.abort(new DOMException('Timed out', 'TimeoutError'))
+              return Promise.reject(requestOptions?.signal?.reason)
+            },
+          ),
+        },
+      },
+    }
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const runPromise = runAgentCore({
+      prompt: 'lookup then summarize',
+      aiConfig: fakeConfig,
+      signal: controller.signal,
+      timeoutMs: 5_000,
+    }).catch((error) => {
+      caught = error
+      throw error
+    })
+
+    await expect(runPromise).rejects.toMatchObject({
+      name: 'AgentRunDeadlineError',
+    })
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(2)
+    expect(agentRunFailureToolRounds(caught)).toEqual([
+      expect.objectContaining({
+        name: 'read_thing',
+        status: 'success',
+        resultSummary: expect.stringContaining('read_thing 执行完毕'),
+      }),
+    ])
   })
 })

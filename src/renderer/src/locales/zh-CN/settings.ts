@@ -373,11 +373,15 @@ export const zhCNSettings = {
   refreshLogsSourceLabel: '拉取来源：{{source}}',
   refreshLogsMaxHint: '最多保留最近 60 条刷新记录。',
   agentRuntime: 'Agent 运行',
-  agentRuntimeDesc: '控制 AI 助手单次任务的全局时间预算。',
+  agentRuntimeDesc: '控制 AI 助手单次任务的时间预算和模型输出参数。',
   agentRunTimeout: '单次运行超时',
   agentRunTimeoutDesc:
     '模型调用和工具调用共享这段时间；非法值会回退到默认 120 秒。',
   agentRunTimeoutUnit: '秒',
+  agentTemperature: 'Agent temperature',
+  agentTemperatureDesc: '0 更稳定，数值越高越发散。',
+  agentMaxTokens: 'Agent max tokens',
+  agentMaxTokensDesc: '限制 Agent 单次模型回复长度。',
   agentPermissions: 'Agent 权限',
   agentPermissionsDesc:
     '控制 AI 助手在执行任务时可以调用哪些工具能力。关闭后对应类别的工具将被拒绝执行。',

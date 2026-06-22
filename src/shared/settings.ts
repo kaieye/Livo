@@ -6,7 +6,9 @@ import {
 import { DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE } from './types/ai'
 import {
   DEFAULT_SETTINGS,
+  MAX_AGENT_MAX_TOKENS,
   MAX_AGENT_RUN_TIMEOUT_SECONDS,
+  MAX_AGENT_TEMPERATURE,
   type AppSettings,
 } from './settings-schema'
 
@@ -106,6 +108,17 @@ function syncContentWidth(settings: AppSettings): void {
 
 function normalizeNumericSettings(settings: AppSettings): void {
   const defaults = DEFAULT_SETTINGS
+
+  settings.ai.agentTemperature = normalizeNumber(
+    settings.ai.agentTemperature,
+    defaults.ai.agentTemperature ?? 0.5,
+    { min: 0, max: MAX_AGENT_TEMPERATURE },
+  )
+  settings.ai.agentMaxTokens = normalizePositiveIntegerOrFallback(
+    settings.ai.agentMaxTokens,
+    defaults.ai.agentMaxTokens ?? 2000,
+    { max: MAX_AGENT_MAX_TOKENS },
+  )
 
   settings.agent.runTimeoutSeconds = normalizePositiveIntegerOrFallback(
     settings.agent.runTimeoutSeconds,

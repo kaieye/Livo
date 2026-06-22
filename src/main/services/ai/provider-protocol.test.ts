@@ -4,6 +4,8 @@ import {
   detectProviderFormat,
   isOpenAICompatible,
   normalizeAIError,
+  supportsStreaming,
+  supportsToolCalls,
 } from './provider-protocol'
 
 function config(overrides: Partial<AIConfig> = {}): AIConfig {
@@ -62,6 +64,19 @@ describe('isOpenAICompatible', () => {
         }),
       ),
     ).toBe(true)
+  })
+})
+
+describe('provider capabilities', () => {
+  it('allows tool calls and streaming for OpenAI-compatible endpoints', () => {
+    expect(supportsToolCalls(config())).toBe(true)
+    expect(supportsStreaming(config())).toBe(true)
+  })
+
+  it('disables tool calls and streaming for native Anthropic', () => {
+    const nativeAnthropic = config({ provider: 'anthropic' })
+    expect(supportsToolCalls(nativeAnthropic)).toBe(false)
+    expect(supportsStreaming(nativeAnthropic)).toBe(false)
   })
 })
 

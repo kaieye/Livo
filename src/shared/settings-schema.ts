@@ -11,6 +11,10 @@ import {
 
 export const DEFAULT_AGENT_RUN_TIMEOUT_SECONDS = 120
 export const MAX_AGENT_RUN_TIMEOUT_SECONDS = 3600
+export const DEFAULT_AGENT_TEMPERATURE = 0.5
+export const MAX_AGENT_TEMPERATURE = 2
+export const DEFAULT_AGENT_MAX_TOKENS = 2000
+export const MAX_AGENT_MAX_TOKENS = 32000
 
 export interface AppSettings {
   ai: AIConfig
@@ -109,6 +113,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     chatPersonaPrompt: '',
     summaryPrompt: '',
     translationPrompt: '',
+    agentTemperature: DEFAULT_AGENT_TEMPERATURE,
+    agentMaxTokens: DEFAULT_AGENT_MAX_TOKENS,
   },
   agent: {
     runTimeoutSeconds: DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,

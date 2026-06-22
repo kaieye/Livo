@@ -40,6 +40,44 @@ describe('agent trace panel model', () => {
     )
   })
 
+  it('summarizes an agent run timeout without leaking the internal error name', () => {
+    const failedTrace = trace({
+      finalText:
+        'AgentRunDeadlineError: Agent 运行超时（已达到 1 秒上限）。请在「设置 > AI」调高 Run timeout，或缩短本次请求后重试。',
+    })
+
+    expect(agentTraceFailureStage(failedTrace)).toBe('模型调用或启动超时')
+    expect(agentTraceFailureContext(failedTrace)).toBe(
+      '未进入工具调用，模型请求按运行超时结束',
+    )
+    expect(agentTraceFailureReason(failedTrace)).toBe(
+      'Agent 运行超时（已达到 1 秒上限）。请在「设置 > AI」调高 Run timeout，或缩短本次请求后重试。',
+    )
+  })
+
+  it('summarizes a timeout after successful tool calls as an agent finishing failure', () => {
+    const failedTrace = trace({
+      finalText:
+        'AgentRunDeadlineError: Agent 运行超时（已达到 1 秒上限）。请在「设置 > AI」调高 Run timeout，或缩短本次请求后重试。',
+      toolCalls: [
+        {
+          id: 'call-1',
+          toolName: 'search_and_open_entry',
+          argsPreview: '{"query":"Rust async"}',
+          status: 'success',
+          resultSummary: '已打开最匹配文章',
+          elapsedMs: 42,
+          at: 1_700_000_000_500,
+        },
+      ],
+    })
+
+    expect(agentTraceFailureStage(failedTrace)).toBe('Agent 收尾超时')
+    expect(agentTraceFailureContext(failedTrace)).toBe(
+      '已记录 1 个工具调用，模型收尾未完成',
+    )
+  })
+
   it('summarizes a failed trace with a failed tool call', () => {
     const failedTrace = trace({
       toolCalls: [

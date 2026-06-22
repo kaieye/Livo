@@ -147,6 +147,14 @@ export function AIChatTracePanel({ onClose }: Props) {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-text-tertiary shrink-0">
+                              耗时
+                            </span>
+                            <span className="text-text-secondary min-w-0 flex-1 truncate tabular-nums">
+                              {formatAgentTraceDuration(trace)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-text-tertiary shrink-0">
                               上下文
                             </span>
                             <span className="text-text-secondary min-w-0 flex-1 truncate">

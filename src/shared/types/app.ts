@@ -5,9 +5,13 @@ import type { ReaderSnapshot } from './entry'
 
 export type { AppSettings, SettingsTabId } from '../settings-schema'
 export {
+  DEFAULT_AGENT_MAX_TOKENS,
   DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+  DEFAULT_AGENT_TEMPERATURE,
   DEFAULT_SETTINGS,
+  MAX_AGENT_MAX_TOKENS,
   MAX_AGENT_RUN_TIMEOUT_SECONDS,
+  MAX_AGENT_TEMPERATURE,
 } from '../settings-schema'
 
 export interface RefreshRunItemResult {
