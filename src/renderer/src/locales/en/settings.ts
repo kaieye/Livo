@@ -404,6 +404,8 @@ export const enSettings = {
   agentRunTimeoutDesc:
     'Model calls and tool calls share this budget. Invalid values fall back to the 120 second default.',
   agentRunTimeoutUnit: 'sec',
+  agentMaxRounds: 'Agent max rounds',
+  agentMaxRoundsDesc: 'Limits the model/tool loop count for one agent task.',
   agentTemperature: 'Agent temperature',
   agentTemperatureDesc: '0 is steadier; higher values are more exploratory.',
   agentMaxTokens: 'Agent max tokens',

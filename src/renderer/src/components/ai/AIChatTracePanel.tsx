@@ -23,6 +23,33 @@ interface Props {
   onClose: () => void
 }
 
+function formatMetricMs(value: number | undefined): string {
+  if (typeof value !== 'number' || value < 0) return ''
+  if (value < 1000) return `${Math.round(value)}ms`
+  return `${(value / 1000).toFixed(1)}s`
+}
+
+function firstTokenMs(trace: AgentTraceRecord): number | undefined {
+  return trace.metricsSnapshot?.rounds.find(
+    (round) => typeof round.firstTokenMs === 'number',
+  )?.firstTokenMs
+}
+
+function traceMetricSummary(trace: AgentTraceRecord): string {
+  const metrics = trace.metricsSnapshot
+  if (!metrics) return ''
+  const parts = [
+    metrics.rounds.length > 0 ? `${metrics.rounds.length} 轮` : '',
+    typeof metrics.tokens?.totalTokens === 'number'
+      ? `${metrics.tokens.totalTokens} tokens`
+      : '',
+    firstTokenMs(trace) !== undefined
+      ? `首 token ${formatMetricMs(firstTokenMs(trace))}`
+      : '',
+  ].filter(Boolean)
+  return parts.join(' · ')
+}
+
 /**
  * Execution-trace panel listing recent agent runs and their tool calls.
  * Backed by the persisted AgentTraceStore over IPC. Mirrors Harmony's
@@ -105,6 +132,7 @@ export function AIChatTracePanel({ onClose }: Props) {
           traces.map((trace) => {
             const expanded = expandedId === trace.traceId
             const failed = trace.status === 'failed'
+            const metricSummary = traceMetricSummary(trace)
             return (
               <div
                 key={trace.traceId}
@@ -124,6 +152,11 @@ export function AIChatTracePanel({ onClose }: Props) {
                   <span className="text-accent">
                     {trace.toolCalls.length} 工具
                   </span>
+                  {metricSummary && (
+                    <span className="text-text-tertiary hidden max-w-[150px] truncate tabular-nums sm:inline">
+                      {metricSummary}
+                    </span>
+                  )}
                   <ChevronRight
                     size={13}
                     className={`text-text-tertiary transition-transform ${expanded ? 'rotate-90' : ''}`}
@@ -134,6 +167,36 @@ export function AIChatTracePanel({ onClose }: Props) {
                 </p>
                 {expanded && (
                   <div className="mt-2 space-y-1.5">
+                    {trace.metricsSnapshot && (
+                      <div className="bg-surface dark:bg-surface-dark grid grid-cols-2 gap-2 rounded-lg px-2.5 py-2 text-[11px] md:grid-cols-4">
+                        <div>
+                          <div className="text-text-tertiary">LLM</div>
+                          <div className="text-text-secondary font-mono tabular-nums">
+                            {formatMetricMs(trace.metricsSnapshot.llmMs) ||
+                              '0ms'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-text-tertiary">工具</div>
+                          <div className="text-text-secondary font-mono tabular-nums">
+                            {formatMetricMs(trace.metricsSnapshot.toolMs) ||
+                              '0ms'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-text-tertiary">Tokens</div>
+                          <div className="text-text-secondary font-mono tabular-nums">
+                            {trace.metricsSnapshot.tokens?.totalTokens ?? '-'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-text-tertiary">首 token</div>
+                          <div className="text-text-secondary font-mono tabular-nums">
+                            {formatMetricMs(firstTokenMs(trace)) || '-'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {failed && (
                       <div className="rounded-lg border border-red-200 bg-red-50/70 px-2.5 py-2 dark:border-red-900/40 dark:bg-red-950/20">
                         <div className="grid gap-1 text-[11px] leading-snug">

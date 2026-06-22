@@ -6,6 +6,7 @@ import {
 import { DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE } from './types/ai'
 import {
   DEFAULT_SETTINGS,
+  MAX_AGENT_MAX_ROUNDS,
   MAX_AGENT_MAX_TOKENS,
   MAX_AGENT_RUN_TIMEOUT_SECONDS,
   MAX_AGENT_TEMPERATURE,
@@ -124,6 +125,11 @@ function normalizeNumericSettings(settings: AppSettings): void {
     settings.agent.runTimeoutSeconds,
     defaults.agent.runTimeoutSeconds,
     { max: MAX_AGENT_RUN_TIMEOUT_SECONDS },
+  )
+  settings.agent.maxRounds = normalizePositiveIntegerOrFallback(
+    settings.agent.maxRounds,
+    defaults.agent.maxRounds,
+    { max: MAX_AGENT_MAX_ROUNDS },
   )
 
   settings.general.refreshInterval = normalizeNumber(

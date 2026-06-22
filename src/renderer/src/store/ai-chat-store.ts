@@ -14,6 +14,7 @@ import type {
 } from '../components/ai/types'
 import type {
   AgentToolExecutionEvent,
+  AgentRoundMetric,
   AgentRunMetrics,
   AgentChatHistoryMessage,
   AgentRunResponse,
@@ -75,6 +76,76 @@ function toolTraceStatus(
   if (type === 'tool_failed') return 'failed'
   if (type === 'confirmation_required') return 'confirmation_required'
   return 'running'
+}
+
+function emptyRunMetrics(): AgentRunMetrics {
+  return {
+    totalMs: 0,
+    llmMs: 0,
+    toolMs: 0,
+    rounds: [],
+  }
+}
+
+function sumOptional(
+  current: number | undefined,
+  next: number | undefined,
+): number | undefined {
+  if (current === undefined && next === undefined) return undefined
+  return (current ?? 0) + (next ?? 0)
+}
+
+function metricFromRoundEvent(
+  event: AgentToolExecutionEvent,
+): AgentRoundMetric | null {
+  if (event.type !== 'round_finished' || typeof event.round !== 'number') {
+    return null
+  }
+  return {
+    round: event.round,
+    llmMs: event.llmMs ?? 0,
+    toolMs: event.toolMs ?? 0,
+    toolCalls: event.toolCalls ?? 0,
+    firstTokenMs: event.firstTokenMs,
+    promptTokens: event.promptTokens,
+    completionTokens: event.completionTokens,
+    totalTokens: event.totalTokens,
+  }
+}
+
+function appendRoundMetric(
+  current: AgentRunMetrics | null,
+  round: AgentRoundMetric,
+): AgentRunMetrics {
+  const base = current ?? emptyRunMetrics()
+  const rounds = base.rounds.filter((item) => item.round !== round.round)
+  rounds.push(round)
+  rounds.sort((a, b) => a.round - b.round)
+  const llmMs = rounds.reduce((sum, item) => sum + item.llmMs, 0)
+  const toolMs = rounds.reduce((sum, item) => sum + item.toolMs, 0)
+  const tokens = rounds.reduce<NonNullable<AgentRunMetrics['tokens']>>(
+    (acc, item) => ({
+      promptTokens: sumOptional(acc.promptTokens, item.promptTokens),
+      completionTokens: sumOptional(
+        acc.completionTokens,
+        item.completionTokens,
+      ),
+      totalTokens: sumOptional(acc.totalTokens, item.totalTokens),
+    }),
+    {},
+  )
+  return {
+    totalMs: llmMs + toolMs,
+    llmMs,
+    toolMs,
+    tokens:
+      tokens.promptTokens === undefined &&
+      tokens.completionTokens === undefined &&
+      tokens.totalTokens === undefined
+        ? undefined
+        : tokens,
+    rounds,
+  }
 }
 
 export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
@@ -275,7 +346,16 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
         }
         return
       }
-      if (event.type === 'round_started' || event.type === 'round_finished') {
+      if (event.type === 'round_started') {
+        return
+      }
+      if (event.type === 'round_finished') {
+        const round = metricFromRoundEvent(event)
+        if (round) {
+          set((state) => ({
+            lastMetrics: appendRoundMetric(state.lastMetrics, round),
+          }))
+        }
         return
       }
       if (!event.toolName) return
@@ -332,6 +412,7 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
         toolStatusItems: [],
         showToolBanner: false,
         currentRequestId: requestId,
+        lastMetrics: emptyRunMetrics(),
       }))
       startTimer()
 

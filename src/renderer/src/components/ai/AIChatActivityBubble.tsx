@@ -8,11 +8,13 @@ import {
   Zap,
 } from 'lucide-react'
 import type { ToolStatusItem } from './types'
+import type { AgentRunMetrics } from '@shared'
 
 interface Props {
   items: ToolStatusItem[]
   elapsedLabel: string
   timerVisible: boolean
+  metrics?: AgentRunMetrics | null
 }
 
 function statusText(status: ToolStatusItem['status']): string {
@@ -96,10 +98,37 @@ function ActivityRow({ item }: { item: ToolStatusItem }) {
   )
 }
 
+function formatMs(value: number | undefined): string {
+  if (typeof value !== 'number' || value < 0) return ''
+  if (value < 1000) return `${Math.round(value)}ms`
+  return `${(value / 1000).toFixed(1)}s`
+}
+
+function firstTokenLabel(metrics: AgentRunMetrics | null | undefined): string {
+  const firstTokenMs = metrics?.rounds.find(
+    (round) => typeof round.firstTokenMs === 'number',
+  )?.firstTokenMs
+  const formatted = formatMs(firstTokenMs)
+  return formatted ? `首 token ${formatted}` : ''
+}
+
+function metricsLabel(metrics: AgentRunMetrics | null | undefined): string {
+  const rounds = metrics?.rounds.length ?? 0
+  const tokens = metrics?.tokens?.totalTokens
+  const firstToken = firstTokenLabel(metrics)
+  const parts = [
+    rounds > 0 ? `${rounds} 轮` : '',
+    typeof tokens === 'number' ? `${tokens} tokens` : '',
+    firstToken,
+  ].filter(Boolean)
+  return parts.join(' · ')
+}
+
 export function AIChatActivityBubble({
   items,
   elapsedLabel,
   timerVisible,
+  metrics,
 }: Props) {
   const hasRunningTool = items.some((item) => item.status === 'running')
   const reasoningText =
@@ -108,6 +137,7 @@ export function AIChatActivityBubble({
       : hasRunningTool
         ? '正在等待工具返回结果'
         : '正在整理工具结果并准备回答'
+  const metricText = metricsLabel(metrics)
 
   return (
     <div
@@ -143,6 +173,11 @@ export function AIChatActivityBubble({
           <div className="text-text-tertiary ml-[82px] mt-1 text-[10px] leading-snug">
             {reasoningText}
           </div>
+          {metricText && (
+            <div className="text-text-tertiary ml-[82px] mt-1 font-mono text-[10px] tabular-nums">
+              {metricText}
+            </div>
+          )}
         </div>
 
         {items.length > 0 && (

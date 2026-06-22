@@ -5,9 +5,11 @@ import {
 import { useTranslation } from 'react-i18next'
 import {
   AI_PROVIDERS,
+  DEFAULT_AGENT_MAX_ROUNDS,
   DEFAULT_AGENT_MAX_TOKENS,
   DEFAULT_AGENT_TEMPERATURE,
   DEFAULT_SETTINGS,
+  MAX_AGENT_MAX_ROUNDS,
   MAX_AGENT_MAX_TOKENS,
   MAX_AGENT_RUN_TIMEOUT_SECONDS,
   MAX_AGENT_TEMPERATURE,
@@ -322,6 +324,15 @@ export function AISettings() {
       runTimeoutSeconds: Number.isFinite(seconds)
         ? seconds
         : DEFAULT_SETTINGS.agent.runTimeoutSeconds,
+    })
+  }
+
+  const handleAgentMaxRoundsChange = (value: string) => {
+    const maxRounds = Number(value)
+    void updateSettingsSection('agent', {
+      maxRounds: Number.isFinite(maxRounds)
+        ? maxRounds
+        : DEFAULT_SETTINGS.agent.maxRounds,
     })
   }
 
@@ -718,7 +729,7 @@ export function AISettings() {
         title={t('settings.agentRuntime')}
         description={t('settings.agentRuntimeDesc')}
       >
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium">
               {t('settings.agentRunTimeout')}
@@ -739,6 +750,23 @@ export function AISettings() {
             </div>
             <p className="text-text-tertiary mt-1 text-xs">
               {t('settings.agentRunTimeoutDesc')}
+            </p>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">
+              {t('settings.agentMaxRounds')}
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={MAX_AGENT_MAX_ROUNDS}
+              step={1}
+              value={agent.maxRounds ?? DEFAULT_AGENT_MAX_ROUNDS}
+              onChange={(e) => handleAgentMaxRoundsChange(e.target.value)}
+              className={inputClass}
+            />
+            <p className="text-text-tertiary mt-1 text-xs">
+              {t('settings.agentMaxRoundsDesc')}
             </p>
           </div>
           <div>

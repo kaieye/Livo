@@ -55,6 +55,11 @@ export function supportsStreaming(config: AIConfig): boolean {
   return isOpenAICompatible(config)
 }
 
+/** Whether we should proactively request token usage metadata from the provider. */
+export function supportsUsage(config: AIConfig): boolean {
+  return config.provider === 'openai' && isOpenAICompatible(config)
+}
+
 interface ErrorLike {
   status?: number
   code?: string

@@ -378,6 +378,8 @@ export const zhCNSettings = {
   agentRunTimeoutDesc:
     '模型调用和工具调用共享这段时间；非法值会回退到默认 120 秒。',
   agentRunTimeoutUnit: '秒',
+  agentMaxRounds: 'Agent max rounds',
+  agentMaxRoundsDesc: '限制单次任务的模型/工具循环轮数。',
   agentTemperature: 'Agent temperature',
   agentTemperatureDesc: '0 更稳定，数值越高越发散。',
   agentMaxTokens: 'Agent max tokens',

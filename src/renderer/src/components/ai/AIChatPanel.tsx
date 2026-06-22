@@ -108,6 +108,7 @@ export function AIChatPanel() {
     pendingConfirmation,
     elapsedLabel,
     timerVisible,
+    lastMetrics,
     currentSessionId,
     isPanelOpen,
     sendMessage,
@@ -497,6 +498,7 @@ export function AIChatPanel() {
               items={toolStatusItems}
               elapsedLabel={elapsedLabel}
               timerVisible={timerVisible}
+              metrics={lastMetrics}
             />
           </div>
         )}

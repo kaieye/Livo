@@ -11,6 +11,8 @@ import {
 
 export const DEFAULT_AGENT_RUN_TIMEOUT_SECONDS = 120
 export const MAX_AGENT_RUN_TIMEOUT_SECONDS = 3600
+export const DEFAULT_AGENT_MAX_ROUNDS = 8
+export const MAX_AGENT_MAX_ROUNDS = 16
 export const DEFAULT_AGENT_TEMPERATURE = 0.5
 export const MAX_AGENT_TEMPERATURE = 2
 export const DEFAULT_AGENT_MAX_TOKENS = 2000
@@ -20,6 +22,7 @@ export interface AppSettings {
   ai: AIConfig
   agent: {
     runTimeoutSeconds: number
+    maxRounds: number
   }
   agentPermissions: AgentPermissionSettings
   general: {
@@ -118,6 +121,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   agent: {
     runTimeoutSeconds: DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+    maxRounds: DEFAULT_AGENT_MAX_ROUNDS,
   },
   agentPermissions: { ...DEFAULT_AGENT_PERMISSION_SETTINGS },
   general: {

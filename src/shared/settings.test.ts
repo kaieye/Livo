@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { mergeSettings, normalizeSettings } from './settings'
 import {
+  DEFAULT_AGENT_MAX_ROUNDS,
   DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
   DEFAULT_AGENT_MAX_TOKENS,
   DEFAULT_AGENT_TEMPERATURE,
   DEFAULT_SETTINGS,
   FEED_COLUMN_DEFAULTS,
   FeedViewType,
+  MAX_AGENT_MAX_ROUNDS,
   MAX_AGENT_MAX_TOKENS,
   MAX_AGENT_RUN_TIMEOUT_SECONDS,
   MAX_AGENT_TEMPERATURE,
@@ -45,6 +47,7 @@ describe('settings normalization', () => {
     const normalized = normalizeSettings({
       agent: {
         runTimeoutSeconds: 0,
+        maxRounds: 0,
       } as any,
       ai: {
         agentTemperature: 99,
@@ -70,6 +73,7 @@ describe('settings normalization', () => {
     expect(normalized.agent.runTimeoutSeconds).toBe(
       DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
     )
+    expect(normalized.agent.maxRounds).toBe(DEFAULT_AGENT_MAX_ROUNDS)
     expect(normalized.ai.agentTemperature).toBe(MAX_AGENT_TEMPERATURE)
     expect(normalized.ai.agentMaxTokens).toBe(DEFAULT_AGENT_MAX_TOKENS)
     expect(normalized.general.refreshInterval).toBe(30)
@@ -97,6 +101,20 @@ describe('settings normalization', () => {
         agent: { runTimeoutSeconds: Number.MAX_SAFE_INTEGER },
       } as any).agent.runTimeoutSeconds,
     ).toBe(MAX_AGENT_RUN_TIMEOUT_SECONDS)
+  })
+
+  it('keeps valid custom agent max rounds and caps excessive values', () => {
+    expect(
+      normalizeSettings({
+        agent: { maxRounds: 12.9 },
+      } as any).agent.maxRounds,
+    ).toBe(12)
+
+    expect(
+      normalizeSettings({
+        agent: { maxRounds: Number.MAX_SAFE_INTEGER },
+      } as any).agent.maxRounds,
+    ).toBe(MAX_AGENT_MAX_ROUNDS)
   })
 
   it('keeps valid custom agent model parameters and caps excessive values', () => {
@@ -156,6 +174,7 @@ describe('settings normalization', () => {
     expect(DEFAULT_SETTINGS.agent.runTimeoutSeconds).toBe(
       DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
     )
+    expect(DEFAULT_SETTINGS.agent.maxRounds).toBe(DEFAULT_AGENT_MAX_ROUNDS)
     expect(DEFAULT_SETTINGS.ai.agentTemperature).toBe(DEFAULT_AGENT_TEMPERATURE)
     expect(DEFAULT_SETTINGS.ai.agentMaxTokens).toBe(DEFAULT_AGENT_MAX_TOKENS)
     expect(DEFAULT_SETTINGS.general.feedColumns).toEqual(FEED_COLUMN_DEFAULTS)

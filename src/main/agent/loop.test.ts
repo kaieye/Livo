@@ -49,6 +49,7 @@ import {
   agentRunFailureToolRounds,
   resumeAgentCore,
   runAgentCore,
+  shouldEnterWrapUp,
 } from './loop'
 import { createOpenAIClient } from '../services/ai/ai-client'
 import {
@@ -122,6 +123,15 @@ const textOnlyResponse = {
   choices: [{ message: { content: 'hello back', tool_calls: null } }],
 }
 
+function textOnlyResponseWithUsage(
+  usage: Record<string, number>,
+): Record<string, unknown> {
+  return {
+    choices: [{ message: { content: 'hello back', tool_calls: null } }],
+    usage,
+  }
+}
+
 const toolCallResponse = {
   choices: [
     {
@@ -137,6 +147,15 @@ const toolCallResponse = {
       },
     },
   ],
+}
+
+function toolCallResponseWithUsage(
+  usage: Record<string, number>,
+): Record<string, unknown> {
+  return {
+    ...toolCallResponse,
+    usage,
+  }
 }
 
 function toolCallResponseFor(
@@ -254,6 +273,45 @@ describe('runAgentCore', () => {
     expect(result.toolRounds).toEqual([])
     expect(result.metrics.llmMs).toBeGreaterThanOrEqual(0)
     expect(result.metrics.rounds).toHaveLength(1)
+  })
+
+  it('accumulates token usage from provider responses into metrics and round events', async () => {
+    agentToolRegistryProvider.setBuilder(() => [makeTool()])
+    vi.mocked(createOpenAIClient).mockReturnValue(
+      makeClient([
+        toolCallResponseWithUsage({
+          prompt_tokens: 10,
+          completion_tokens: 2,
+          total_tokens: 12,
+        }),
+        textOnlyResponseWithUsage({
+          prompt_tokens: 15,
+          completion_tokens: 5,
+          total_tokens: 20,
+        }),
+      ]) as never,
+    )
+    const events: AgentToolExecutionEvent[] = []
+
+    const result = await runAgentCore({
+      prompt: 'lookup a',
+      aiConfig: fakeConfig,
+      onToolEvent: (event) => events.push(event),
+    })
+
+    expect(result.metrics.tokens).toEqual({
+      promptTokens: 25,
+      completionTokens: 7,
+      totalTokens: 32,
+    })
+    expect(result.metrics.rounds.map((round) => round.totalTokens)).toEqual([
+      12, 20,
+    ])
+    expect(
+      events
+        .filter((event) => event.type === 'round_finished')
+        .map((event) => event.totalTokens),
+    ).toEqual([12, 20])
   })
 
   it('uses compact context for tool-calling providers with read permission', async () => {

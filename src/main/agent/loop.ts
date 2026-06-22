@@ -13,10 +13,13 @@ import type {
   AgentRoundMetric,
   AgentRunMetrics,
   AgentChatHistoryMessage,
+  AgentTokenUsage,
 } from '../../shared/types'
 import {
+  DEFAULT_AGENT_MAX_ROUNDS,
   DEFAULT_AGENT_MAX_TOKENS,
   DEFAULT_AGENT_TEMPERATURE,
+  MAX_AGENT_MAX_ROUNDS,
   MAX_AGENT_MAX_TOKENS,
   MAX_AGENT_TEMPERATURE,
 } from '../../shared/types'
@@ -27,6 +30,7 @@ import { runWithRetry } from '../services/ai/ai-retry'
 import {
   supportsStreaming,
   supportsToolCalls,
+  supportsUsage,
 } from '../services/ai/provider-protocol'
 import { agentToolResultToText } from './tool-result-text'
 import { agentToolRegistryProvider } from './registry-provider'
@@ -45,7 +49,7 @@ import {
   scopedSignalWithTimeout,
 } from '../utils/abort-signal'
 
-export const MAX_AGENT_ROUNDS = 5
+export const MAX_AGENT_ROUNDS = MAX_AGENT_MAX_ROUNDS
 export const AGENT_RUN_TIMEOUT_MS = 120_000
 const MODEL_MAX_RETRIES = 2
 const TOOL_RESULT_MAX_LEN = 8000
@@ -78,6 +82,7 @@ export interface AgentContinuationState {
   remainingToolCalls: NormalizedToolCall[]
   toolRounds: AgentRoundDetail[]
   nextRound: number
+  metrics?: AgentRunMetrics
 }
 
 export interface AgentRunResult {
@@ -112,6 +117,7 @@ export interface AgentRunOptions {
   onToolEvent?: (event: AgentToolExecutionEvent) => void
   signal?: AbortSignal
   timeoutMs?: number
+  maxRounds?: number
 }
 
 export interface AgentResumeOptions {
@@ -122,6 +128,7 @@ export interface AgentResumeOptions {
   onToolEvent?: (event: AgentToolExecutionEvent) => void
   signal?: AbortSignal
   timeoutMs?: number
+  maxRounds?: number
 }
 
 const AGENT_SYSTEM_PROMPT = `你是 Livo 应用内的智能助手，可以帮用户查看和管理 RSS 订阅，并按需操作应用功能。
@@ -138,7 +145,8 @@ const AGENT_SYSTEM_PROMPT = `你是 Livo 应用内的智能助手，可以帮用
 
 工具清单和参数说明会通过 function calling 协议直接传递给你，不要在 prompt 里二次列举。`
 
-const TOOL_ROUND_LIMIT_SUMMARY_PROMPT = `已达到本次 Agent 的工具调用轮次上限。请停止调用工具，基于上面的工具结果给用户一个简洁总结：说明已经查到或完成了什么、还缺什么、以及用户下一步可以怎么做。不要声称已执行未完成的操作。`
+const TOOL_WRAP_UP_PROMPT = `本次 Agent 已接近轮次、时间或 token 预算。请判断是否还必须调用一个关键工具才能完成用户请求；如果不必须，请直接基于已有工具结果总结。不要重复查询已经得到的信息，不要声称已执行未完成的操作。`
+const TOOL_ROUND_LIMIT_SUMMARY_PROMPT = `本次 Agent 已达到工具调用轮次上限或预算边界。请停止调用工具，基于上面的工具结果给用户一个简洁总结：说明已经查到或完成了什么、还缺什么、以及用户下一步可以怎么做。不要声称已执行未完成的操作。`
 
 function nowMs(): number {
   return Date.now()
@@ -237,10 +245,135 @@ function appendHistoryMessages(
   }
 }
 
+function createEmptyAgentRunMetrics(): AgentRunMetrics {
+  return {
+    totalMs: 0,
+    llmMs: 0,
+    toolMs: 0,
+    rounds: [],
+  }
+}
+
+function cloneAgentRunMetrics(metrics: AgentRunMetrics): AgentRunMetrics {
+  return {
+    totalMs: metrics.totalMs,
+    llmMs: metrics.llmMs,
+    toolMs: metrics.toolMs,
+    tokens: metrics.tokens ? { ...metrics.tokens } : undefined,
+    rounds: metrics.rounds.map((round) => ({ ...round })),
+  }
+}
+
+function safeUsageNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : undefined
+}
+
+function sumUsageField(
+  current: number | undefined,
+  next: number | undefined,
+): number | undefined {
+  if (current === undefined && next === undefined) return undefined
+  return (current ?? 0) + (next ?? 0)
+}
+
+function mergeTokenUsage(
+  current: AgentTokenUsage | undefined,
+  next: AgentTokenUsage | undefined,
+): AgentTokenUsage | undefined {
+  if (!next) return current
+  return {
+    promptTokens: sumUsageField(current?.promptTokens, next.promptTokens),
+    completionTokens: sumUsageField(
+      current?.completionTokens,
+      next.completionTokens,
+    ),
+    totalTokens: sumUsageField(current?.totalTokens, next.totalTokens),
+  }
+}
+
+function normalizeModelTokenUsage(value: unknown): AgentTokenUsage | undefined {
+  const usage = value as
+    | {
+        prompt_tokens?: unknown
+        completion_tokens?: unknown
+        total_tokens?: unknown
+      }
+    | undefined
+  const promptTokens = safeUsageNumber(usage?.prompt_tokens)
+  const completionTokens = safeUsageNumber(usage?.completion_tokens)
+  const totalTokens = safeUsageNumber(usage?.total_tokens)
+  if (
+    promptTokens === undefined &&
+    completionTokens === undefined &&
+    totalTokens === undefined
+  ) {
+    return undefined
+  }
+  return { promptTokens, completionTokens, totalTokens }
+}
+
+function accumulateTokenUsage(
+  metrics: AgentRunMetrics,
+  usage: AgentTokenUsage | undefined,
+): void {
+  metrics.tokens = mergeTokenUsage(metrics.tokens, usage)
+}
+
+function resolveAgentMaxRounds(value: unknown): number {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return DEFAULT_AGENT_MAX_ROUNDS
+  }
+  return Math.min(MAX_AGENT_ROUNDS, Math.max(1, Math.floor(numeric)))
+}
+
+function resolveAgentTokenBudget(
+  sampling: AgentSamplingOptions,
+  maxRounds: number,
+): number {
+  return Math.max(1, sampling.maxTokens) * Math.max(1, maxRounds)
+}
+
+export function shouldEnterWrapUp(
+  metrics: AgentRunMetrics,
+  budget: AgentWrapUpBudget,
+): boolean {
+  const elapsedMs = metrics.llmMs + metrics.toolMs
+  if (
+    typeof budget.runTimeoutMs === 'number' &&
+    Number.isFinite(budget.runTimeoutMs) &&
+    budget.runTimeoutMs > 0 &&
+    elapsedMs >= budget.runTimeoutMs * 0.8
+  ) {
+    return true
+  }
+
+  const totalTokens = metrics.tokens?.totalTokens
+  if (
+    typeof totalTokens === 'number' &&
+    typeof budget.tokenBudget === 'number' &&
+    Number.isFinite(budget.tokenBudget) &&
+    budget.tokenBudget > 0 &&
+    totalTokens >= budget.tokenBudget * 0.9
+  ) {
+    return true
+  }
+
+  return false
+}
+
 interface ModelResult {
   content: string
   toolCalls: NormalizedToolCall[]
   firstTokenMs?: number
+  usage?: AgentTokenUsage
+}
+
+export interface AgentWrapUpBudget {
+  runTimeoutMs?: number
+  tokenBudget?: number
 }
 
 interface AgentSamplingOptions {
@@ -308,7 +441,11 @@ function normalizeChatCompletionResponse(
       name: tc.function.name,
       arguments: tc.function.arguments || '{}',
     }))
-  return { content, toolCalls }
+  return {
+    content,
+    toolCalls,
+    usage: normalizeModelTokenUsage(response.usage),
+  }
 }
 
 function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
@@ -381,6 +518,9 @@ async function requestStreamingModel(
     {
       ...modelRequestParams(aiConfig, messages, tools, sampling),
       stream: true,
+      ...(supportsUsage(aiConfig)
+        ? { stream_options: { include_usage: true } }
+        : {}),
     } as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
     { signal },
   )) as unknown
@@ -393,8 +533,13 @@ async function requestStreamingModel(
 
   let content = ''
   let firstTokenMs: number | undefined
+  let usage: AgentTokenUsage | undefined
   const streamedToolCalls = new Map<number, StreamingToolCallAccumulator>()
   for await (const chunk of response) {
+    usage = mergeTokenUsage(
+      usage,
+      normalizeModelTokenUsage((chunk as { usage?: unknown }).usage),
+    )
     const choice = chunk.choices[0]
     if (!choice) continue
     const delta = choice.delta
@@ -413,6 +558,7 @@ async function requestStreamingModel(
     content,
     toolCalls: finalizeStreamingToolCalls(streamedToolCalls),
     firstTokenMs,
+    usage,
   }
 }
 
@@ -841,6 +987,7 @@ function buildConfirmationResult(
       remainingToolCalls: remaining,
       toolRounds: toolRounds.slice(),
       nextRound,
+      metrics: cloneAgentRunMetrics(metrics),
     },
     metrics,
   }
@@ -883,6 +1030,9 @@ function pushRoundMetric(
     toolMs: metric.toolMs,
     toolCalls: metric.toolCalls,
     firstTokenMs: metric.firstTokenMs,
+    promptTokens: metric.promptTokens,
+    completionTokens: metric.completionTokens,
+    totalTokens: metric.totalTokens,
   })
 }
 
@@ -895,14 +1045,22 @@ async function runAgentLoop(
   toolRounds: AgentRoundDetail[],
   startRound: number,
   metrics: AgentRunMetrics,
+  roundBudgetMaxRounds: number,
+  runTimeoutMs: number,
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   signal?: AbortSignal,
   deadlineMs?: number,
 ): Promise<AgentRunResult> {
   const client = createOpenAIClient(aiConfig)
   const sampling = resolveAgentSampling(aiConfig)
+  const maxRounds = resolveAgentMaxRounds(roundBudgetMaxRounds)
+  const budget: AgentWrapUpBudget = {
+    runTimeoutMs,
+    tokenBudget: resolveAgentTokenBudget(sampling, maxRounds),
+  }
+  let wrapUpRequested = false
 
-  for (let round = startRound; round < MAX_AGENT_ROUNDS; round += 1) {
+  for (let round = startRound; round < maxRounds; round += 1) {
     if (signal?.aborted) throw abortErrorFromSignal(signal)
 
     onToolEvent?.({ type: 'round_started', round })
@@ -926,6 +1084,7 @@ async function runAgentLoop(
     )
     const llmMs = nowMs() - llmStart
     metrics.llmMs += llmMs
+    accumulateTokenUsage(metrics, result.usage)
 
     let content = result.content
     let toolCalls = result.toolCalls
@@ -954,6 +1113,9 @@ async function runAgentLoop(
           toolMs: 0,
           toolCalls: 0,
           firstTokenMs: result.firstTokenMs,
+          promptTokens: result.usage?.promptTokens,
+          completionTokens: result.usage?.completionTokens,
+          totalTokens: result.usage?.totalTokens,
         },
         onToolEvent,
       )
@@ -990,6 +1152,9 @@ async function runAgentLoop(
           toolMs,
           toolCalls: toolCalls.length,
           firstTokenMs: result.firstTokenMs,
+          promptTokens: result.usage?.promptTokens,
+          completionTokens: result.usage?.completionTokens,
+          totalTokens: result.usage?.totalTokens,
         },
         onToolEvent,
       )
@@ -1014,9 +1179,13 @@ async function runAgentLoop(
         toolMs,
         toolCalls: toolCalls.length,
         firstTokenMs: result.firstTokenMs,
+        promptTokens: result.usage?.promptTokens,
+        completionTokens: result.usage?.completionTokens,
+        totalTokens: result.usage?.totalTokens,
       },
       onToolEvent,
     )
+    metrics.totalMs = metrics.llmMs + metrics.toolMs
     if (toolExecution.interrupted) {
       return buildInterruptedResult(
         toolExecution.interrupted,
@@ -1024,13 +1193,23 @@ async function runAgentLoop(
         metrics,
       )
     }
+    if (!wrapUpRequested && shouldEnterWrapUp(metrics, budget)) {
+      messages.push({
+        role: 'system',
+        content: TOOL_WRAP_UP_PROMPT,
+      })
+      wrapUpRequested = true
+    } else if (wrapUpRequested) {
+      break
+    }
   }
 
-  // Reached MAX_AGENT_ROUNDS: do one final tool-free call to summarize.
+  // Reached the hard round budget: do one final tool-free call to summarize.
   messages.push({
     role: 'system',
     content: TOOL_ROUND_LIMIT_SUMMARY_PROMPT,
   })
+  const finalRound = Math.max(startRound, maxRounds)
   const llmStart = nowMs()
   const finalResult = await callModel(
     client,
@@ -1042,15 +1221,31 @@ async function runAgentLoop(
       onContentDelta: (delta, content) =>
         onToolEvent?.({
           type: 'content_delta',
-          round: MAX_AGENT_ROUNDS,
+          round: finalRound,
           delta,
           content,
         }),
     },
     signal,
   )
-  metrics.llmMs += nowMs() - llmStart
+  const finalLlmMs = nowMs() - llmStart
+  metrics.llmMs += finalLlmMs
+  accumulateTokenUsage(metrics, finalResult.usage)
   metrics.totalMs = metrics.llmMs + metrics.toolMs
+  pushRoundMetric(
+    metrics,
+    {
+      round: finalRound,
+      llmMs: finalLlmMs,
+      toolMs: 0,
+      toolCalls: 0,
+      firstTokenMs: finalResult.firstTokenMs,
+      promptTokens: finalResult.usage?.promptTokens,
+      completionTokens: finalResult.usage?.completionTokens,
+      totalTokens: finalResult.usage?.totalTokens,
+    },
+    onToolEvent,
+  )
   return {
     text: finalResult.content || '抱歉，我暂时无法回答这个问题。',
     toolRounds,
@@ -1093,12 +1288,7 @@ export async function runAgentCore(
       ),
     })
 
-    const metrics: AgentRunMetrics = {
-      totalMs: 0,
-      llmMs: 0,
-      toolMs: 0,
-      rounds: [],
-    }
+    const metrics = createEmptyAgentRunMetrics()
     return await runAgentLoop(
       messages,
       tools,
@@ -1108,6 +1298,8 @@ export async function runAgentCore(
       toolRounds,
       0,
       metrics,
+      resolveAgentMaxRounds(options.maxRounds),
+      timeoutMs,
       options.onToolEvent,
       scopedSignal.signal,
       deadlineMs,
@@ -1139,12 +1331,9 @@ export async function resumeAgentCore(
     const { continuation } = options
     const messages = continuation.messages.slice()
     toolRounds = continuation.toolRounds.slice()
-    const metrics: AgentRunMetrics = {
-      totalMs: 0,
-      llmMs: 0,
-      toolMs: 0,
-      rounds: [],
-    }
+    const metrics = continuation.metrics
+      ? cloneAgentRunMetrics(continuation.metrics)
+      : createEmptyAgentRunMetrics()
 
     // Run the confirmed pending tool call.
     const toolStart = nowMs()
@@ -1215,6 +1404,8 @@ export async function resumeAgentCore(
       toolRounds,
       continuation.nextRound,
       metrics,
+      resolveAgentMaxRounds(options.maxRounds),
+      timeoutMs,
       options.onToolEvent,
       scopedSignal.signal,
       deadlineMs,

@@ -87,6 +87,7 @@ describe('agent tool schema boundaries', () => {
     ],
     ['update_ai_runtime_settings', { agentTemperature: 2.1 }, /不能大于/],
     ['update_ai_runtime_settings', { agentMaxTokens: 32001 }, /不能大于/],
+    ['update_ai_runtime_settings', { agentMaxRounds: 17 }, /不能大于/],
   ])('rejects invalid %s args before execution', (toolName, args, expected) => {
     const tool = toolByName(toolName)
     expect(validateToolArgs(tool.inputSchema, args)).toMatch(expected)
@@ -118,7 +119,12 @@ describe('agent tool schema boundaries', () => {
     ['update_general_settings', { refreshInterval: 60 }],
     [
       'update_ai_runtime_settings',
-      { model: 'gpt-4o-mini', agentTemperature: 0.7, agentMaxTokens: 4096 },
+      {
+        model: 'gpt-4o-mini',
+        agentTemperature: 0.7,
+        agentMaxTokens: 4096,
+        agentMaxRounds: 12,
+      },
     ],
     ['get_session_overview', {}],
   ])('accepts boundary-valid %s args', (toolName, args) => {

@@ -1,6 +1,8 @@
 import { settingsProvider } from '../services/system/settings-provider'
 import {
   DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+  DEFAULT_AGENT_MAX_ROUNDS,
+  MAX_AGENT_MAX_ROUNDS,
   MAX_AGENT_RUN_TIMEOUT_SECONDS,
   type AgentRunSummary,
   type AppSettings,
@@ -69,6 +71,19 @@ function resolveAgentRunTimeoutMs(settings: {
   return Math.min(safeSeconds, MAX_AGENT_RUN_TIMEOUT_SECONDS) * MS_PER_SECOND
 }
 
+function resolveAgentMaxRounds(settings: {
+  agent?: Partial<AppSettings['agent']>
+}): number {
+  const rounds = settings.agent?.maxRounds
+  if (typeof rounds !== 'number' || !Number.isFinite(rounds)) {
+    return DEFAULT_AGENT_MAX_ROUNDS
+  }
+
+  const safeRounds = Math.floor(rounds)
+  if (safeRounds <= 0) return DEFAULT_AGENT_MAX_ROUNDS
+  return Math.min(safeRounds, MAX_AGENT_MAX_ROUNDS)
+}
+
 /**
  * Unified entry point for the agent: owns abort controllers per request,
  * parks continuation state while waiting for user confirmation, and records a
@@ -91,6 +106,7 @@ class AgentServiceImpl {
   async run(request: AgentServiceRunRequest): Promise<AgentServiceResult> {
     const settings = settingsProvider.get()
     const timeoutMs = resolveAgentRunTimeoutMs(settings)
+    const maxRounds = resolveAgentMaxRounds(settings)
     const controller = new AbortController()
     this.aborters.set(request.requestId, controller)
     const startedAt = Date.now()
@@ -105,6 +121,7 @@ class AgentServiceImpl {
         onToolEvent: request.onToolEvent,
         signal: controller.signal,
         timeoutMs,
+        maxRounds,
       })
       return this.finalize(request.requestId, request.prompt, startedAt, result)
     } catch (error) {
@@ -127,6 +144,7 @@ class AgentServiceImpl {
 
     const settings = settingsProvider.get()
     const timeoutMs = resolveAgentRunTimeoutMs(settings)
+    const maxRounds = resolveAgentMaxRounds(settings)
     const controller = new AbortController()
     this.aborters.set(request.requestId, controller)
     try {
@@ -138,6 +156,7 @@ class AgentServiceImpl {
         onToolEvent: request.onToolEvent,
         signal: controller.signal,
         timeoutMs,
+        maxRounds,
       })
       return this.finalize(
         parked.requestId,
@@ -194,6 +213,7 @@ class AgentServiceImpl {
         elapsedMs: round.elapsedMs || 0,
         at: parked.startedAt,
       })),
+      metricsSnapshot: parked.continuation.metrics,
     })
     return true
   }
@@ -261,6 +281,7 @@ class AgentServiceImpl {
         elapsedMs: round.elapsedMs || 0,
         at: startedAt,
       })),
+      metricsSnapshot: result.metrics,
     }
     this.saveTraceRecord(record)
   }

@@ -6,6 +6,7 @@ import {
   normalizeAIError,
   supportsStreaming,
   supportsToolCalls,
+  supportsUsage,
 } from './provider-protocol'
 
 function config(overrides: Partial<AIConfig> = {}): AIConfig {
@@ -77,6 +78,12 @@ describe('provider capabilities', () => {
     const nativeAnthropic = config({ provider: 'anthropic' })
     expect(supportsToolCalls(nativeAnthropic)).toBe(false)
     expect(supportsStreaming(nativeAnthropic)).toBe(false)
+  })
+
+  it('requests usage metadata only for the first-party OpenAI provider', () => {
+    expect(supportsUsage(config())).toBe(true)
+    expect(supportsUsage(config({ provider: 'deepseek' }))).toBe(false)
+    expect(supportsUsage(config({ provider: 'anthropic' }))).toBe(false)
   })
 })
 

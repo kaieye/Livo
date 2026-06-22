@@ -140,6 +140,9 @@ export interface AgentToolExecutionEvent {
   toolMs?: number
   toolCalls?: number
   firstTokenMs?: number
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
 }
 
 export interface AgentPendingConfirmation {
@@ -155,12 +158,22 @@ export interface AgentRoundMetric {
   toolMs: number
   toolCalls: number
   firstTokenMs?: number
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+}
+
+export interface AgentTokenUsage {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
 }
 
 export interface AgentRunMetrics {
   totalMs: number
   llmMs: number
   toolMs: number
+  tokens?: AgentTokenUsage
   rounds: AgentRoundMetric[]
 }
 
@@ -241,4 +254,5 @@ export interface AgentTraceRecord {
   finalText: string
   status: AgentTraceStatus
   toolCalls: AgentTraceToolCall[]
+  metricsSnapshot?: AgentRunMetrics
 }

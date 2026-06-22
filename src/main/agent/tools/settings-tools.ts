@@ -51,6 +51,7 @@ const TRANSLATION_LANGUAGE_VALUES = [
 ]
 const AGENT_TEMPERATURE_MAX = 2
 const AGENT_MAX_TOKENS_MAX = 32000
+const AGENT_MAX_ROUNDS_MAX = 16
 
 function hasAnyArg(args: AgentToolArgs): boolean {
   return Object.keys(args).length > 0
@@ -101,7 +102,7 @@ export function buildGetSettingsTool(): AgentTool {
       const message =
         `通用设置：语言 ${s.general.language}，主题 ${s.general.theme}，强调色 ${s.general.accentColor}，刷新间隔 ${s.general.refreshInterval} 分钟，图片代理 ${s.general.imageProxy ? '开启' : '关闭'}。\n` +
         `翻译：${s.translation.enabled ? '开启' : '关闭'}，目标语言 ${s.translation.targetLanguage}，自动翻译 ${s.translation.autoTranslate ? '开启' : '关闭'}。\n` +
-        `AI 运行配置：${s.ai.provider} / ${s.ai.model}，Agent temperature ${s.ai.agentTemperature ?? 0.5}，Agent max tokens ${s.ai.agentMaxTokens ?? 2000}，API Key ${((s.ai.apiKeys?.[s.ai.provider] || s.ai.apiKey || '') as string).trim() ? '已配置' : '未配置'}。\n` +
+        `AI 运行配置：${s.ai.provider} / ${s.ai.model}，Agent temperature ${s.ai.agentTemperature ?? 0.5}，Agent max tokens ${s.ai.agentMaxTokens ?? 2000}，Agent max rounds ${s.agent.maxRounds ?? 8}，API Key ${((s.ai.apiKeys?.[s.ai.provider] || s.ai.apiKey || '') as string).trim() ? '已配置' : '未配置'}。\n` +
         `Agent 权限：读取 ${s.agentPermissions.allowRead ? '开' : '关'}，导航 ${s.agentPermissions.allowNavigate ? '开' : '关'}，写入 ${s.agentPermissions.allowMutate ? '开' : '关'}，破坏性 ${s.agentPermissions.allowDestructive ? '开' : '关'}，外部 ${s.agentPermissions.allowExternal ? '开' : '关'}。`
       return {
         status: 'success',
@@ -110,6 +111,7 @@ export function buildGetSettingsTool(): AgentTool {
           general: s.general as unknown as object,
           translation: s.translation as unknown as object,
           ai: sanitizeAISettings(s.ai),
+          agent: s.agent as unknown as object,
           agentPermissions: s.agentPermissions as unknown as object,
         },
       }
@@ -332,6 +334,12 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
         minimum: 1,
         maximum: AGENT_MAX_TOKENS_MAX,
       },
+      agentMaxRounds: {
+        type: 'number',
+        description: 'Agent 单次任务最多允许的模型/工具轮次数',
+        minimum: 1,
+        maximum: AGENT_MAX_ROUNDS_MAX,
+      },
     }),
     confirmationTitle: '确认更新 AI 运行配置',
     confirmationMessage:
@@ -347,6 +355,7 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
         }
       }
       const current = settingsProvider.get().ai
+      const currentAgent = settingsProvider.get().agent
       const nextProvider = (
         typeof args['provider'] === 'string'
           ? (args['provider'] as string)
@@ -414,11 +423,21 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
             ? Math.floor(args['agentMaxTokens'] as number)
             : current.agentMaxTokens,
       }
-      const saved = await applySettingsUpdate({ ai: next })
+      const nextAgent = {
+        ...currentAgent,
+        maxRounds:
+          typeof args['agentMaxRounds'] === 'number'
+            ? Math.floor(args['agentMaxRounds'] as number)
+            : currentAgent.maxRounds,
+      }
+      const saved = await applySettingsUpdate({ ai: next, agent: nextAgent })
       return {
         status: 'success',
         message: `已更新 AI 运行配置：${saved.ai.provider} / ${saved.ai.model}。API Key 未通过本次工具调用修改。`,
-        data: { ai: sanitizeAISettings(saved.ai) },
+        data: {
+          ai: sanitizeAISettings(saved.ai),
+          agent: saved.agent as unknown as object,
+        },
       }
     },
   })
