@@ -116,6 +116,17 @@ describe('ipc-contracts', () => {
     expect(validateIpcArgs(IPC.AGENT_CANCEL_PENDING, ['pending-1'])).toEqual([
       'pending-1',
     ])
+    expect(validateIpcArgs(IPC.AGENT_TRACES_LIST, [])).toEqual([])
+    expect(
+      validateIpcArgs(IPC.AGENT_TRACES_LIST, [
+        { sessionId: 'agent-session-1' },
+      ]),
+    ).toEqual([{ sessionId: 'agent-session-1' }])
+    expect(validateIpcArgs(IPC.AGENT_TRACES_DELETE, ['trace-1'])).toEqual([
+      'trace-1',
+    ])
+    expect(validateIpcArgs(IPC.AGENT_MEMORY_LIST, [])).toEqual([])
+    expect(validateIpcArgs(IPC.AGENT_MEMORY_CLEAR, [])).toEqual([])
 
     expect(() =>
       validateIpcArgs(IPC.AGENT_RUN, [{ requestId: 'run-1' }]),
@@ -151,6 +162,12 @@ describe('ipc-contracts', () => {
     expect(() =>
       validateIpcArgs(IPC.AGENT_CANCEL_PENDING, ['x'.repeat(241)]),
     ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AGENT_TRACES_LIST, [{ sessionId: 123 }]),
+    ).toThrow(IpcValidationError)
+    expect(() => validateIpcArgs(IPC.AGENT_TRACES_DELETE, ['  '])).toThrow(
+      IpcValidationError,
+    )
   })
 
   it('unwraps successful IPC envelopes for existing API callers', () => {

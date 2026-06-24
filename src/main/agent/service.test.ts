@@ -316,6 +316,52 @@ describe('agentService', () => {
     expect(agentService.cancelPending(first.pendingId!)).toBe(false)
   })
 
+  it('cancels a parked batched write confirmation without resuming the batch', async () => {
+    mocks.runAgentCore.mockResolvedValueOnce(
+      confirmationResult({
+        continuation: {
+          messages: [],
+          pendingToolCall: {
+            id: 'call-read-1',
+            name: 'set_entry_read_state',
+            arguments: '{"entryId":"entry-1","isRead":true}',
+          },
+          pendingToolBatch: [
+            {
+              id: 'call-read-1',
+              name: 'set_entry_read_state',
+              arguments: '{"entryId":"entry-1","isRead":true}',
+            },
+            {
+              id: 'call-read-2',
+              name: 'set_entry_read_state',
+              arguments: '{"entryId":"entry-2","isRead":true}',
+            },
+          ],
+          remainingToolCalls: [],
+          toolRounds: [],
+          nextRound: 1,
+        },
+      }),
+    )
+    const agentService = await loadService()
+
+    const first = await agentService.run({
+      requestId: 'request-batch-cancel-1',
+      prompt: '批量标记已读',
+    })
+
+    expect(first.pendingId).toBeDefined()
+    expect(agentService.cancelPending(first.pendingId!)).toBe(true)
+    await expect(
+      agentService.resume({
+        requestId: 'request-batch-cancel-2',
+        pendingId: first.pendingId!,
+      }),
+    ).rejects.toThrow(/确认请求已过期/)
+    expect(mocks.resumeAgentCore).not.toHaveBeenCalled()
+  })
+
   it('evicts expired pending confirmations without recording cancelled traces', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))

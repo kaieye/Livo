@@ -3,6 +3,7 @@ import type {
   AgentTool,
   AgentToolArgs,
   AgentToolInputSchema,
+  AgentToolPreview,
   AgentToolResult,
   AgentRiskLevel,
 } from '../../../shared/types'
@@ -12,6 +13,11 @@ export type AgentToolExecute<TArgs extends AgentToolArgs = AgentToolArgs> = (
   context: AgentExecutionContext,
   args: TArgs,
 ) => Promise<AgentToolResult>
+
+export type AgentToolPreviewFn<TArgs extends AgentToolArgs = AgentToolArgs> = (
+  context: AgentExecutionContext,
+  args: TArgs,
+) => Promise<AgentToolPreview>
 
 /** Fields shared by every read / mutate factory config. */
 interface BaseToolConfig<TArgs extends AgentToolArgs> {
@@ -24,6 +30,7 @@ interface BaseToolConfig<TArgs extends AgentToolArgs> {
   requiresConfirmation?: boolean
   confirmationTitle?: string
   confirmationMessage?: string
+  preview?: AgentToolPreviewFn<TArgs>
 }
 
 export type ReadToolConfig<TArgs extends AgentToolArgs = AgentToolArgs> =
@@ -54,6 +61,9 @@ export function defineReadTool<TArgs extends AgentToolArgs = AgentToolArgs>(
     ...(config.confirmationMessage && {
       confirmationMessage: config.confirmationMessage,
     }),
+    ...(config.preview && {
+      preview: config.preview as AgentTool['preview'],
+    }),
     execute: config.execute as AgentTool['execute'],
   }
 }
@@ -79,6 +89,9 @@ export function defineMutateTool<TArgs extends AgentToolArgs = AgentToolArgs>(
     }),
     ...(config.confirmationMessage && {
       confirmationMessage: config.confirmationMessage,
+    }),
+    ...(config.preview && {
+      preview: config.preview as AgentTool['preview'],
     }),
     execute: config.execute as AgentTool['execute'],
   }

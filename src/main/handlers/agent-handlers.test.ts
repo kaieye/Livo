@@ -8,7 +8,11 @@ const mocks = vi.hoisted(() => ({
   abort: vi.fn(),
   cancelPending: vi.fn(),
   loadTraces: vi.fn(),
+  loadTracesBySession: vi.fn(),
+  deleteTrace: vi.fn(),
   clearTraces: vi.fn(),
+  loadMemory: vi.fn(),
+  clearMemory: vi.fn(),
   getSettings: vi.fn(),
 }))
 
@@ -30,7 +34,16 @@ vi.mock('../agent/service', () => ({
 vi.mock('../agent/trace-store', () => ({
   AgentTraceStore: {
     loadAll: mocks.loadTraces,
+    loadBySession: mocks.loadTracesBySession,
+    delete: mocks.deleteTrace,
     clearAll: mocks.clearTraces,
+  },
+}))
+
+vi.mock('../agent/agent-memory', () => ({
+  AgentMemoryStore: {
+    loadAll: mocks.loadMemory,
+    clearAll: mocks.clearMemory,
   },
 }))
 
@@ -99,6 +112,9 @@ describe('registerAgentHandlers', () => {
     mocks.abort.mockReturnValue(true)
     mocks.cancelPending.mockReturnValue(true)
     mocks.loadTraces.mockReturnValue([])
+    mocks.loadTracesBySession.mockReturnValue([])
+    mocks.deleteTrace.mockReturnValue(true)
+    mocks.loadMemory.mockReturnValue([])
   })
 
   it('registers pending cancellation through IPC envelopes', async () => {
@@ -146,5 +162,61 @@ describe('registerAgentHandlers', () => {
       toolName: 'get_today_updates',
       args: '{}',
     })
+  })
+
+  it('lists traces by session when a session filter is provided', async () => {
+    const { registerAgentHandlers } = await import('./agent-handlers')
+    registerAgentHandlers()
+
+    const listTraces = getRegisteredHandler(IPC.AGENT_TRACES_LIST)
+    const result = unwrapIpcEnvelope(
+      await listTraces(makeEvent(), { sessionId: 'agent-session-1' }),
+    )
+
+    expect(result).toEqual([])
+    expect(mocks.loadTracesBySession).toHaveBeenCalledWith('agent-session-1')
+    expect(mocks.loadTraces).not.toHaveBeenCalled()
+  })
+
+  it('deletes one trace through IPC envelopes', async () => {
+    const { registerAgentHandlers } = await import('./agent-handlers')
+    registerAgentHandlers()
+
+    const deleteTrace = getRegisteredHandler(IPC.AGENT_TRACES_DELETE)
+    const result = unwrapIpcEnvelope(
+      await deleteTrace(makeEvent(), 'trace-agent-1'),
+    )
+
+    expect(result).toEqual({ success: true })
+    expect(mocks.deleteTrace).toHaveBeenCalledWith('trace-agent-1')
+  })
+
+  it('lists and clears agent memory through IPC envelopes', async () => {
+    mocks.loadMemory.mockReturnValueOnce([
+      {
+        topic: '阅读偏好',
+        content: '优先科技文章',
+        source: 'user_confirmed',
+        updatedAt: 1,
+      },
+    ])
+    const { registerAgentHandlers } = await import('./agent-handlers')
+    registerAgentHandlers()
+
+    const listMemory = getRegisteredHandler(IPC.AGENT_MEMORY_LIST)
+    const clearMemory = getRegisteredHandler(IPC.AGENT_MEMORY_CLEAR)
+
+    expect(unwrapIpcEnvelope(await listMemory(makeEvent()))).toEqual([
+      {
+        topic: '阅读偏好',
+        content: '优先科技文章',
+        source: 'user_confirmed',
+        updatedAt: 1,
+      },
+    ])
+    expect(unwrapIpcEnvelope(await clearMemory(makeEvent()))).toEqual({
+      success: true,
+    })
+    expect(mocks.clearMemory).toHaveBeenCalledOnce()
   })
 })

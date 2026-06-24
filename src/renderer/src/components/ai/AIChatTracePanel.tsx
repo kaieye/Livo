@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent,
+} from 'react'
 import {
   X,
   RotateCw,
@@ -6,6 +12,7 @@ import {
   ListTree,
   Loader2,
   ChevronRight,
+  Download,
 } from 'lucide-react'
 import { aiChatToolLabelOf } from './tool-labels'
 import {
@@ -22,6 +29,16 @@ import type { AgentTraceRecord, AgentTraceToolCall } from '@shared'
 interface Props {
   onClose: () => void
 }
+
+type TraceStatusFilter = 'all' | AgentTraceRecord['status']
+
+const STATUS_FILTERS: Array<{ value: TraceStatusFilter; label: string }> = [
+  { value: 'all', label: '全部状态' },
+  { value: 'completed', label: '完成' },
+  { value: 'confirmation_required', label: '待确认' },
+  { value: 'failed', label: '失败' },
+  { value: 'cancelled', label: '已取消' },
+]
 
 function formatMetricMs(value: number | undefined): string {
   if (typeof value !== 'number' || value < 0) return ''
@@ -59,6 +76,30 @@ export function AIChatTracePanel({ onClose }: Props) {
   const [traces, setTraces] = useState<AgentTraceRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [expandedId, setExpandedId] = useState('')
+  const [statusFilter, setStatusFilter] = useState<TraceStatusFilter>('all')
+  const [sessionFilter, setSessionFilter] = useState('all')
+
+  const sessionOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(traces.map((trace) => trace.sessionId).filter(Boolean)),
+      ),
+    [traces],
+  )
+
+  const visibleTraces = useMemo(
+    () =>
+      traces.filter((trace) => {
+        if (statusFilter !== 'all' && trace.status !== statusFilter) {
+          return false
+        }
+        if (sessionFilter !== 'all' && trace.sessionId !== sessionFilter) {
+          return false
+        }
+        return true
+      }),
+    [sessionFilter, statusFilter, traces],
+  )
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -79,6 +120,30 @@ export function AIChatTracePanel({ onClose }: Props) {
     setExpandedId('')
   }, [])
 
+  const deleteTrace = useCallback(
+    async (event: MouseEvent, traceId: string) => {
+      event.stopPropagation()
+      const result = await window.api.agent.deleteTrace(traceId)
+      if (!result.success) return
+      setTraces((current) =>
+        current.filter((trace) => trace.traceId !== traceId),
+      )
+      if (expandedId === traceId) setExpandedId('')
+    },
+    [expandedId],
+  )
+
+  const exportTraces = useCallback(async () => {
+    if (visibleTraces.length === 0) return
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    await window.api.app.saveTextFile({
+      title: '导出 Agent 执行轨迹',
+      defaultFileName: `livo-agent-traces-${stamp}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      content: JSON.stringify(visibleTraces, null, 2),
+    })
+  }, [visibleTraces])
+
   return (
     <div className="dark:bg-surface-dark absolute inset-0 z-10 flex flex-col overflow-hidden rounded-2xl bg-white">
       <div className="flex flex-shrink-0 items-center justify-between border-b px-4 py-3">
@@ -89,6 +154,14 @@ export function AIChatTracePanel({ onClose }: Props) {
         <div className="flex items-center gap-1">
           {traces.length > 0 && (
             <>
+              <button
+                onClick={() => void exportTraces()}
+                className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
+                title="导出"
+                disabled={visibleTraces.length === 0}
+              >
+                <Download size={14} />
+              </button>
               <button
                 onClick={() => void clear()}
                 className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
@@ -114,6 +187,38 @@ export function AIChatTracePanel({ onClose }: Props) {
         </div>
       </div>
 
+      {traces.length > 0 && (
+        <div className="flex flex-shrink-0 items-center gap-2 border-b px-4 py-2">
+          <select
+            aria-label="按状态过滤"
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as TraceStatusFilter)
+            }
+            className="border-border bg-surface dark:bg-surface-dark text-text-secondary min-w-0 rounded-lg border px-2 py-1 text-[11px] outline-none"
+          >
+            {STATUS_FILTERS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="按会话过滤"
+            value={sessionFilter}
+            onChange={(event) => setSessionFilter(event.target.value)}
+            className="border-border bg-surface dark:bg-surface-dark text-text-secondary min-w-0 flex-1 rounded-lg border px-2 py-1 text-[11px] outline-none"
+          >
+            <option value="all">全部会话</option>
+            {sessionOptions.map((sessionId) => (
+              <option key={sessionId} value={sessionId}>
+                {sessionId}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
         {isLoading ? (
           <div className="text-text-secondary flex flex-col items-center gap-2 py-10">
@@ -128,8 +233,13 @@ export function AIChatTracePanel({ onClose }: Props) {
               完成一次带工具调用的 AI 对话后会出现在这里
             </p>
           </div>
+        ) : visibleTraces.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-10 text-center">
+            <ListTree size={28} className="text-text-tertiary" />
+            <p className="text-sm font-medium">没有匹配的执行轨迹</p>
+          </div>
         ) : (
-          traces.map((trace) => {
+          visibleTraces.map((trace) => {
             const expanded = expandedId === trace.traceId
             const failed = trace.status === 'failed'
             const metricSummary = traceMetricSummary(trace)
@@ -157,6 +267,13 @@ export function AIChatTracePanel({ onClose }: Props) {
                       {metricSummary}
                     </span>
                   )}
+                  <button
+                    onClick={(event) => void deleteTrace(event, trace.traceId)}
+                    className="text-text-tertiary hover:bg-surface dark:hover:bg-surface-dark rounded-md p-1"
+                    title="删除"
+                  >
+                    <Trash2 size={12} />
+                  </button>
                   <ChevronRight
                     size={13}
                     className={`text-text-tertiary transition-transform ${expanded ? 'rotate-90' : ''}`}
@@ -268,6 +385,11 @@ export function AIChatTracePanel({ onClose }: Props) {
                           {call.resultSummary && (
                             <p className="text-text-secondary mt-1 line-clamp-2 text-[11px] leading-snug">
                               {call.resultSummary}
+                            </p>
+                          )}
+                          {call.argsPreview && (
+                            <p className="text-text-tertiary mt-1 line-clamp-2 break-all font-mono text-[10px] leading-snug">
+                              {call.argsPreview}
                             </p>
                           )}
                         </div>

@@ -88,6 +88,15 @@ describe('agent tool schema boundaries', () => {
     ['update_ai_runtime_settings', { agentTemperature: 2.1 }, /不能大于/],
     ['update_ai_runtime_settings', { agentMaxTokens: 32001 }, /不能大于/],
     ['update_ai_runtime_settings', { agentMaxRounds: 17 }, /不能大于/],
+    ['remember_preference', { topic: '', content: 'x' }, /长度不能小于/],
+    [
+      'remember_preference',
+      { topic: '阅读', content: 'x'.repeat(2049) },
+      /长度不能大于/,
+    ],
+    ['recall_preference', { query: '' }, /长度不能小于/],
+    ['recall_preference', { limit: 21 }, /不能大于/],
+    ['forget_preference', { topic: '' }, /长度不能小于/],
   ])('rejects invalid %s args before execution', (toolName, args, expected) => {
     const tool = toolByName(toolName)
     expect(validateToolArgs(tool.inputSchema, args)).toMatch(expected)
@@ -127,6 +136,9 @@ describe('agent tool schema boundaries', () => {
       },
     ],
     ['get_session_overview', {}],
+    ['remember_preference', { topic: '阅读偏好', content: '优先科技文章' }],
+    ['recall_preference', { query: '科技', limit: 8 }],
+    ['forget_preference', { topic: '阅读偏好' }],
   ])('accepts boundary-valid %s args', (toolName, args) => {
     const tool = toolByName(toolName)
     expect(validateToolArgs(tool.inputSchema, args)).toBe('')

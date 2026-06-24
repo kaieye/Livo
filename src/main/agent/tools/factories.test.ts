@@ -52,6 +52,7 @@ describe('defineMutateTool', () => {
   })
 
   it('forwards confirmationTitle and confirmationMessage when provided', () => {
+    const preview = async () => ({ message: 'preview' })
     const tool = defineMutateTool({
       name: 'refresh',
       title: '刷新',
@@ -59,10 +60,12 @@ describe('defineMutateTool', () => {
       inputSchema: emptyParams(),
       confirmationTitle: '确认刷新',
       confirmationMessage: '将访问所有订阅源',
+      preview,
       execute: async () => ({ status: 'success', message: 'refreshed' }),
     })
     expect(tool.confirmationTitle).toBe('确认刷新')
     expect(tool.confirmationMessage).toBe('将访问所有订阅源')
+    expect(tool.preview).toBe(preview)
   })
 
   it('omits confirmation fields when not provided (empty object stays off the wire)', () => {

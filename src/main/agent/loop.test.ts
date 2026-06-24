@@ -45,6 +45,35 @@ vi.mock('./default-tools', () => ({
   }),
 }))
 
+vi.mock('./tools/entry-tools', () => ({
+  executeBatchEntryReadStateUpdate: vi.fn((updates: AgentToolArgs[]) => ({
+    status: 'success',
+    message: `批量已读 ${updates.length}`,
+    data: {
+      changedCount: updates.length,
+      missingCount: 0,
+      results: updates.map((update) => ({
+        entryId: update.entryId,
+        entry: { id: update.entryId },
+        changed: true,
+      })),
+    },
+  })),
+  executeBatchEntryStarredStateUpdate: vi.fn((updates: AgentToolArgs[]) => ({
+    status: 'success',
+    message: `批量收藏 ${updates.length}`,
+    data: {
+      changedCount: updates.length,
+      missingCount: 0,
+      results: updates.map((update) => ({
+        entryId: update.entryId,
+        entry: { id: update.entryId },
+        changed: true,
+      })),
+    },
+  })),
+}))
+
 import {
   AGENT_RUN_TIMEOUT_MS,
   MAX_AGENT_ROUNDS,
@@ -58,6 +87,7 @@ import {
   buildCompactContextFallback,
   buildContextFallback,
 } from './context-builder'
+import { executeBatchEntryReadStateUpdate } from './tools/entry-tools'
 
 const fakeConfig: AIConfig = {
   provider: 'openai',
@@ -257,6 +287,7 @@ beforeEach(() => {
   vi.mocked(createOpenAIClient).mockReset()
   vi.mocked(buildCompactContextFallback).mockClear()
   vi.mocked(buildContextFallback).mockClear()
+  vi.mocked(executeBatchEntryReadStateUpdate).mockClear()
 })
 
 describe('shouldEnterWrapUp', () => {
@@ -968,6 +999,236 @@ describe('runAgentCore', () => {
       ])
     },
   )
+
+  it('deduplicates duplicate read-state write calls after confirmation', async () => {
+    const executedArgs: AgentToolArgs[] = []
+    const writeArgs = { entryId: 'entry-1', isRead: true }
+    agentToolRegistryProvider.setBuilder(() => [
+      makeTool({
+        name: 'set_entry_read_state',
+        title: '标记文章已读状态',
+        capability: 'mutate',
+        risk: 'medium',
+        requiresConfirmation: true,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            entryId: { type: 'string', description: '文章 ID' },
+            isRead: { type: 'boolean', description: '是否已读' },
+          },
+          required: ['entryId', 'isRead'],
+          additionalProperties: false,
+        },
+        execute: async (_context, args): Promise<AgentToolResult> => {
+          executedArgs.push(args)
+          return { status: 'success', message: '已标为已读' }
+        },
+      }),
+    ])
+
+    const duplicateReadStateResponse = {
+      choices: [
+        {
+          message: {
+            content: '',
+            tool_calls: [
+              {
+                id: 'call-read-1',
+                type: 'function',
+                function: {
+                  name: 'set_entry_read_state',
+                  arguments: JSON.stringify(writeArgs),
+                },
+              },
+              {
+                id: 'call-read-2',
+                type: 'function',
+                function: {
+                  name: 'set_entry_read_state',
+                  arguments: JSON.stringify(writeArgs),
+                },
+              },
+            ],
+          },
+        },
+      ],
+    }
+    const firstClient = makeClient([duplicateReadStateResponse])
+    const resumeClient = makeClient([
+      {
+        choices: [
+          { message: { content: '已处理重复标记请求', tool_calls: null } },
+        ],
+      },
+    ])
+    vi.mocked(createOpenAIClient)
+      .mockReturnValueOnce(firstClient as never)
+      .mockReturnValueOnce(resumeClient as never)
+
+    const firstResult = await runAgentCore({
+      prompt: '把这篇文章标为已读，确认后不要重复写入',
+      aiConfig: fakeConfig,
+      timeoutMs: 5_000,
+    })
+
+    expect(firstResult.status).toBe('confirmation_required')
+    expect(
+      firstResult.continuation?.remainingToolCalls.map((call) => call.id),
+    ).toEqual(['call-read-2'])
+    expect(executedArgs).toEqual([])
+
+    const continuation = firstResult.continuation
+    expect(continuation).toBeDefined()
+    const resumed = await resumeAgentCore({
+      continuation: continuation!,
+      aiConfig: fakeConfig,
+      timeoutMs: 5_000,
+    })
+
+    expect(resumed.status).toBe('completed')
+    expect(resumed.text).toBe('已处理重复标记请求')
+    expect(executedArgs).toEqual([writeArgs])
+    expect(resumed.toolRounds.map((round) => round.name)).toEqual([
+      'set_entry_read_state',
+      'set_entry_read_state',
+      'set_entry_read_state',
+    ])
+    expect(resumed.toolRounds.map((round) => round.status)).toEqual([
+      'confirmation_required',
+      'success',
+      'success',
+    ])
+    expect(resumed.toolRounds[2]?.resultSummary).toContain('已跳过重复写入')
+
+    const resumeCallOptions = resumeClient.chat.completions.create.mock
+      .calls[0]?.[0] as {
+      messages: Array<{
+        role: string
+        tool_call_id?: string
+        content?: string
+      }>
+    }
+    const toolMessages = resumeCallOptions.messages.filter(
+      (message) => message.role === 'tool',
+    )
+    expect(toolMessages.map((message) => message.tool_call_id)).toEqual([
+      'call-read-1',
+      'call-read-2',
+    ])
+    expect(toolMessages[1]?.content).toContain('deduplicated')
+  })
+
+  it('confirms consecutive read-state writes once then executes them as one batch', async () => {
+    const execute = vi.fn(async (): Promise<AgentToolResult> => {
+      throw new Error('single execute should not run for the batch')
+    })
+    const toolCalls = Array.from({ length: 10 }, (_, index) => ({
+      id: `call-read-${index + 1}`,
+      type: 'function',
+      function: {
+        name: 'set_entry_read_state',
+        arguments: JSON.stringify({
+          entryId: `entry-${index + 1}`,
+          isRead: true,
+        }),
+      },
+    }))
+    agentToolRegistryProvider.setBuilder(() => [
+      makeTool({
+        name: 'set_entry_read_state',
+        title: '标记文章已读状态',
+        capability: 'mutate',
+        risk: 'medium',
+        requiresConfirmation: true,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            entryId: { type: 'string', description: '文章 ID' },
+            isRead: { type: 'boolean', description: '是否已读' },
+          },
+          required: ['entryId', 'isRead'],
+          additionalProperties: false,
+        },
+        execute,
+      }),
+    ])
+
+    const firstClient = makeClient([
+      {
+        choices: [
+          {
+            message: {
+              content: '',
+              tool_calls: toolCalls,
+            },
+          },
+        ],
+      },
+    ])
+    const resumeClient = makeClient([
+      {
+        choices: [{ message: { content: '已批量标记', tool_calls: null } }],
+      },
+    ])
+    vi.mocked(createOpenAIClient)
+      .mockReturnValueOnce(firstClient as never)
+      .mockReturnValueOnce(resumeClient as never)
+
+    const firstResult = await runAgentCore({
+      prompt: '把这 10 篇标为已读',
+      aiConfig: fakeConfig,
+      timeoutMs: 5_000,
+    })
+
+    expect(firstResult.status).toBe('confirmation_required')
+    expect(firstResult.confirmation?.confirmation.preview).toContain(
+      '批量更新 10 篇文章',
+    )
+    expect(
+      firstResult.continuation?.pendingToolBatch?.map((call) => call.id),
+    ).toEqual(toolCalls.map((call) => call.id))
+    expect(firstResult.continuation?.remainingToolCalls).toEqual([])
+    expect(execute).not.toHaveBeenCalled()
+
+    const resumed = await resumeAgentCore({
+      continuation: firstResult.continuation!,
+      aiConfig: fakeConfig,
+      timeoutMs: 5_000,
+    })
+
+    expect(resumed.status).toBe('completed')
+    expect(resumed.text).toBe('已批量标记')
+    expect(executeBatchEntryReadStateUpdate).toHaveBeenCalledOnce()
+    expect(executeBatchEntryReadStateUpdate).toHaveBeenCalledWith(
+      Array.from({ length: 10 }, (_, index) => ({
+        entryId: `entry-${index + 1}`,
+        isRead: true,
+      })),
+    )
+    expect(execute).not.toHaveBeenCalled()
+    expect(resumed.toolRounds.map((round) => round.name)).toEqual([
+      'set_entry_read_state',
+      ...Array.from({ length: 10 }, () => 'set_entry_read_state'),
+    ])
+    expect(resumed.toolRounds[0]?.status).toBe('confirmation_required')
+    expect(resumed.toolRounds.slice(1).map((round) => round.status)).toEqual(
+      Array.from({ length: 10 }, () => 'success'),
+    )
+
+    const resumeCallOptions = resumeClient.chat.completions.create.mock
+      .calls[0]?.[0] as {
+      messages: Array<{
+        role: string
+        tool_call_id?: string
+        content?: string
+      }>
+    }
+    expect(
+      resumeCallOptions.messages
+        .filter((message) => message.role === 'tool')
+        .map((message) => message.tool_call_id),
+    ).toEqual(toolCalls.map((call) => call.id))
+  })
 
   it('executes consecutive low-risk read tools in the same round concurrently', async () => {
     const release: Array<() => void> = []

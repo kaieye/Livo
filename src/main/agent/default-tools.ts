@@ -55,6 +55,11 @@ import {
   buildViewRefreshLogTool,
 } from './tools/data-tools'
 import { buildWebSearchTool } from './tools/external-tools'
+import {
+  buildForgetPreferenceTool,
+  buildRecallPreferenceTool,
+  buildRememberPreferenceTool,
+} from './tools/memory-tools'
 
 /** Build every agent tool exactly once. Used by the registry provider. */
 export function buildAllAgentTools(): AgentTool[] {
@@ -97,6 +102,10 @@ export function buildAllAgentTools(): AgentTool[] {
     buildRefreshAccountStatusTool(),
     buildOpenAccountLoginTool(),
     buildUnlinkAccountTool(),
+    // Memory
+    buildRecallPreferenceTool(),
+    buildRememberPreferenceTool(),
+    buildForgetPreferenceTool(),
     // External
     buildWebSearchTool(),
     // Navigation

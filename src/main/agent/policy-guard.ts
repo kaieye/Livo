@@ -85,6 +85,7 @@ export class AgentPolicyGuard {
     tool: AgentTool,
     args: AgentToolArgs,
     decision: AgentPolicyDecision,
+    preview?: string,
   ): AgentConfirmationRequest {
     return {
       toolName: tool.name,
@@ -93,6 +94,7 @@ export class AgentPolicyGuard {
         tool.confirmationMessage || confirmationMessageFor(tool, decision),
       risk: decision.risk,
       argsPreview: formatArgsPreview(args),
+      ...(preview && { preview }),
     }
   }
 }

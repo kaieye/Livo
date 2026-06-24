@@ -117,6 +117,24 @@ describe('settings normalization', () => {
     ).toBe(MAX_AGENT_MAX_ROUNDS)
   })
 
+  it('normalizes web search providers by filtering invalid values and preserving order', () => {
+    expect(
+      normalizeSettings({
+        agent: {
+          webSearchProviders: ['bing', 'unknown', 'duckduckgo', 'bing'],
+        } as any,
+      }).agent.webSearchProviders,
+    ).toEqual(['bing', 'duckduckgo'])
+
+    expect(
+      normalizeSettings({
+        agent: {
+          webSearchProviders: ['unknown'],
+        } as any,
+      }).agent.webSearchProviders,
+    ).toEqual(DEFAULT_SETTINGS.agent.webSearchProviders)
+  })
+
   it('keeps valid custom agent model parameters and caps excessive values', () => {
     const normalized = normalizeSettings({
       ai: {

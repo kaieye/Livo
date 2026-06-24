@@ -25,4 +25,5 @@ export interface PendingAgentConfirmationView {
   message: string
   risk: string
   argsPreview: string
+  preview?: string
 }

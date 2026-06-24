@@ -70,6 +70,23 @@ export class EntryRepository implements IEntryRepository {
     return row ? entryFromRow(row) : undefined
   }
 
+  getEntriesByIds(ids: string[]): Map<string, Entry> {
+    const cleanIds = Array.from(
+      new Set(ids.map((id) => id.trim()).filter(Boolean)),
+    )
+    if (cleanIds.length === 0) return new Map()
+    const placeholders = cleanIds.map(() => '?').join(',')
+    const rows = this.db
+      .prepare(`SELECT * FROM entries WHERE id IN (${placeholders})`)
+      .all(...cleanIds) as any[]
+    return new Map(
+      rows.map((row) => {
+        const entry = entryFromRow(row)
+        return [entry.id, entry]
+      }),
+    )
+  }
+
   // 写路径的去重匹配只需要 identity 相关字段。截断 content/summary 并跳过
   // readability / AI 摘要等大列，避免每次 upsert 把整个 feed 的全文读出来。
   private getFeedEntriesLite(feedId: string): Entry[] {
@@ -248,6 +265,42 @@ export class EntryRepository implements IEntryRepository {
     if (!existing) return
     const merged = { ...existing, ...updates }
     this.persistEntry(merged)
+  }
+
+  updateEntryState(
+    id: string,
+    updates: { isRead?: boolean; isStarred?: boolean },
+  ): void {
+    const assignments: string[] = []
+    const params: Array<number | string> = []
+    if (updates.isRead !== undefined) {
+      assignments.push('is_read = ?')
+      params.push(updates.isRead ? 1 : 0)
+    }
+    if (updates.isStarred !== undefined) {
+      assignments.push('is_starred = ?')
+      params.push(updates.isStarred ? 1 : 0)
+    }
+    if (assignments.length === 0) return
+    params.push(id)
+    this.db
+      .prepare(`UPDATE entries SET ${assignments.join(', ')} WHERE id = ?`)
+      .run(...params)
+  }
+
+  updateEntriesState(
+    updates: Array<{ id: string; isRead?: boolean; isStarred?: boolean }>,
+  ): void {
+    if (updates.length === 0) return
+    const updateMany = this.db.transaction((items: typeof updates) => {
+      for (const item of items) {
+        this.updateEntryState(item.id, {
+          isRead: item.isRead,
+          isStarred: item.isStarred,
+        })
+      }
+    })
+    updateMany(updates)
   }
 
   private persistEntry(entry: Entry): void {

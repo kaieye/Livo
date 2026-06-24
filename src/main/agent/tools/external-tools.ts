@@ -4,10 +4,11 @@ import type {
   AgentToolResult,
 } from '../../../shared/types'
 import {
-  webSearch,
+  webSearchWithMetadata,
   formatWebSearchResultsForAI,
   sanitizeWebSearchResult,
 } from '../../services/ai/web-search'
+import { settingsProvider } from '../../services/system/settings-provider'
 import { LONG_TEXT_MAX_LENGTH, objectParams } from './schema'
 
 export function buildWebSearchTool(): AgentTool {
@@ -32,13 +33,21 @@ export function buildWebSearchTool(): AgentTool {
     requiresConfirmation: false,
     execute: async (context, args: AgentToolArgs): Promise<AgentToolResult> => {
       const query = String(args['query']).trim()
-      const results = await webSearch(query, { signal: context.signal })
-      const safeResults = results.map(sanitizeWebSearchResult)
+      const settings = settingsProvider.get()
+      const response = await webSearchWithMetadata(query, {
+        signal: context.signal,
+        providers: settings.agent.webSearchProviders,
+        locale: settings.general.language,
+      })
+      const safeResults = response.results.map(sanitizeWebSearchResult)
       return {
         status: 'success',
         message: formatWebSearchResultsForAI(safeResults, query),
         data: {
           count: safeResults.length,
+          provider: response.provider || '',
+          fromCache: response.fromCache,
+          attempts: response.attempts,
           results: safeResults as unknown as object,
         },
       }

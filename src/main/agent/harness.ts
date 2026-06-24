@@ -88,6 +88,11 @@ export class AgentHarness {
     }
 
     if (decision.requiresConfirmation && !request.confirmed) {
+      const preview = await createToolPreview(
+        tool,
+        request.context,
+        request.args,
+      )
       return {
         toolName: tool.name,
         args: request.args,
@@ -99,6 +104,7 @@ export class AgentHarness {
             tool,
             request.args,
             decision,
+            preview,
           ),
         },
       }
@@ -131,6 +137,21 @@ export class AgentHarness {
     } finally {
       scoped.dispose()
     }
+  }
+}
+
+async function createToolPreview(
+  tool: AgentTool,
+  context: AgentExecutionContext,
+  args: AgentToolArgs,
+): Promise<string | undefined> {
+  if (!tool.preview) return undefined
+  try {
+    const preview = await tool.preview({ ...context, dryRun: true }, args)
+    const message = preview.message.trim()
+    return message || undefined
+  } catch {
+    return undefined
   }
 }
 

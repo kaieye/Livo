@@ -10,6 +10,7 @@ import {
   MAX_AGENT_MAX_TOKENS,
   MAX_AGENT_RUN_TIMEOUT_SECONDS,
   MAX_AGENT_TEMPERATURE,
+  WEB_SEARCH_PROVIDERS,
   type AppSettings,
 } from './settings-schema'
 
@@ -195,6 +196,20 @@ function normalizeNumericSettings(settings: AppSettings): void {
   )
 }
 
+function normalizeWebSearchProviders(settings: AppSettings): void {
+  const allowed = new Set<string>(WEB_SEARCH_PROVIDERS)
+  const providers = Array.isArray(settings.agent.webSearchProviders)
+    ? settings.agent.webSearchProviders
+    : DEFAULT_SETTINGS.agent.webSearchProviders
+  const normalized = Array.from(
+    new Set(providers.filter((provider) => allowed.has(provider))),
+  ) as AppSettings['agent']['webSearchProviders']
+  settings.agent.webSearchProviders =
+    normalized.length > 0
+      ? normalized
+      : [...DEFAULT_SETTINGS.agent.webSearchProviders]
+}
+
 export function cloneDefaultSettings(): AppSettings {
   return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as AppSettings
 }
@@ -216,6 +231,7 @@ export function normalizeSettings(input?: Partial<AppSettings>): AppSettings {
   merged.general.viewTabs = normalizeViewTabs(merged.general.viewTabs)
   merged.general.feedColumns = normalizeFeedColumns(merged.general.feedColumns)
   normalizeNumericSettings(merged)
+  normalizeWebSearchProviders(merged)
   syncContentWidth(merged)
 
   return merged

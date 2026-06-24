@@ -384,6 +384,13 @@ export const zhCNSettings = {
   agentTemperatureDesc: '0 更稳定，数值越高越发散。',
   agentMaxTokens: 'Agent max tokens',
   agentMaxTokensDesc: '限制 Agent 单次模型回复长度。',
+  webSearchProviders: '网络搜索源',
+  webSearchProvidersDesc:
+    '控制 Agent 网络搜索的搜索源优先级；失败或无结果时会自动尝试下一项。',
+  webSearchProviderPriority: '优先级 {{index}}',
+  webSearchProviderDisabled: '已停用',
+  webSearchProviderMoveUp: '上移',
+  webSearchProviderMoveDown: '下移',
   agentPermissions: 'Agent 权限',
   agentPermissionsDesc:
     '控制 AI 助手在执行任务时可以调用哪些工具能力。关闭后对应类别的工具将被拒绝执行。',

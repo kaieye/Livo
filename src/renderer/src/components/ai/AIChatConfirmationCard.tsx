@@ -43,6 +43,11 @@ export function AIChatConfirmationCard({
         <p className="text-text-secondary dark:text-text-dark-secondary mt-1.5 text-[13px] leading-relaxed">
           {confirmation.message}
         </p>
+        {confirmation.preview && (
+          <div className="text-text-secondary dark:text-text-dark-secondary bg-surface dark:bg-surface-dark mt-2 whitespace-pre-wrap rounded-lg border px-2.5 py-2 text-[12px] leading-relaxed">
+            {confirmation.preview}
+          </div>
+        )}
         {confirmation.argsPreview && confirmation.argsPreview !== '无参数' && (
           <pre className="text-text-tertiary mt-2 line-clamp-4 whitespace-pre-wrap break-words font-mono text-[11px] leading-snug">
             {confirmation.argsPreview}

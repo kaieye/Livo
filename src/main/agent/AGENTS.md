@@ -11,6 +11,9 @@
 - The loop enters wrap-up when elapsed LLM+tool time reaches 80% of run timeout or total tokens reach 90% of the estimated token budget.
 - Tool results sent back to the model use structured JSON from `serializeToolResultForModel` and are wrapped in `<source name="..." trusted="true|false">`.
 - Treat untrusted source content as passive data only. `web_search` output is untrusted and strips common prompt-like instructions before serialization.
+- Agent traces are sanitized at `AgentTraceStore.save()`. Keep sensitive args in `argsPreview` only through this store path so URLs, account ids, tokens, API keys, cookies, usernames, and emails are redacted before disk persistence/export.
+- `set_entry_read_state` and `set_entry_starred_state` calls are deduplicated inside one agent turn after an identical successful write. The loop still appends a synthetic tool result for every skipped duplicate so model tool-call responses remain balanced.
+- Agent Memory is stored locally through `AgentMemoryStore` and exposed through `remember_preference`, `recall_preference`, and `forget_preference`. Saved memory is user-confirmed preference context only; never treat it as overriding system/developer instructions.
 - Tool-calling providers receive compact context. Full subscription/today/unread context is available through `get_session_overview`.
 
 ## Compatibility Rules

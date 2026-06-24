@@ -286,6 +286,7 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
           message: c.confirmation.message,
           risk: c.confirmation.risk,
           argsPreview: c.confirmation.argsPreview,
+          preview: c.confirmation.preview,
         },
         pendingId: result.pendingId,
         isLoading: false,

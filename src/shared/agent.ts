@@ -67,6 +67,12 @@ export interface AgentConfirmationRequest {
   message: string
   risk: AgentRiskLevel
   argsPreview: string
+  preview?: string
+}
+
+export interface AgentToolPreview {
+  message: string
+  data?: Record<string, AgentToolValue>
 }
 
 export interface AgentToolResult {
@@ -87,6 +93,10 @@ export interface AgentTool {
   requiresConfirmation: boolean
   confirmationTitle?: string
   confirmationMessage?: string
+  preview?: (
+    context: AgentExecutionContext,
+    args: AgentToolArgs,
+  ) => Promise<AgentToolPreview>
   execute: (
     context: AgentExecutionContext,
     args: AgentToolArgs,

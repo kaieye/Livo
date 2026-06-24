@@ -285,6 +285,68 @@ describe('AgentHarness', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
+  it('adds optional dry-run preview to confirmation requests', async () => {
+    const preview = vi.fn(async () => ({
+      message: '将更新 2 篇文章，其中 1 篇状态会变化。',
+    }))
+    const execute = vi.fn(
+      async (): Promise<AgentToolResult> => ({
+        status: 'success',
+        message: 'mutated',
+      }),
+    )
+    const registry = new AgentToolRegistry([
+      makeTool({
+        name: 'do_mutate',
+        capability: 'mutate',
+        risk: 'medium',
+        preview,
+        execute,
+      }),
+    ])
+    const harness = new AgentHarness(registry)
+
+    const run = await harness.execute({
+      toolName: 'do_mutate',
+      args: { id: 'x' },
+      context: ctx(),
+    })
+
+    expect(run.result.status).toBe('confirmation_required')
+    expect(run.result.confirmation?.preview).toBe(
+      '将更新 2 篇文章，其中 1 篇状态会变化。',
+    )
+    expect(preview).toHaveBeenCalledWith(
+      expect.objectContaining({ dryRun: true }),
+      { id: 'x' },
+    )
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('keeps confirmation usable when dry-run preview fails', async () => {
+    const registry = new AgentToolRegistry([
+      makeTool({
+        name: 'do_mutate',
+        capability: 'mutate',
+        risk: 'medium',
+        preview: async () => {
+          throw new Error('preview unavailable')
+        },
+      }),
+    ])
+    const harness = new AgentHarness(registry)
+
+    const run = await harness.execute({
+      toolName: 'do_mutate',
+      args: { id: 'x' },
+      context: ctx(),
+    })
+
+    expect(run.result.status).toBe('confirmation_required')
+    expect(run.result.confirmation?.preview).toBeUndefined()
+    expect(run.result.confirmation?.argsPreview).toContain('id: x')
+  })
+
   it('does not enter tool implementation when signal is already aborted', async () => {
     const execute = vi.fn(
       async (): Promise<AgentToolResult> => ({

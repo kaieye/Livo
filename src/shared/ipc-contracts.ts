@@ -60,7 +60,10 @@ export const IPC = {
   AGENT_ABORT: 'agent:abort',
   AGENT_CANCEL_PENDING: 'agent:cancel-pending',
   AGENT_TRACES_LIST: 'agent:traces-list',
+  AGENT_TRACES_DELETE: 'agent:traces-delete',
   AGENT_TRACES_CLEAR: 'agent:traces-clear',
+  AGENT_MEMORY_LIST: 'agent:memory-list',
+  AGENT_MEMORY_CLEAR: 'agent:memory-clear',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
   ACTIONS_SYNC: 'actions:sync',
@@ -317,8 +320,11 @@ export type IpcArgsByChannel = {
   [IPC.AGENT_RESUME]: [payload: { requestId: string; pendingId: string }]
   [IPC.AGENT_ABORT]: [requestId: string]
   [IPC.AGENT_CANCEL_PENDING]: [pendingId: string]
-  [IPC.AGENT_TRACES_LIST]: []
+  [IPC.AGENT_TRACES_LIST]: [options?: { sessionId?: string }]
+  [IPC.AGENT_TRACES_DELETE]: [traceId: string]
   [IPC.AGENT_TRACES_CLEAR]: []
+  [IPC.AGENT_MEMORY_LIST]: []
+  [IPC.AGENT_MEMORY_CLEAR]: []
   [IPC.SETTINGS_GET]: []
   [IPC.SETTINGS_SET]: [settings: Partial<AppSettings>]
   [IPC.ACTIONS_SYNC]: [rules: ActionRule[]]
@@ -782,6 +788,19 @@ function assertAgentPendingId(value: unknown, field: string): void {
   assertMaxStringLength(value, field, AGENT_REQUEST_ID_MAX_LENGTH * 2)
 }
 
+function assertAgentTraceListOptions(value: unknown): void {
+  if (value === undefined) return
+  assertObject(value, 'options')
+  assertOptionalString(value.sessionId, 'options.sessionId')
+  if (typeof value.sessionId === 'string') {
+    assertMaxStringLength(
+      value.sessionId,
+      'options.sessionId',
+      AGENT_REQUEST_ID_MAX_LENGTH,
+    )
+  }
+}
+
 function validateEntryListOptions(value: unknown): void {
   assertObject(value, 'options')
   assertOptionalString(value.feedId, 'options.feedId')
@@ -1071,8 +1090,25 @@ export const IPC_CONTRACTS = {
       return args as IpcArgs<typeof IPC.AGENT_CANCEL_PENDING>
     },
   },
-  [IPC.AGENT_TRACES_LIST]: noArgs(IPC.AGENT_TRACES_LIST),
+  [IPC.AGENT_TRACES_LIST]: {
+    channel: IPC.AGENT_TRACES_LIST,
+    validateArgs: (args) => {
+      assertArity(IPC.AGENT_TRACES_LIST, args, 0, 1)
+      assertAgentTraceListOptions(args[0])
+      return args as IpcArgs<typeof IPC.AGENT_TRACES_LIST>
+    },
+  },
+  [IPC.AGENT_TRACES_DELETE]: {
+    channel: IPC.AGENT_TRACES_DELETE,
+    validateArgs: (args) => {
+      assertArity(IPC.AGENT_TRACES_DELETE, args, 1)
+      assertNonEmptyString(args[0], 'traceId')
+      return args as IpcArgs<typeof IPC.AGENT_TRACES_DELETE>
+    },
+  },
   [IPC.AGENT_TRACES_CLEAR]: noArgs(IPC.AGENT_TRACES_CLEAR),
+  [IPC.AGENT_MEMORY_LIST]: noArgs(IPC.AGENT_MEMORY_LIST),
+  [IPC.AGENT_MEMORY_CLEAR]: noArgs(IPC.AGENT_MEMORY_CLEAR),
   [IPC.SETTINGS_GET]: noArgs(IPC.SETTINGS_GET),
   [IPC.SETTINGS_SET]: oneObject(IPC.SETTINGS_SET, 'settings'),
   [IPC.ACTIONS_SYNC]: {

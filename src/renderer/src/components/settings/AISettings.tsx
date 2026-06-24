@@ -13,9 +13,14 @@ import {
   MAX_AGENT_MAX_TOKENS,
   MAX_AGENT_RUN_TIMEOUT_SECONDS,
   MAX_AGENT_TEMPERATURE,
+  type AgentMemoryRecord,
   type AIConfig,
   type AIProvider,
 } from '../../../../shared/types'
+import {
+  WEB_SEARCH_PROVIDERS,
+  type WebSearchProviderId,
+} from '../../../../shared/settings-schema'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import {
   Eye,
@@ -33,6 +38,10 @@ import {
   Trash2,
   Settings as SettingsIcon,
   Timer,
+  Database,
+  Download,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 
 function SectionCard({
@@ -117,6 +126,12 @@ function isPromptDirtyFn(draft: AIConfig, saved: AIConfig): boolean {
   )
 }
 
+const WEB_SEARCH_PROVIDER_LABELS: Record<WebSearchProviderId, string> = {
+  duckduckgo: 'DuckDuckGo',
+  bing: 'Bing',
+  brave: 'Brave',
+}
+
 export function AISettings() {
   const ai = useSettingSection('ai')
   const agent = useSettingSection('agent') || DEFAULT_SETTINGS.agent
@@ -133,6 +148,9 @@ export function AISettings() {
   const [isTesting, setIsTesting] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [isCustomModel, setIsCustomModel] = useState(false)
+  const [agentMemories, setAgentMemories] = useState<AgentMemoryRecord[]>([])
+  const [isMemoryLoading, setIsMemoryLoading] = useState(false)
+  const [memoryMessage, setMemoryMessage] = useState<string | null>(null)
 
   // Only prompt fields are "dirty" — connection fields auto-save.
   const isPromptDirty = isPromptDirtyFn(draftAi, ai)
@@ -183,6 +201,7 @@ export function AISettings() {
   const clearFeedback = () => {
     setTestResult(null)
     setActionMessage(null)
+    setMemoryMessage(null)
   }
 
   // ── Connection field handlers (auto-save) ──
@@ -318,6 +337,55 @@ export function AISettings() {
     setIsTesting(false)
   }
 
+  const loadAgentMemories = useCallback(async () => {
+    setIsMemoryLoading(true)
+    try {
+      setAgentMemories(await window.api.agent.listMemory())
+    } catch (err) {
+      setMemoryMessage(
+        `${t('settings.agentMemoryLoadFailed', { defaultValue: '读取 Agent 记忆失败' })}: ${String(err)}`,
+      )
+    } finally {
+      setIsMemoryLoading(false)
+    }
+  }, [t])
+
+  useEffect(() => {
+    void loadAgentMemories()
+  }, [loadAgentMemories])
+
+  const handleClearAgentMemory = async () => {
+    setIsMemoryLoading(true)
+    try {
+      await window.api.agent.clearMemory()
+      setAgentMemories([])
+      setMemoryMessage(
+        t('settings.agentMemoryCleared', {
+          defaultValue: 'Agent 记忆已清空',
+        }),
+      )
+    } catch (err) {
+      setMemoryMessage(
+        `${t('settings.agentMemoryClearFailed', { defaultValue: '清空 Agent 记忆失败' })}: ${String(err)}`,
+      )
+    } finally {
+      setIsMemoryLoading(false)
+    }
+  }
+
+  const handleExportAgentMemory = async () => {
+    if (agentMemories.length === 0) return
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    await window.api.app.saveTextFile({
+      title: t('settings.agentMemoryExportTitle', {
+        defaultValue: '导出 Agent 记忆',
+      }),
+      defaultFileName: `livo-agent-memory-${stamp}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      content: JSON.stringify(agentMemories, null, 2),
+    })
+  }
+
   const handleAgentRunTimeoutChange = (value: string) => {
     const seconds = Number(value)
     void updateSettingsSection('agent', {
@@ -352,6 +420,40 @@ export function AISettings() {
         ? maxTokens
         : DEFAULT_AGENT_MAX_TOKENS,
     })
+  }
+
+  const updateWebSearchProviders = (providers: WebSearchProviderId[]) => {
+    void updateSettingsSection('agent', {
+      webSearchProviders:
+        providers.length > 0
+          ? providers
+          : DEFAULT_SETTINGS.agent.webSearchProviders,
+    })
+  }
+
+  const handleToggleWebSearchProvider = (provider: WebSearchProviderId) => {
+    const current =
+      agent.webSearchProviders || DEFAULT_SETTINGS.agent.webSearchProviders
+    const next = current.includes(provider)
+      ? current.filter((item) => item !== provider)
+      : [...current, provider]
+    updateWebSearchProviders(next)
+  }
+
+  const handleMoveWebSearchProvider = (
+    provider: WebSearchProviderId,
+    direction: -1 | 1,
+  ) => {
+    const current = [
+      ...(agent.webSearchProviders ||
+        DEFAULT_SETTINGS.agent.webSearchProviders),
+    ]
+    const index = current.indexOf(provider)
+    const target = index + direction
+    if (index < 0 || target < 0 || target >= current.length) return
+    const [item] = current.splice(index, 1)
+    current.splice(target, 0, item)
+    updateWebSearchProviders(current)
   }
 
   const inputClass =
@@ -803,6 +905,158 @@ export function AISettings() {
               {t('settings.agentMaxTokensDesc')}
             </p>
           </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        icon={Link2}
+        title={t('settings.webSearchProviders')}
+        description={t('settings.webSearchProvidersDesc')}
+      >
+        <div className="divide-border overflow-hidden rounded-lg border">
+          {WEB_SEARCH_PROVIDERS.map((provider) => {
+            const current =
+              agent.webSearchProviders ||
+              DEFAULT_SETTINGS.agent.webSearchProviders
+            const enabled = current.includes(provider)
+            const index = current.indexOf(provider)
+            return (
+              <div
+                key={provider}
+                className="flex items-center gap-3 px-3 py-2.5"
+              >
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={enabled}
+                  onClick={() => handleToggleWebSearchProvider(provider)}
+                  className={`inline-flex h-6 w-10 flex-shrink-0 items-center rounded-full transition-colors ${
+                    enabled ? 'bg-accent' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                      enabled ? 'translate-x-5' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">
+                    {WEB_SEARCH_PROVIDER_LABELS[provider]}
+                  </p>
+                  <p className="text-text-tertiary text-xs">
+                    {enabled
+                      ? t('settings.webSearchProviderPriority', {
+                          index: index + 1,
+                        })
+                      : t('settings.webSearchProviderDisabled')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleMoveWebSearchProvider(provider, -1)}
+                    disabled={!enabled || index <= 0}
+                    className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 disabled:opacity-40"
+                    title={t('settings.webSearchProviderMoveUp')}
+                  >
+                    <ArrowUp size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMoveWebSearchProvider(provider, 1)}
+                    disabled={!enabled || index >= current.length - 1}
+                    className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 disabled:opacity-40"
+                    title={t('settings.webSearchProviderMoveDown')}
+                  >
+                    <ArrowDown size={14} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        icon={Database}
+        title={t('settings.agentMemory', { defaultValue: 'Agent 记忆' })}
+        description={t('settings.agentMemoryDesc', {
+          defaultValue:
+            '长期偏好会保存在本地，并在后续 Agent 会话中作为背景偏好使用。',
+        })}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">
+              {t('settings.agentMemoryCount', {
+                defaultValue: '{{count}} 条记忆',
+                count: agentMemories.length,
+              })}
+            </p>
+            {memoryMessage && (
+              <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
+                {memoryMessage}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void loadAgentMemories()}
+              disabled={isMemoryLoading}
+              className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              <RotateCcw size={14} />
+              {t('common.refresh', { defaultValue: '刷新' })}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleExportAgentMemory()}
+              disabled={agentMemories.length === 0}
+              className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              <Download size={14} />
+              {t('common.export', { defaultValue: '导出' })}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleClearAgentMemory()}
+              disabled={isMemoryLoading || agentMemories.length === 0}
+              className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm text-red-500 disabled:opacity-50"
+            >
+              <Trash2 size={14} />
+              {t('common.clear', { defaultValue: '清空' })}
+            </button>
+          </div>
+        </div>
+
+        <div className="divide-border border-border max-h-56 overflow-y-auto rounded-lg border">
+          {isMemoryLoading ? (
+            <div className="text-text-secondary dark:text-text-dark-secondary px-3 py-4 text-sm">
+              {t('common.loading', { defaultValue: '加载中...' })}
+            </div>
+          ) : agentMemories.length === 0 ? (
+            <div className="text-text-secondary dark:text-text-dark-secondary px-3 py-4 text-sm">
+              {t('settings.agentMemoryEmpty', {
+                defaultValue: '暂无 Agent 记忆',
+              })}
+            </div>
+          ) : (
+            agentMemories.slice(0, 8).map((memory) => (
+              <div key={memory.topic} className="px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">{memory.topic}</p>
+                  <span className="text-text-tertiary flex-shrink-0 text-[11px]">
+                    {new Date(memory.updatedAt).toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-text-secondary dark:text-text-dark-secondary mt-1 line-clamp-2 text-xs">
+                  {memory.content}
+                </p>
+              </div>
+            ))
+          )}
         </div>
       </SectionCard>
 

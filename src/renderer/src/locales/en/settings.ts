@@ -410,6 +410,13 @@ export const enSettings = {
   agentTemperatureDesc: '0 is steadier; higher values are more exploratory.',
   agentMaxTokens: 'Agent max tokens',
   agentMaxTokensDesc: 'Caps the length of each agent model response.',
+  webSearchProviders: 'Web search providers',
+  webSearchProvidersDesc:
+    'Controls the Agent web-search priority. Failed or empty providers fall back to the next enabled source.',
+  webSearchProviderPriority: 'Priority {{index}}',
+  webSearchProviderDisabled: 'Disabled',
+  webSearchProviderMoveUp: 'Move up',
+  webSearchProviderMoveDown: 'Move down',
   agentPermissions: 'Agent Permissions',
   agentPermissionsDesc:
     'Control which tool capabilities the AI assistant can use when running tasks. Disabling a category causes those tools to be rejected.',

@@ -51,6 +51,11 @@ import {
   abortErrorFromSignal,
   scopedSignalWithTimeout,
 } from '../utils/abort-signal'
+import {
+  executeBatchEntryReadStateUpdate,
+  executeBatchEntryStarredStateUpdate,
+} from './tools/entry-tools'
+import { validateToolArgs } from './harness'
 
 export const MAX_AGENT_ROUNDS = MAX_AGENT_MAX_ROUNDS
 export const AGENT_RUN_TIMEOUT_MS = 120_000
@@ -82,6 +87,7 @@ interface NormalizedToolCall {
 export interface AgentContinuationState {
   messages: ChatMessage[]
   pendingToolCall: NormalizedToolCall
+  pendingToolBatch?: NormalizedToolCall[]
   remainingToolCalls: NormalizedToolCall[]
   toolRounds: AgentRoundDetail[]
   nextRound: number
@@ -617,6 +623,18 @@ interface ExecutedToolCallWithRounds {
   rounds: AgentRoundDetail[]
 }
 
+interface WriteToolBatchItem {
+  toolCall: NormalizedToolCall
+  args: AgentToolArgs
+}
+
+interface WriteToolBatch {
+  toolName: 'set_entry_read_state' | 'set_entry_starred_state'
+  items: WriteToolBatchItem[]
+}
+
+type WriteToolDedupeState = Set<string>
+
 type ParsedToolArgs =
   | { ok: true; args: AgentToolArgs }
   | { ok: false; message: string }
@@ -635,6 +653,136 @@ function parseToolArgs(argumentsText: string): ParsedToolArgs {
   }
 
   return { ok: true, args: parsed as AgentToolArgs }
+}
+
+function writeToolDedupeKey(
+  toolName: string,
+  args: AgentToolArgs,
+): string | null {
+  if (toolName === 'set_entry_read_state') {
+    const entryId = typeof args.entryId === 'string' ? args.entryId.trim() : ''
+    if (!entryId || typeof args.isRead !== 'boolean') return null
+    return `${toolName}:${entryId}:${args.isRead ? 1 : 0}`
+  }
+  if (toolName === 'set_entry_starred_state') {
+    const entryId = typeof args.entryId === 'string' ? args.entryId.trim() : ''
+    if (!entryId || typeof args.isStarred !== 'boolean') return null
+    return `${toolName}:${entryId}:${args.isStarred ? 1 : 0}`
+  }
+  return null
+}
+
+function writeToolDedupeKeyForCall(
+  toolCall: NormalizedToolCall,
+): string | null {
+  const parsedArgs = parseToolArgs(toolCall.arguments)
+  if (!parsedArgs.ok) return null
+  return writeToolDedupeKey(toolCall.name, parsedArgs.args)
+}
+
+function parseEntryReadStateArgs(
+  args: AgentToolArgs,
+): { entryId: string; isRead: boolean } | null {
+  const entryId = typeof args.entryId === 'string' ? args.entryId.trim() : ''
+  if (!entryId || typeof args.isRead !== 'boolean') return null
+  return { entryId, isRead: args.isRead }
+}
+
+function parseEntryStarredStateArgs(
+  args: AgentToolArgs,
+): { entryId: string; isStarred: boolean } | null {
+  const entryId = typeof args.entryId === 'string' ? args.entryId.trim() : ''
+  if (!entryId || typeof args.isStarred !== 'boolean') return null
+  return { entryId, isStarred: args.isStarred }
+}
+
+function writeToolBatchItemForCall(
+  toolCall: NormalizedToolCall,
+): WriteToolBatchItem | null {
+  if (
+    toolCall.name !== 'set_entry_read_state' &&
+    toolCall.name !== 'set_entry_starred_state'
+  ) {
+    return null
+  }
+  const parsedArgs = parseToolArgs(toolCall.arguments)
+  if (!parsedArgs.ok) return null
+  const valid =
+    toolCall.name === 'set_entry_read_state'
+      ? parseEntryReadStateArgs(parsedArgs.args)
+      : parseEntryStarredStateArgs(parsedArgs.args)
+  if (!valid) return null
+  return { toolCall, args: parsedArgs.args }
+}
+
+function collectWriteToolBatch(
+  toolCalls: NormalizedToolCall[],
+  startIndex: number,
+  permissions: AgentPermissionSettings,
+): WriteToolBatch | null {
+  const first = writeToolBatchItemForCall(toolCalls[startIndex])
+  if (!first) return null
+  const toolName = first.toolCall.name as WriteToolBatch['toolName']
+  const registry = agentToolRegistryProvider.forPermissions(permissions)
+  const tool = registry.get(toolName)
+  if (
+    !tool ||
+    tool.capability !== 'mutate' ||
+    !tool.requiresConfirmation ||
+    tool.risk !== 'medium' ||
+    validateToolArgs(tool.inputSchema, first.args)
+  ) {
+    return null
+  }
+
+  const items: WriteToolBatchItem[] = [first]
+  for (let i = startIndex + 1; i < toolCalls.length; i += 1) {
+    const nextCall = toolCalls[i]
+    if (nextCall.name !== toolName) break
+    const item = writeToolBatchItemForCall(nextCall)
+    if (!item) break
+    if (validateToolArgs(tool.inputSchema, item.args)) break
+    items.push(item)
+  }
+
+  const uniqueWriteKeys = new Set(
+    items
+      .map((item) => writeToolDedupeKey(item.toolCall.name, item.args))
+      .filter((key): key is string => Boolean(key)),
+  )
+  return items.length > 1 && uniqueWriteKeys.size > 1
+    ? { toolName, items }
+    : null
+}
+
+function buildBatchConfirmationPreview(batch: WriteToolBatch): string {
+  if (batch.toolName === 'set_entry_read_state') {
+    const reads = batch.items.filter(
+      (item) => parseEntryReadStateArgs(item.args)?.isRead,
+    ).length
+    const unreads = batch.items.length - reads
+    return [
+      `将批量更新 ${batch.items.length} 篇文章的已读状态。`,
+      reads > 0 ? `标记已读：${reads} 篇。` : '',
+      unreads > 0 ? `标记未读：${unreads} 篇。` : '',
+      '确认后会合并为一次本地批量写入，并逐条同步需要变化的远端状态。',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  const starred = batch.items.filter(
+    (item) => parseEntryStarredStateArgs(item.args)?.isStarred,
+  ).length
+  const unstarred = batch.items.length - starred
+  return [
+    `将批量更新 ${batch.items.length} 篇文章的收藏状态。`,
+    starred > 0 ? `收藏：${starred} 篇。` : '',
+    unstarred > 0 ? `取消收藏：${unstarred} 篇。` : '',
+    '确认后会合并为一次本地批量写入，并逐条同步需要变化的远端状态。',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 function isParallelReadTool(tool: AgentTool | undefined): boolean {
@@ -698,6 +846,116 @@ function appendToolCallResults(
     toolRounds.push(...result.rounds)
     messages.push(toolResultMessage(result.toolCall, result.executed.text))
   }
+}
+
+function appendDeduplicatedWriteToolResult(
+  toolCall: NormalizedToolCall,
+  messages: ChatMessage[],
+  toolRounds: AgentRoundDetail[],
+  onToolEvent: ((event: AgentToolExecutionEvent) => void) | undefined,
+): void {
+  const parsedArgs = parseToolArgs(toolCall.arguments)
+  const startedAt = nowMs()
+  const run: AgentToolRun = {
+    toolName: toolCall.name,
+    args: parsedArgs.ok ? parsedArgs.args : {},
+    elapsedMs: nowMs() - startedAt,
+    result: {
+      status: 'success',
+      message: '已跳过重复写入工具调用：同回合已执行过相同操作。',
+      data: { deduplicated: true },
+    },
+  }
+  const text = truncateToolResult(
+    serializeToolResultForModel(toolCall.name, run.result),
+  )
+  const resultSummary = pushToolRound(toolCall, run, text, toolRounds)
+  messages.push(toolResultMessage(toolCall, text))
+  onToolEvent?.({
+    type: 'tool_completed',
+    toolCallId: toolCall.id,
+    toolName: toolCall.name,
+    args: toolCall.arguments,
+    message: run.result.message,
+    resultSummary,
+    elapsedMs: run.elapsedMs,
+  })
+}
+
+function executeConfirmedWriteToolBatch(
+  batch: WriteToolBatch,
+  messages: ChatMessage[],
+  toolRounds: AgentRoundDetail[],
+  onToolEvent: ((event: AgentToolExecutionEvent) => void) | undefined,
+  dedupeState: WriteToolDedupeState,
+): ExecutedToolCallWithRounds[] {
+  const startedAt = nowMs()
+  const batchResult =
+    batch.toolName === 'set_entry_read_state'
+      ? executeBatchEntryReadStateUpdate(
+          batch.items
+            .map((item) => parseEntryReadStateArgs(item.args))
+            .filter((item): item is { entryId: string; isRead: boolean } =>
+              Boolean(item),
+            ),
+        )
+      : executeBatchEntryStarredStateUpdate(
+          batch.items
+            .map((item) => parseEntryStarredStateArgs(item.args))
+            .filter((item): item is { entryId: string; isStarred: boolean } =>
+              Boolean(item),
+            ),
+        )
+  const elapsedMs = nowMs() - startedAt
+  const results = (batchResult.data?.results as unknown[] | undefined) ?? []
+
+  return batch.items.map((item, index) => {
+    const perItemResult = results[index] as
+      | { entry?: unknown; changed?: unknown }
+      | undefined
+    const missing = perItemResult && perItemResult.entry === null
+    const changed = perItemResult?.changed === true
+    const result = {
+      status: missing ? ('failed' as const) : ('success' as const),
+      message: missing
+        ? `批量写入中未找到第 ${index + 1} 个目标。`
+        : `${batchResult.message}${changed ? '' : '（该项状态原本如此）'}`,
+      data: {
+        batched: true,
+        batchSize: batch.items.length,
+        batchStatus: batchResult.status,
+        changed,
+        item: perItemResult as object,
+      },
+    }
+    const run: AgentToolRun = {
+      toolName: item.toolCall.name,
+      args: item.args,
+      elapsedMs,
+      result,
+    }
+    const text = truncateToolResult(
+      serializeToolResultForModel(item.toolCall.name, run.result),
+    )
+    const resultSummary = pushToolRound(item.toolCall, run, text, toolRounds)
+    messages.push(toolResultMessage(item.toolCall, text))
+    const writeKey = writeToolDedupeKey(run.toolName, run.args)
+    if (run.result.status === 'success' && writeKey) dedupeState.add(writeKey)
+    onToolEvent?.({
+      type: run.result.status === 'success' ? 'tool_completed' : 'tool_failed',
+      toolCallId: item.toolCall.id,
+      toolName: item.toolCall.name,
+      args: item.toolCall.arguments,
+      message: run.result.message,
+      resultSummary,
+      elapsedMs,
+    })
+    return {
+      toolCall: item.toolCall,
+      executed: { run, text },
+      rounds: [],
+    }
+  })
 }
 
 function appendSkippedToolFailure(
@@ -765,17 +1023,69 @@ async function executeToolCallsUntilConfirmation(
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   signal?: AbortSignal,
   deadlineMs?: number,
+  writeDedupeState: WriteToolDedupeState = new Set(),
 ): Promise<
   | { status: 'completed'; interrupted?: 'cancelled' | 'timeout' }
   | {
       status: 'confirmation_required'
       toolCall: NormalizedToolCall
+      batch?: WriteToolBatch
       remainingToolCalls: NormalizedToolCall[]
       executed: ExecutedToolCall
     }
 > {
   for (let i = 0; i < toolCalls.length; ) {
     const toolCall = toolCalls[i]
+    const writeKey = writeToolDedupeKeyForCall(toolCall)
+    if (writeKey && writeDedupeState.has(writeKey)) {
+      appendDeduplicatedWriteToolResult(
+        toolCall,
+        messages,
+        toolRounds,
+        onToolEvent,
+      )
+      i += 1
+      continue
+    }
+
+    const writeBatch = collectWriteToolBatch(toolCalls, i, permissions)
+    if (writeBatch) {
+      const executed = await executeToolCall(
+        toolCall,
+        false,
+        permissions,
+        sessionId,
+        toolRounds,
+        onToolEvent,
+        signal,
+        deadlineMs,
+        buildBatchConfirmationPreview(writeBatch),
+      )
+      if (executed.run.result.status === 'confirmation_required') {
+        return {
+          status: 'confirmation_required',
+          toolCall,
+          batch: writeBatch,
+          remainingToolCalls: toolCalls.slice(i + writeBatch.items.length),
+          executed,
+        }
+      }
+      messages.push(toolResultMessage(toolCall, executed.text))
+      if (isInterruptedToolResult(executed.run.result)) {
+        const reason =
+          interruptionReasonFromResult(executed.run.result) ?? 'cancelled'
+        appendSkippedToolFailures(
+          toolCalls.slice(i + 1),
+          messages,
+          toolRounds,
+          onToolEvent,
+          reason,
+        )
+        return { status: 'completed', interrupted: reason }
+      }
+      i += 1
+      continue
+    }
 
     const batch = collectParallelReadToolBatch(toolCalls, i, permissions)
     if (batch.length > 1) {
@@ -826,6 +1136,9 @@ async function executeToolCallsUntilConfirmation(
         executed,
       }
     }
+    if (executed.run.result.status === 'success' && writeKey) {
+      writeDedupeState.add(writeKey)
+    }
     messages.push(toolResultMessage(toolCall, executed.text))
     if (isInterruptedToolResult(executed.run.result)) {
       const reason =
@@ -872,6 +1185,7 @@ async function executeToolCall(
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   signal?: AbortSignal,
   deadlineMs?: number,
+  confirmationPreviewOverride?: string,
 ): Promise<ExecutedToolCall> {
   onToolEvent?.({
     type: 'tool_started',
@@ -915,6 +1229,16 @@ async function executeToolCall(
     permissions,
     { sessionId, signal, deadlineMs },
   )
+  if (
+    confirmationPreviewOverride &&
+    run.result.status === 'confirmation_required' &&
+    run.result.confirmation
+  ) {
+    run.result.confirmation = {
+      ...run.result.confirmation,
+      preview: confirmationPreviewOverride,
+    }
+  }
   const text = truncateToolResult(
     serializeToolResultForModel(toolCall.name, run.result),
   )
@@ -974,6 +1298,7 @@ function toolResultMessage(
 
 function buildConfirmationResult(
   toolCall: NormalizedToolCall,
+  batch: WriteToolBatch | undefined,
   remaining: NormalizedToolCall[],
   messages: ChatMessage[],
   toolRounds: AgentRoundDetail[],
@@ -998,6 +1323,9 @@ function buildConfirmationResult(
     continuation: {
       messages: messages.slice(),
       pendingToolCall: toolCall,
+      ...(batch && {
+        pendingToolBatch: batch.items.map((item) => item.toolCall),
+      }),
       remainingToolCalls: remaining,
       toolRounds: toolRounds.slice(),
       nextRound,
@@ -1022,6 +1350,28 @@ function buildInterruptedResult(
     status: 'completed',
     metrics,
   }
+}
+
+function writeToolBatchFromPendingCalls(
+  pendingToolBatch: NormalizedToolCall[] | undefined,
+): WriteToolBatch | null {
+  if (!pendingToolBatch || pendingToolBatch.length <= 1) return null
+  const first = writeToolBatchItemForCall(pendingToolBatch[0])
+  if (!first) return null
+  const toolName = first.toolCall.name
+  if (
+    toolName !== 'set_entry_read_state' &&
+    toolName !== 'set_entry_starred_state'
+  ) {
+    return null
+  }
+  const items: WriteToolBatchItem[] = [first]
+  for (let i = 1; i < pendingToolBatch.length; i += 1) {
+    const item = writeToolBatchItemForCall(pendingToolBatch[i])
+    if (!item || item.toolCall.name !== toolName) return null
+    items.push(item)
+  }
+  return { toolName, items }
 }
 
 function resolveTools(
@@ -1175,6 +1525,7 @@ async function runAgentLoop(
       metrics.totalMs = metrics.llmMs + metrics.toolMs
       return buildConfirmationResult(
         toolExecution.toolCall,
+        toolExecution.batch,
         toolExecution.remainingToolCalls,
         messages,
         toolRounds,
@@ -1349,34 +1700,58 @@ export async function resumeAgentCore(
       ? cloneAgentRunMetrics(continuation.metrics)
       : createEmptyAgentRunMetrics()
 
-    // Run the confirmed pending tool call.
+    // Run the confirmed pending tool call or its compatible write batch.
     const toolStart = nowMs()
-    const pending = await executeToolCall(
-      continuation.pendingToolCall,
-      true,
-      permissions,
-      sessionId,
-      toolRounds,
-      options.onToolEvent,
-      scopedSignal.signal,
-      deadlineMs,
+    const writeDedupeState: WriteToolDedupeState = new Set()
+    const pendingBatch = writeToolBatchFromPendingCalls(
+      continuation.pendingToolBatch,
     )
-    const pendingToolMs = nowMs() - toolStart
-    metrics.toolMs += pendingToolMs
-    metrics.totalMs = metrics.llmMs + metrics.toolMs
-    messages.push(toolResultMessage(continuation.pendingToolCall, pending.text))
-    if (isInterruptedToolResult(pending.run.result)) {
-      const reason =
-        interruptionReasonFromResult(pending.run.result) ?? 'cancelled'
-      appendSkippedToolFailures(
-        continuation.remainingToolCalls,
+    let pending: ExecutedToolCall | undefined
+    if (pendingBatch) {
+      executeConfirmedWriteToolBatch(
+        pendingBatch,
         messages,
         toolRounds,
         options.onToolEvent,
-        reason,
+        writeDedupeState,
       )
-      return buildInterruptedResult(reason, toolRounds, metrics)
+    } else {
+      pending = await executeToolCall(
+        continuation.pendingToolCall,
+        true,
+        permissions,
+        sessionId,
+        toolRounds,
+        options.onToolEvent,
+        scopedSignal.signal,
+        deadlineMs,
+      )
+      messages.push(
+        toolResultMessage(continuation.pendingToolCall, pending.text),
+      )
+      if (pending.run.result.status === 'success') {
+        const pendingWriteKey = writeToolDedupeKey(
+          pending.run.toolName,
+          pending.run.args,
+        )
+        if (pendingWriteKey) writeDedupeState.add(pendingWriteKey)
+      }
+      if (isInterruptedToolResult(pending.run.result)) {
+        const reason =
+          interruptionReasonFromResult(pending.run.result) ?? 'cancelled'
+        appendSkippedToolFailures(
+          continuation.remainingToolCalls,
+          messages,
+          toolRounds,
+          options.onToolEvent,
+          reason,
+        )
+        return buildInterruptedResult(reason, toolRounds, metrics)
+      }
     }
+    const pendingToolMs = nowMs() - toolStart
+    metrics.toolMs += pendingToolMs
+    metrics.totalMs = metrics.llmMs + metrics.toolMs
 
     // Run the remaining queued tool calls (may hit another confirmation).
     const remaining = continuation.remainingToolCalls
@@ -1390,6 +1765,7 @@ export async function resumeAgentCore(
       options.onToolEvent,
       scopedSignal.signal,
       deadlineMs,
+      writeDedupeState,
     )
     const remainingToolMs = nowMs() - remainingToolStart
     metrics.toolMs += remainingToolMs
@@ -1409,6 +1785,7 @@ export async function resumeAgentCore(
       metrics.totalMs = metrics.llmMs + metrics.toolMs
       return buildConfirmationResult(
         toolExecution.toolCall,
+        toolExecution.batch,
         toolExecution.remainingToolCalls,
         messages,
         toolRounds,

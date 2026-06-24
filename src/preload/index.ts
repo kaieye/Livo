@@ -52,6 +52,7 @@ import type {
   AgentToolExecutionEvent,
   AgentChatHistoryMessage,
   AgentNavigationAction,
+  AgentMemoryRecord,
   AgentTraceRecord,
 } from '../shared/types'
 
@@ -285,10 +286,18 @@ const api = {
       invokeIpc(IPC.AGENT_ABORT, requestId),
     cancelPending: (pendingId: string): Promise<{ success: boolean }> =>
       invokeIpc(IPC.AGENT_CANCEL_PENDING, pendingId),
-    listTraces: (): Promise<AgentTraceRecord[]> =>
-      invokeIpc(IPC.AGENT_TRACES_LIST),
+    listTraces: (options?: {
+      sessionId?: string
+    }): Promise<AgentTraceRecord[]> =>
+      invokeIpc(IPC.AGENT_TRACES_LIST, options),
+    deleteTrace: (traceId: string): Promise<{ success: boolean }> =>
+      invokeIpc(IPC.AGENT_TRACES_DELETE, traceId),
     clearTraces: (): Promise<{ success: boolean }> =>
       invokeIpc(IPC.AGENT_TRACES_CLEAR),
+    listMemory: (): Promise<AgentMemoryRecord[]> =>
+      invokeIpc(IPC.AGENT_MEMORY_LIST),
+    clearMemory: (): Promise<{ success: boolean }> =>
+      invokeIpc(IPC.AGENT_MEMORY_CLEAR),
     onToolEvent: (callback: (data: AgentToolEventPayload) => void) => {
       const handler = (_event: unknown, data: AgentToolEventPayload) =>
         callback(data)

@@ -1,6 +1,7 @@
 import { isAgentCapabilityAllowed } from '../../shared/types'
 import type { AgentPermissionSettings } from '../../shared/types'
 import { getDb } from '../database'
+import { AgentMemoryStore } from './agent-memory'
 
 const VIEW_NAMES = ['文章', '社交', '视频', '图片']
 const MAX_PAGE_CONTEXT_CHARS = 6000
@@ -28,6 +29,10 @@ export function buildContextFallback(
   const trimmedPageContext = truncateText(pageContext, MAX_PAGE_CONTEXT_CHARS)
   if (trimmedPageContext) {
     ctx += `当前页面上下文：\n${trimmedPageContext}\n\n`
+  }
+  const memoryContext = AgentMemoryStore.contextSnippet()
+  if (memoryContext) {
+    ctx += `${memoryContext}\n\n`
   }
 
   try {
@@ -95,6 +100,10 @@ export function buildCompactContextFallback(
   const trimmedPageContext = truncateText(pageContext, MAX_PAGE_CONTEXT_CHARS)
   if (trimmedPageContext) {
     ctx += `当前页面上下文：\n${trimmedPageContext}\n\n`
+  }
+  const memoryContext = AgentMemoryStore.contextSnippet()
+  if (memoryContext) {
+    ctx += `${memoryContext}\n\n`
   }
 
   try {

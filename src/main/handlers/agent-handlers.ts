@@ -6,6 +6,7 @@ import type {
   AgentHistoryMessage,
   AgentToolExecutionEvent,
 } from '../agent/loop'
+import { AgentMemoryStore } from '../agent/agent-memory'
 import { AgentTraceStore } from '../agent/trace-store'
 import { settingsProvider } from '../services/system/settings-provider'
 import { normalizeAIError } from '../services/ai/provider-protocol'
@@ -22,6 +23,10 @@ interface AgentRunPayload {
 interface AgentResumePayload {
   requestId: string
   pendingId: string
+}
+
+interface AgentTraceListOptions {
+  sessionId?: string
 }
 
 export function registerAgentHandlers(): void {
@@ -89,12 +94,30 @@ export function registerAgentHandlers(): void {
     return { success: agentService.cancelPending(pendingId) }
   })
 
-  registerChannel(IPC.AGENT_TRACES_LIST, () => {
-    return AgentTraceStore.loadAll()
+  registerChannel(
+    IPC.AGENT_TRACES_LIST,
+    (_event, options?: AgentTraceListOptions) => {
+      return options?.sessionId
+        ? AgentTraceStore.loadBySession(options.sessionId)
+        : AgentTraceStore.loadAll()
+    },
+  )
+
+  registerChannel(IPC.AGENT_TRACES_DELETE, (_event, traceId: string) => {
+    return { success: AgentTraceStore.delete(traceId) }
   })
 
   registerChannel(IPC.AGENT_TRACES_CLEAR, () => {
     AgentTraceStore.clearAll()
+    return { success: true }
+  })
+
+  registerChannel(IPC.AGENT_MEMORY_LIST, () => {
+    return AgentMemoryStore.loadAll()
+  })
+
+  registerChannel(IPC.AGENT_MEMORY_CLEAR, () => {
+    AgentMemoryStore.clearAll()
     return { success: true }
   })
 }

@@ -17,12 +17,15 @@ export const DEFAULT_AGENT_TEMPERATURE = 0.5
 export const MAX_AGENT_TEMPERATURE = 2
 export const DEFAULT_AGENT_MAX_TOKENS = 2000
 export const MAX_AGENT_MAX_TOKENS = 32000
+export const WEB_SEARCH_PROVIDERS = ['duckduckgo', 'bing', 'brave'] as const
+export type WebSearchProviderId = (typeof WEB_SEARCH_PROVIDERS)[number]
 
 export interface AppSettings {
   ai: AIConfig
   agent: {
     runTimeoutSeconds: number
     maxRounds: number
+    webSearchProviders: WebSearchProviderId[]
   }
   agentPermissions: AgentPermissionSettings
   general: {
@@ -122,6 +125,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   agent: {
     runTimeoutSeconds: DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
     maxRounds: DEFAULT_AGENT_MAX_ROUNDS,
+    webSearchProviders: ['duckduckgo', 'bing', 'brave'],
   },
   agentPermissions: { ...DEFAULT_AGENT_PERMISSION_SETTINGS },
   general: {

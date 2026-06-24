@@ -8,6 +8,7 @@ import type {
 import { isAgentCapabilityAllowed } from '../../../shared/types'
 import { getDb } from '../../database'
 import {
+  batchUpdateEntryStateWithWriteBack,
   markAllRead,
   updateEntryWithWriteBack,
 } from '../../operations/entry-operations'
@@ -80,6 +81,96 @@ function entryStateLine(entry: Entry): string {
   return `状态: ${entry.isRead ? '已读' : '未读'} / ${entry.isStarred ? '已收藏' : '未收藏'}`
 }
 
+function entryStatePreview(
+  entryId: string,
+  updates: { isRead?: boolean; isStarred?: boolean },
+): string {
+  const entry = getDb().entries.getEntryById(entryId)
+  if (!entry) return `将尝试更新 1 篇文章；未找到 ID 为 "${entryId}" 的文章。`
+  const nextUpdates: string[] = []
+  if (updates.isRead !== undefined && updates.isRead !== entry.isRead) {
+    nextUpdates.push(updates.isRead ? '标记为已读' : '标记为未读')
+  }
+  if (
+    updates.isStarred !== undefined &&
+    updates.isStarred !== entry.isStarred
+  ) {
+    nextUpdates.push(updates.isStarred ? '收藏' : '取消收藏')
+  }
+  if (nextUpdates.length === 0) {
+    return `将检查文章「${entry.title}」；当前状态已经符合要求，不会写入。`
+  }
+  return `将更新文章「${entry.title}」：${nextUpdates.join('、')}。`
+}
+
+export function executeBatchEntryReadStateUpdate(
+  updates: Array<{ entryId: string; isRead: boolean }>,
+): AgentToolResult {
+  const result = batchUpdateEntryStateWithWriteBack(
+    updates.map((update) => ({
+      entryId: update.entryId,
+      isRead: update.isRead,
+    })),
+  )
+  const action = summarizeBooleanTargets(
+    updates,
+    'isRead',
+    '标记已读',
+    '标记未读',
+  )
+  return {
+    status: result.missingCount > 0 ? 'failed' : 'success',
+    message: `${action}：共 ${updates.length} 篇，找到 ${result.matchedCount} 篇，实际变更 ${result.changedCount} 篇${result.missingCount > 0 ? `，未找到 ${result.missingCount} 篇` : ''}。`,
+    data: {
+      count: updates.length,
+      changedCount: result.changedCount,
+      missingCount: result.missingCount,
+      results: result.results as unknown as object,
+    },
+  }
+}
+
+export function executeBatchEntryStarredStateUpdate(
+  updates: Array<{ entryId: string; isStarred: boolean }>,
+): AgentToolResult {
+  const result = batchUpdateEntryStateWithWriteBack(
+    updates.map((update) => ({
+      entryId: update.entryId,
+      isStarred: update.isStarred,
+    })),
+  )
+  const action = summarizeBooleanTargets(
+    updates,
+    'isStarred',
+    '收藏',
+    '取消收藏',
+  )
+  return {
+    status: result.missingCount > 0 ? 'failed' : 'success',
+    message: `${action}：共 ${updates.length} 篇，找到 ${result.matchedCount} 篇，实际变更 ${result.changedCount} 篇${result.missingCount > 0 ? `，未找到 ${result.missingCount} 篇` : ''}。`,
+    data: {
+      count: updates.length,
+      changedCount: result.changedCount,
+      missingCount: result.missingCount,
+      results: result.results as unknown as object,
+    },
+  }
+}
+
+function summarizeBooleanTargets<T extends string>(
+  updates: Array<Record<T, boolean>>,
+  key: T,
+  trueText: string,
+  falseText: string,
+): string {
+  const trueCount = updates.filter((update) => update[key]).length
+  const falseCount = updates.length - trueCount
+  if (trueCount > 0 && falseCount > 0) {
+    return `${trueText} ${trueCount} 篇，${falseText} ${falseCount} 篇`
+  }
+  return trueCount > 0 ? trueText : falseText
+}
+
 export function buildGetTodayUpdatesTool(): AgentTool {
   return defineReadTool({
     name: 'get_today_updates',
@@ -143,6 +234,14 @@ export function buildGetEntryDetailTool(): AgentTool {
       },
       ['entryId'],
     ),
+    preview: async (_context, args) => {
+      const entryId = String(args['entryId']).trim()
+      return {
+        message: entryStatePreview(entryId, {
+          isRead: args['isRead'] === true,
+        }),
+      }
+    },
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -215,6 +314,14 @@ export function buildSearchEntriesTool(): AgentTool {
       },
       ['query'],
     ),
+    preview: async (_context, args) => {
+      const entryId = String(args['entryId']).trim()
+      return {
+        message: entryStatePreview(entryId, {
+          isStarred: args['isStarred'] === true,
+        }),
+      }
+    },
     execute: async (
       _context,
       args: AgentToolArgs,
