@@ -409,6 +409,10 @@ describe('runAgentCore', () => {
     }
     expect(firstCallOptions.messages[0]?.content).toContain('COMPACT_CONTEXT')
     expect(firstCallOptions.messages[0]?.content).toContain(
+      '按相关性与可靠性给每个结果评分',
+    )
+    expect(firstCallOptions.messages[0]?.content).toContain('低于 0.4')
+    expect(firstCallOptions.messages[0]?.content).toContain(
       'get_session_overview',
     )
   })
