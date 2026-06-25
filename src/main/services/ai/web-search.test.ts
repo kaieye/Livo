@@ -50,6 +50,43 @@ describe('web search result formatting', () => {
     })
   })
 
+  it('filters unsafe result URLs before model formatting', () => {
+    const formatted = formatWebSearchResultsForAI(
+      [
+        {
+          title: 'Script URL',
+          url: 'javascript:alert(1)',
+          snippet: 'bad scheme',
+        },
+        {
+          title: 'Credentials URL',
+          url: 'https://user:pass@example.com/private',
+          snippet: 'credentials',
+        },
+        {
+          title: 'Loopback URL',
+          url: 'http://localhost:3000/admin',
+          snippet: 'local service',
+        },
+        {
+          title: 'Safe URL',
+          url: 'https://example.com/safe',
+          snippet: 'safe snippet',
+        },
+      ],
+      'query',
+    )
+
+    expect(formatted).toContain('Safe URL')
+    expect(formatted).toContain('https://example.com/safe')
+    expect(formatted).not.toContain('Script URL')
+    expect(formatted).not.toContain('Credentials URL')
+    expect(formatted).not.toContain('Loopback URL')
+    expect(formatted).not.toContain('javascript:alert')
+    expect(formatted).not.toContain('user:pass')
+    expect(formatted).not.toContain('localhost')
+  })
+
   it('leaves normal search text unchanged', () => {
     expect(stripPromptLikeSearchText('normal snippet')).toBe('normal snippet')
   })
@@ -86,6 +123,48 @@ describe('web search result formatting', () => {
     ])
     expect(response.attempts.map((attempt) => attempt.status)).toEqual([
       'failed',
+      'success',
+    ])
+  })
+
+  it('falls back when a provider only returns unsafe result URLs', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        htmlResponse(`
+          <html>
+            <a class="result__a" href="javascript:alert(1)">Unsafe title</a>
+            <a class="result__snippet">Unsafe snippet</a>
+          </html>
+        `),
+      )
+      .mockResolvedValueOnce(
+        htmlResponse(`
+          <html>
+            <li class="b_algo">
+              <h2><a href="https://example.com/safe">Safe title</a></h2>
+              <p>Safe snippet</p>
+            </li>
+          </html>
+        `),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const response = await webSearchWithMetadata('unsafe fallback query', {
+      providers: ['duckduckgo', 'bing'],
+      locale: 'en',
+    })
+
+    expect(response.provider).toBe('bing')
+    expect(response.results).toEqual([
+      {
+        title: 'Safe title',
+        url: 'https://example.com/safe',
+        snippet: 'Safe snippet',
+      },
+    ])
+    expect(response.attempts.map((attempt) => attempt.status)).toEqual([
+      'empty',
       'success',
     ])
   })

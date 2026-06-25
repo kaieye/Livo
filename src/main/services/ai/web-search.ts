@@ -4,6 +4,7 @@ import {
   throwIfAborted,
 } from '../../utils/abort-signal'
 import type { WebSearchProviderId } from '../../../shared/settings-schema'
+import { classifyExternalUrl } from '../../../shared/url-policy'
 
 /**
  * Minimal DuckDuckGo HTML search (no API key required), used by the agent's
@@ -105,6 +106,22 @@ export function sanitizeWebSearchResult(
     url: result.url,
     snippet: stripPromptLikeSearchText(result.snippet),
   }
+}
+
+function isAllowedSearchResultUrl(rawUrl: string): boolean {
+  const policy = classifyExternalUrl(rawUrl)
+  if (!policy.allowed || policy.suspicious) return false
+
+  const hostname = policy.hostname.toLowerCase()
+  return hostname !== 'localhost' && !hostname.endsWith('.localhost')
+}
+
+export function filterSafeWebSearchResults(
+  results: WebSearchResult[],
+): WebSearchResult[] {
+  return results
+    .filter((result) => isAllowedSearchResultUrl(result.url))
+    .map(sanitizeWebSearchResult)
 }
 
 /**
@@ -291,7 +308,7 @@ export async function webSearchWithMetadata(
         signal: scoped.signal,
       })
       throwIfAborted(scoped.signal)
-      const limited = results.slice(0, MAX_RESULTS)
+      const limited = filterSafeWebSearchResults(results).slice(0, MAX_RESULTS)
       attempts.push({
         provider: providerId,
         status: limited.length > 0 ? 'success' : 'empty',
@@ -419,7 +436,7 @@ export function formatWebSearchResultsForAI(
   results: WebSearchResult[],
   query: string,
 ): string {
-  const safeResults = results.map(sanitizeWebSearchResult)
+  const safeResults = filterSafeWebSearchResults(results).slice(0, MAX_RESULTS)
   if (safeResults.length === 0) {
     return `没有找到关于「${query}」的网络搜索结果。`
   }
