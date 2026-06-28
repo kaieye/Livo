@@ -23,8 +23,32 @@ export interface RagSearchResult {
   score: number
 }
 
-interface RagSearchResponse {
-  results?: RagSearchResult[]
+export type RagEmptyReason =
+  | 'no_session'
+  | 'no_subscribed_sources'
+  | 'no_indexed_chunks'
+  | 'no_retrieval_hits'
+  | 'filtered_out'
+  | 'retriever_error'
+
+export interface RagSearchTrace {
+  traceId?: string
+  vectorHits?: number
+  textHits?: number
+  returned?: number
+  latencyMs?: number
+  filters?: {
+    categories?: string[]
+    publishedAfter?: string
+    publishedBefore?: string
+    sourceUrls?: number
+  }
+  emptyReason?: RagEmptyReason
+}
+
+export interface RagSearchResponse {
+  results: RagSearchResult[]
+  trace?: RagSearchTrace
 }
 
 export interface RagIndexStatus {
@@ -66,6 +90,14 @@ export async function searchServerKnowledge(
   input: RagSearchInput,
   options: RagSearchOptions = {},
 ): Promise<RagSearchResult[]> {
+  const payload = await searchServerKnowledgeResponse(input, options)
+  return payload.results
+}
+
+export async function searchServerKnowledgeResponse(
+  input: RagSearchInput,
+  options: RagSearchOptions = {},
+): Promise<RagSearchResponse> {
   const response = await fetchRagApi('/api/rag/search', {
     method: 'POST',
     signal: options.signal,
@@ -74,11 +106,19 @@ export async function searchServerKnowledge(
     },
     body: JSON.stringify(input),
   })
-  if (!response) return []
+  if (!response) {
+    return {
+      results: [],
+      trace: { emptyReason: 'no_session', returned: 0 },
+    }
+  }
 
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
-      return []
+      return {
+        results: [],
+        trace: { emptyReason: 'no_session', returned: 0 },
+      }
     }
     const text = await response.text().catch(() => '')
     throw new Error(
@@ -87,7 +127,10 @@ export async function searchServerKnowledge(
   }
 
   const payload = (await response.json()) as RagSearchResponse
-  return Array.isArray(payload.results) ? payload.results : []
+  return {
+    results: Array.isArray(payload.results) ? payload.results : [],
+    trace: payload.trace,
+  }
 }
 
 export async function getServerKnowledgeStatus(

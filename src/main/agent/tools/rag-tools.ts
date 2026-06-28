@@ -5,8 +5,9 @@ import type {
 } from '../../../shared/types'
 import {
   getServerKnowledgeStatus,
-  searchServerKnowledge,
+  searchServerKnowledgeResponse,
   type RagIndexStatus,
+  type RagSearchTrace,
   type RagSearchInput,
   type RagSearchResult,
 } from '../../services/rag/rag-client'
@@ -26,37 +27,60 @@ function formatPublishedAt(value: string | null | undefined): string {
 
 function formatEmptyResultsForAI(
   query: string,
+  trace?: RagSearchTrace,
   status?: RagIndexStatus | null,
 ): string {
+  const traceSuffix = trace?.traceId
+    ? ` 本次检索 traceId：${trace.traceId}。`
+    : ''
+  switch (trace?.emptyReason) {
+    case 'no_session':
+      return `无法检索服务端知识库：当前未登录、会话已失效或没有权限。${traceSuffix}`
+    case 'no_subscribed_sources':
+      return `没有在服务端知识库中找到与「${query}」相关的资料，因为当前账号没有订阅源。${traceSuffix}`
+    case 'no_indexed_chunks':
+      return `没有在服务端知识库中找到与「${query}」相关的资料，因为服务端还没有可检索的索引片段。${traceSuffix}`
+    case 'filtered_out':
+      return `没有在服务端知识库中找到与「${query}」相关的资料，因为当前分类、来源或时间过滤条件排除了所有已索引内容。${traceSuffix}`
+    case 'retriever_error':
+      return `没有在服务端知识库中找到与「${query}」相关的资料，因为本次检索器执行失败。${traceSuffix}`
+    case 'no_retrieval_hits':
+      return `没有在服务端知识库中找到与「${query}」足够相关的资料；当前索引存在，但本次查询没有命中。${traceSuffix}`
+    default:
+      break
+  }
+
   if (!status) {
-    return `没有在服务端知识库中找到与「${query}」足够相关的资料。若尚未登录、无权限或服务端索引尚未完成，也可能返回空结果。`
+    return `没有在服务端知识库中找到与「${query}」足够相关的资料。若尚未登录、无权限或服务端索引尚未完成，也可能返回空结果。${traceSuffix}`
   }
 
   const activeJobs = status.jobs.pending + status.jobs.running
   if (status.chunks === 0 && activeJobs > 0) {
-    return `没有在服务端知识库中找到与「${query}」足够相关的资料。服务端知识库还没有可检索片段，当前仍有 ${activeJobs} 个索引任务待处理或运行中。`
+    return `没有在服务端知识库中找到与「${query}」足够相关的资料。服务端知识库还没有可检索片段，当前仍有 ${activeJobs} 个索引任务待处理或运行中。${traceSuffix}`
   }
   if (status.chunks === 0) {
-    return `没有在服务端知识库中找到与「${query}」足够相关的资料。服务端知识库目前没有已索引片段。`
+    return `没有在服务端知识库中找到与「${query}」足够相关的资料。服务端知识库目前没有已索引片段。${traceSuffix}`
   }
   if (status.jobs.failed > 0) {
     const detail = status.latestFailedError
       ? `最近失败原因：${status.latestFailedError}`
       : '存在索引失败任务。'
-    return `没有在服务端知识库中找到与「${query}」足够相关的资料。当前已有 ${status.chunks} 个可检索片段，但本次查询没有命中；${detail}`
+    return `没有在服务端知识库中找到与「${query}」足够相关的资料。当前已有 ${status.chunks} 个可检索片段，但本次查询没有命中；${detail}${traceSuffix}`
   }
-  return `没有在服务端知识库中找到与「${query}」足够相关的资料。当前服务端知识库已有 ${status.chunks} 个可检索片段，但本次查询没有足够相关的命中。`
+  return `没有在服务端知识库中找到与「${query}」足够相关的资料。当前服务端知识库已有 ${status.chunks} 个可检索片段，但本次查询没有足够相关的命中。${traceSuffix}`
 }
 
 function formatResultsForAI(
   query: string,
   results: RagSearchResult[],
+  trace?: RagSearchTrace,
   status?: RagIndexStatus | null,
 ): string {
   if (results.length === 0) {
-    return formatEmptyResultsForAI(query, status)
+    return formatEmptyResultsForAI(query, trace, status)
   }
 
+  const traceLine = trace?.traceId ? `\n\ntraceId: ${trace.traceId}` : ''
   const lines = results
     .map((item, index) => {
       const source = item.sourceTitle ? `｜来源: ${item.sourceTitle}` : ''
@@ -68,7 +92,7 @@ function formatResultsForAI(
     })
     .join('\n\n')
 
-  return `服务端知识库检索「${query}」返回 ${results.length} 条相关片段：\n\n${lines}`
+  return `服务端知识库检索「${query}」返回 ${results.length} 条相关片段：\n\n${lines}${traceLine}`
 }
 
 function optionalStringArg(value: unknown): string | undefined {
@@ -139,9 +163,10 @@ export function buildSearchLivoKnowledgeTool(): AgentTool {
         if (publishedAfter) input.publishedAfter = publishedAfter
         if (publishedBefore) input.publishedBefore = publishedBefore
 
-        const results = await searchServerKnowledge(input, {
+        const response = await searchServerKnowledgeResponse(input, {
           signal: context.signal,
         })
+        const { results, trace } = response
         const status =
           results.length === 0
             ? await getServerKnowledgeStatus({ signal: context.signal }).catch(
@@ -150,10 +175,12 @@ export function buildSearchLivoKnowledgeTool(): AgentTool {
             : null
         return {
           status: 'success',
-          message: formatResultsForAI(query, results, status),
+          message: formatResultsForAI(query, results, trace, status),
           data: {
             count: results.length,
             results: results as unknown[],
+            ...(trace && { trace: trace as unknown as object }),
+            ...(trace?.traceId && { traceId: trace.traceId }),
             ...(status && { status: status as unknown as object }),
           },
         }

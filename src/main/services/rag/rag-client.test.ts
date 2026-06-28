@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getServerKnowledgeStatus, searchServerKnowledge } from './rag-client'
+import {
+  getServerKnowledgeStatus,
+  searchServerKnowledge,
+  searchServerKnowledgeResponse,
+} from './rag-client'
 
 const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -44,6 +48,12 @@ describe('searchServerKnowledge', () => {
               score: 0.9,
             },
           ],
+          trace: {
+            traceId: 'trace_1',
+            vectorHits: 0,
+            textHits: 1,
+            returned: 1,
+          },
         }),
         { status: 200 },
       ),
@@ -68,12 +78,50 @@ describe('searchServerKnowledge', () => {
     expect(results).toHaveLength(1)
   })
 
+  it('returns the full search response including trace metadata', async () => {
+    mocks.getValidToken.mockReturnValue('token_1')
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          results: [],
+          trace: {
+            traceId: 'trace_empty',
+            vectorHits: 0,
+            textHits: 0,
+            returned: 0,
+            emptyReason: 'no_retrieval_hits',
+          },
+        }),
+        { status: 200 },
+      ),
+    )
+
+    await expect(
+      searchServerKnowledgeResponse({ query: 'Missing topic' }),
+    ).resolves.toEqual({
+      results: [],
+      trace: {
+        traceId: 'trace_empty',
+        vectorHits: 0,
+        textHits: 0,
+        returned: 0,
+        emptyReason: 'no_retrieval_hits',
+      },
+    })
+  })
+
   it('returns empty results without a valid session token', async () => {
     mocks.getValidToken.mockReturnValue(null)
 
     await expect(searchServerKnowledge({ query: 'AI Agent' })).resolves.toEqual(
       [],
     )
+    await expect(
+      searchServerKnowledgeResponse({ query: 'AI Agent' }),
+    ).resolves.toEqual({
+      results: [],
+      trace: { emptyReason: 'no_session', returned: 0 },
+    })
     expect(mocks.fetch).not.toHaveBeenCalled()
   })
 
