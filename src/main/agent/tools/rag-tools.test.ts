@@ -39,6 +39,21 @@ describe('buildSearchLivoKnowledgeTool', () => {
           publishedAt: '2026-06-20T10:00:00.000Z',
           snippet: 'AI Agent 正在成为工具调用的重要形态。',
           score: 0.82,
+          evidence: [
+            {
+              chunkId: 'chunk_1',
+              quote: 'AI Agent 正在成为工具调用的重要形态。',
+              snippet: 'AI Agent 正在成为工具调用的重要形态。',
+              score: 0.84,
+            },
+            {
+              chunkId: 'chunk_2',
+              quote: '工具调用让 Agent 能连接外部系统。',
+              snippet: '工具调用让 Agent 能连接外部系统。',
+              score: 0.77,
+            },
+          ],
+          whyMatched: ['关键词命中', '内容质量较高'],
         },
       ],
       trace: {
@@ -71,6 +86,9 @@ describe('buildSearchLivoKnowledgeTool', () => {
     expect(result.status).toBe('success')
     expect(result.message).toContain('AI Agent 观察')
     expect(result.message).toContain('Example Feed')
+    expect(result.message).toContain('证据 1 (0.84)')
+    expect(result.message).toContain('工具调用让 Agent 能连接外部系统')
+    expect(result.message).toContain('匹配原因: 关键词命中、内容质量较高')
     expect(result.message).toContain('trace_1')
     expect(result.data?.count).toBe(1)
     expect(result.data?.traceId).toBe('trace_1')

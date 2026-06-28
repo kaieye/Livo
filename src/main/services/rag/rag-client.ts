@@ -11,6 +11,13 @@ export interface RagSearchInput {
   publishedBefore?: string
 }
 
+export interface RagEvidence {
+  chunkId: string
+  quote: string
+  snippet: string
+  score: number
+}
+
 export interface RagSearchResult {
   documentId: string
   chunkId: string
@@ -21,6 +28,8 @@ export interface RagSearchResult {
   publishedAt?: string | null
   snippet: string
   score: number
+  evidence?: RagEvidence[]
+  whyMatched?: string[]
 }
 
 export type RagEmptyReason =

@@ -86,9 +86,22 @@ function formatResultsForAI(
       const source = item.sourceTitle ? `｜来源: ${item.sourceTitle}` : ''
       const category = item.category ? `｜分类: ${item.category}` : ''
       const url = item.url ? `\n   链接: ${item.url}` : ''
+      const evidence =
+        item.evidence && item.evidence.length > 0
+          ? item.evidence
+              .map((entry, evidenceIndex) => {
+                const quote = entry.quote || entry.snippet
+                return `   证据 ${evidenceIndex + 1} (${entry.score.toFixed(2)}): ${quote}`
+              })
+              .join('\n')
+          : `   片段: ${item.snippet}`
+      const whyMatched =
+        item.whyMatched && item.whyMatched.length > 0
+          ? `\n   匹配原因: ${item.whyMatched.join('、')}`
+          : ''
       return `[${index + 1}] ${item.title}${source}${category}
    发布时间: ${formatPublishedAt(item.publishedAt)}｜相关度: ${item.score.toFixed(2)}
-   片段: ${item.snippet}${url}`
+${evidence}${whyMatched}${url}`
     })
     .join('\n\n')
 
