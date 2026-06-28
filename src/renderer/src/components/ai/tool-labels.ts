@@ -19,6 +19,8 @@ export function aiChatToolLabelOf(name: string): string {
       return '统计未读'
     case 'web_search':
       return '网络搜索'
+    case 'search_livo_knowledge':
+      return '检索知识库'
     case 'add_feed':
       return '添加订阅源'
     case 'remove_subscription':

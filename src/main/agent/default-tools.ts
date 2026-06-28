@@ -60,6 +60,7 @@ import {
   buildRecallPreferenceTool,
   buildRememberPreferenceTool,
 } from './tools/memory-tools'
+import { buildSearchLivoKnowledgeTool } from './tools/rag-tools'
 
 /** Build every agent tool exactly once. Used by the registry provider. */
 export function buildAllAgentTools(): AgentTool[] {
@@ -106,6 +107,8 @@ export function buildAllAgentTools(): AgentTool[] {
     buildRecallPreferenceTool(),
     buildRememberPreferenceTool(),
     buildForgetPreferenceTool(),
+    // Server knowledge
+    buildSearchLivoKnowledgeTool(),
     // External
     buildWebSearchTool(),
     // Navigation
