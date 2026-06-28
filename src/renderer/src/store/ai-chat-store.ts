@@ -120,6 +120,54 @@ function citationFromUnknown(value: unknown): AIChatCitation | null {
   }
 }
 
+function evidenceCitationFromUnknown(
+  result: unknown,
+  evidence: unknown,
+): AIChatCitation | null {
+  if (
+    !isRecord(result) ||
+    typeof result.title !== 'string' ||
+    !isRecord(evidence)
+  ) {
+    return null
+  }
+  const snippet =
+    typeof evidence.quote === 'string' && evidence.quote.trim()
+      ? evidence.quote
+      : typeof evidence.snippet === 'string' && evidence.snippet.trim()
+        ? evidence.snippet
+        : undefined
+
+  return {
+    documentId: optionalString(result.documentId) ?? undefined,
+    chunkId:
+      optionalString(evidence.chunkId) ??
+      optionalString(result.chunkId) ??
+      undefined,
+    title: result.title,
+    url: optionalString(result.url),
+    sourceTitle: optionalString(result.sourceTitle),
+    category: optionalString(result.category),
+    publishedAt: optionalString(result.publishedAt),
+    snippet,
+    score: optionalNumber(evidence.score) ?? optionalNumber(result.score),
+  }
+}
+
+function appendUniqueCitation(
+  citations: AIChatCitation[],
+  seen: Set<string>,
+  citation: AIChatCitation | null,
+): boolean {
+  if (!citation) return false
+  const key =
+    citation.chunkId || citation.documentId || citation.url || citation.title
+  if (seen.has(key)) return false
+  seen.add(key)
+  citations.push(citation)
+  return citations.length >= 8
+}
+
 function extractRagCitations(
   toolRounds: AgentRoundDetail[] | undefined,
 ): AIChatCitation[] {
@@ -132,17 +180,24 @@ function extractRagCitations(
     const results = round.resultData?.results
     if (!Array.isArray(results)) continue
     for (const result of results) {
-      const citation = citationFromUnknown(result)
-      if (!citation) continue
-      const key =
-        citation.chunkId ||
-        citation.documentId ||
-        citation.url ||
-        citation.title
-      if (seen.has(key)) continue
-      seen.add(key)
-      citations.push(citation)
-      if (citations.length >= 8) return citations
+      const evidence = isRecord(result) ? result.evidence : undefined
+      if (Array.isArray(evidence) && evidence.length > 0) {
+        for (const item of evidence) {
+          if (
+            appendUniqueCitation(
+              citations,
+              seen,
+              evidenceCitationFromUnknown(result, item),
+            )
+          ) {
+            return citations
+          }
+        }
+        continue
+      }
+      if (appendUniqueCitation(citations, seen, citationFromUnknown(result))) {
+        return citations
+      }
     }
   }
   return citations

@@ -288,6 +288,20 @@ describe('useAIChatStore.cancelPending', () => {
                 publishedAt: '2026-06-20T10:00:00.000Z',
                 snippet: '相关片段',
                 score: 0.82,
+                evidence: [
+                  {
+                    chunkId: 'chunk_evidence_1',
+                    quote: '第一条可引用证据',
+                    snippet: '第一条证据上下文',
+                    score: 0.84,
+                  },
+                  {
+                    chunkId: 'chunk_evidence_2',
+                    quote: '第二条可引用证据',
+                    snippet: '第二条证据上下文',
+                    score: 0.78,
+                  },
+                ],
               },
             ],
           },
@@ -303,6 +317,16 @@ describe('useAIChatStore.cancelPending', () => {
     expect(assistant?.citations).toEqual([
       expect.objectContaining({
         title: 'AI Agent 观察',
+        chunkId: 'chunk_evidence_1',
+        snippet: '第一条可引用证据',
+        score: 0.84,
+        url: 'https://example.com/post',
+        sourceTitle: 'Example Feed',
+      }),
+      expect.objectContaining({
+        title: 'AI Agent 观察',
+        chunkId: 'chunk_evidence_2',
+        snippet: '第二条可引用证据',
         url: 'https://example.com/post',
         sourceTitle: 'Example Feed',
       }),
