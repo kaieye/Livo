@@ -362,7 +362,11 @@ async function runRefreshSingleFeed(
       feedImageUrl,
     )
 
-    const newTitle = formatFeedTitle(normalizedFeedUrl, parsed.title, feed.title)
+    const newTitle = formatFeedTitle(
+      normalizedFeedUrl,
+      parsed.title,
+      feed.title,
+    )
 
     getDb().feeds.updateFeed(feed.id, {
       title: newTitle,

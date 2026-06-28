@@ -90,9 +90,7 @@ async function fetchText(url: string): Promise<string | null> {
 function extractTitleFromXml(xml: string): string | null {
   const m = xml.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
   if (!m?.[1]) return null
-  return m[1]
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .trim()
+  return m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim()
 }
 
 async function fetchJson(
@@ -164,7 +162,11 @@ async function resolveTwitterNameByUsername(
     if (m3?.[1]?.trim()) return m3[1].trim()
 
     // 如果标题不是 URL 且不等于用户名，直接使用
-    if (title && !/^https?:\/\//i.test(title) && title.toLowerCase() !== username.toLowerCase()) {
+    if (
+      title &&
+      !/^https?:\/\//i.test(title) &&
+      title.toLowerCase() !== username.toLowerCase()
+    ) {
       return title
     }
   }
@@ -199,7 +201,11 @@ async function resolveInstagramNameByUsername(
     if (m2?.[1]?.trim()) return m2[1].trim()
 
     // 如果标题不是 URL 且不等于用户名，直接使用
-    if (title && !/^https?:\/\//i.test(title) && title.toLowerCase() !== username.toLowerCase()) {
+    if (
+      title &&
+      !/^https?:\/\//i.test(title) &&
+      title.toLowerCase() !== username.toLowerCase()
+    ) {
       return title
     }
   }
