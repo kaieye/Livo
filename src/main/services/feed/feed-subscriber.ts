@@ -7,6 +7,7 @@ import { getImmediateFeedAvatar, resolveFeedAvatar } from './feed-avatar'
 import { getFeedImageUrl } from './feed-utils'
 import { detectViewType } from './feed-view'
 import { formatFeedTitle } from './feed-title'
+import { resolveFeedTitleFallback } from './feed-title-resolver'
 import {
   ensureInstagramUserFeedLimit,
   ensureTwitterUserFeedLimit,
@@ -145,6 +146,26 @@ export async function subscribeFeed(
       createdAt: Date.now(),
     }
     getDb().feeds.insertFeed(optimisticFeed)
+
+    // 后台异步解析真实订阅源名称（不阻塞订阅流程）
+    resolveFeedTitleFallback(storedUrl)
+      .then((resolvedTitle) => {
+        if (resolvedTitle) {
+          getDb().feeds.updateFeed(optimisticId, { title: resolvedTitle })
+          const updatedFeed = getDb().feeds.getFeedById(optimisticId)
+          getEventBus().send('feeds:updated', {
+            feedId: optimisticId,
+            feedIds: [optimisticId],
+            feeds: updatedFeed
+              ? [{ id: updatedFeed.id, title: updatedFeed.title }]
+              : undefined,
+          })
+        }
+      })
+      .catch(() => {
+        // 静默失败：标题解析失败不影响订阅
+      })
+
     return {
       feedId: optimisticId,
       feedTitle: optimisticFeed.title,
@@ -208,6 +229,34 @@ export async function subscribeFeed(
     createdAt: now,
   }
   getDb().feeds.insertFeed(feed)
+
+  // 如果标题看起来只是用户名（没有空格或太短），后台尝试解析真实名称
+  const currentTitle = feed.title
+  const looksLikeUsername =
+    currentTitle &&
+    !currentTitle.includes(' ') &&
+    (currentTitle.endsWith(' - X') ||
+      currentTitle.endsWith(' - Ins') ||
+      currentTitle.endsWith(' - Bilibili'))
+  if (looksLikeUsername) {
+    resolveFeedTitleFallback(storedUrl)
+      .then((resolvedTitle) => {
+        if (resolvedTitle && resolvedTitle !== currentTitle) {
+          getDb().feeds.updateFeed(id, { title: resolvedTitle })
+          const updatedFeed = getDb().feeds.getFeedById(id)
+          getEventBus().send('feeds:updated', {
+            feedId: id,
+            feedIds: [id],
+            feeds: updatedFeed
+              ? [{ id: updatedFeed.id, title: updatedFeed.title }]
+              : undefined,
+          })
+        }
+      })
+      .catch(() => {
+        // 静默失败
+      })
+  }
 
   // ---- Entry insertion ----
   let entriesInserted = 0

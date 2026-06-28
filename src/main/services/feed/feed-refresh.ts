@@ -27,6 +27,7 @@ import {
   sanitizeExistingFeedAvatarForRefresh,
 } from './feed-avatar-policy'
 import { formatFeedTitle } from './feed-title'
+import { resolveFeedTitleFallback } from './feed-title-resolver'
 import { logWarnQuiet } from '../system/logger'
 import {
   getBootstrapRefreshTimeoutMs,
@@ -361,8 +362,10 @@ async function runRefreshSingleFeed(
       feedImageUrl,
     )
 
+    const newTitle = formatFeedTitle(normalizedFeedUrl, parsed.title, feed.title)
+
     getDb().feeds.updateFeed(feed.id, {
-      title: formatFeedTitle(normalizedFeedUrl, parsed.title, feed.title),
+      title: newTitle,
       description: parsed.description,
       // Keep avatars fresh when upstream exposes a newer image, while still
       // avoiding regressions back to placeholder/default assets.
@@ -379,6 +382,33 @@ async function runRefreshSingleFeed(
         ? { view: reconcileFeedView(feed.url, feed.view) }
         : {}),
     })
+
+    // 如果标题看起来只是用户名，后台尝试解析真实名称
+    const looksLikeUsername =
+      newTitle &&
+      !newTitle.includes(' ') &&
+      (newTitle.endsWith(' - X') ||
+        newTitle.endsWith(' - Ins') ||
+        newTitle.endsWith(' - Bilibili'))
+    if (looksLikeUsername) {
+      resolveFeedTitleFallback(feed.url)
+        .then((resolvedTitle) => {
+          if (resolvedTitle && resolvedTitle !== newTitle) {
+            getDb().feeds.updateFeed(feed.id, { title: resolvedTitle })
+            const updatedFeed = getDb().feeds.getFeedById(feed.id)
+            getEventBus().send('feeds:updated', {
+              feedId: feed.id,
+              feedIds: [feed.id],
+              feeds: updatedFeed
+                ? [{ id: updatedFeed.id, title: updatedFeed.title }]
+                : undefined,
+            })
+          }
+        })
+        .catch(() => {
+          // 静默失败
+        })
+    }
 
     // IMPORTANT:
     // Do incremental upsert for all feeds, including Instagram/Picnob mirror routes.
