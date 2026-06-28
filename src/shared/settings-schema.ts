@@ -25,6 +25,7 @@ export interface AppSettings {
   agent: {
     runTimeoutSeconds: number
     maxRounds: number
+    enableServerKnowledge: boolean
     webSearchProviders: WebSearchProviderId[]
   }
   agentPermissions: AgentPermissionSettings
@@ -125,6 +126,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   agent: {
     runTimeoutSeconds: DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
     maxRounds: DEFAULT_AGENT_MAX_ROUNDS,
+    enableServerKnowledge: true,
     webSearchProviders: ['duckduckgo', 'bing', 'brave'],
   },
   agentPermissions: { ...DEFAULT_AGENT_PERMISSION_SETTINGS },

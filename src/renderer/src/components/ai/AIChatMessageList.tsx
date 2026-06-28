@@ -1,4 +1,4 @@
-import { Bot, User } from 'lucide-react'
+import { Bot, Link2, User } from 'lucide-react'
 import type { RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AIChatActivityBubble } from './AIChatActivityBubble'
@@ -7,6 +7,8 @@ import { AIChatMarkdown } from './AIChatMarkdown'
 import type { PendingAgentConfirmationView, ToolStatusItem } from './types'
 import type { AgentRunMetrics } from '@shared'
 import type { ChatMessage } from '../../store/ai-chat-store'
+import type { AIChatCitation } from '../../store/chat-history-store'
+import { openExternalUrlSafe } from '../../services/external-url'
 
 interface AIChatMessageListProps {
   messages: ChatMessage[]
@@ -23,6 +25,54 @@ interface AIChatMessageListProps {
   onSuggestionClick: (suggestion: string) => void
   onConfirm: () => void
   onCancel: () => void
+}
+
+function formatCitationDate(value: string | null | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isFinite(date.getTime())
+    ? date.toLocaleDateString()
+    : value.slice(0, 10)
+}
+
+function AIChatCitationList({ citations }: { citations: AIChatCitation[] }) {
+  if (citations.length === 0) return null
+
+  return (
+    <div className="border-border/70 mt-3 space-y-1.5 border-t pt-2">
+      <p className="text-text-tertiary text-[11px] font-medium">引用来源</p>
+      {citations.slice(0, 6).map((citation, index) => {
+        const date = formatCitationDate(citation.publishedAt)
+        const meta = [citation.sourceTitle, date].filter(Boolean).join(' · ')
+        return (
+          <button
+            key={`${citation.chunkId || citation.documentId || citation.url || citation.title}-${index}`}
+            type="button"
+            disabled={!citation.url}
+            onClick={() => {
+              if (citation.url) void openExternalUrlSafe(citation.url)
+            }}
+            className="hover:bg-surface-tertiary/70 dark:hover:bg-surface-dark-tertiary/70 flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors disabled:cursor-default disabled:hover:bg-transparent"
+          >
+            <Link2
+              size={13}
+              className="text-text-tertiary mt-0.5 flex-shrink-0"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="line-clamp-1 text-xs font-medium">
+                {citation.title}
+              </span>
+              {meta && (
+                <span className="text-text-tertiary mt-0.5 block truncate text-[11px]">
+                  {meta}
+                </span>
+              )}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 export function AIChatMessageList({
@@ -93,7 +143,10 @@ export function AIChatMessageList({
               }`}
             >
               {msg.role === 'assistant' ? (
-                <AIChatMarkdown content={msg.content} />
+                <>
+                  <AIChatMarkdown content={msg.content} />
+                  <AIChatCitationList citations={msg.citations ?? []} />
+                </>
               ) : (
                 <p className="whitespace-pre-wrap">{msg.content}</p>
               )}

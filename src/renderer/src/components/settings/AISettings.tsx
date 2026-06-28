@@ -39,6 +39,7 @@ import {
   Settings as SettingsIcon,
   Timer,
   Database,
+  Server,
   Download,
   ArrowUp,
   ArrowDown,
@@ -454,6 +455,12 @@ export function AISettings() {
     const [item] = current.splice(index, 1)
     current.splice(target, 0, item)
     updateWebSearchProviders(current)
+  }
+
+  const handleToggleServerKnowledge = () => {
+    void updateSettingsSection('agent', {
+      enableServerKnowledge: agent.enableServerKnowledge === false,
+    })
   }
 
   const inputClass =
@@ -903,6 +910,42 @@ export function AISettings() {
             />
             <p className="text-text-tertiary mt-1 text-xs">
               {t('settings.agentMaxTokensDesc')}
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        icon={Server}
+        title={t('settings.serverKnowledge')}
+        description={t('settings.serverKnowledgeDesc')}
+      >
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={agent.enableServerKnowledge !== false}
+            onClick={handleToggleServerKnowledge}
+            className={`inline-flex h-6 w-10 flex-shrink-0 items-center rounded-full transition-colors ${
+              agent.enableServerKnowledge !== false
+                ? 'bg-accent'
+                : 'bg-gray-300 dark:bg-gray-600'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                agent.enableServerKnowledge !== false
+                  ? 'translate-x-5'
+                  : 'translate-x-1'
+              }`}
+            />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">
+              {t('settings.enableServerKnowledge')}
+            </p>
+            <p className="text-text-tertiary mt-0.5 text-xs">
+              {t('settings.enableServerKnowledgeDesc')}
             </p>
           </div>
         </div>

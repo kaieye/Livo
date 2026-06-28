@@ -118,6 +118,7 @@ export interface AgentRoundDetail {
   name: string
   args: string
   resultSummary: string
+  resultData?: Record<string, AgentToolValue>
   status?: string
   elapsedMs?: number
   confirmation?: AgentConfirmationRequest

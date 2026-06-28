@@ -5,6 +5,7 @@ import { Typewriter } from '../lib/typewriter'
 import { aiChatToolLabelOf } from '../components/ai/tool-labels'
 import {
   ChatHistoryStore,
+  type AIChatCitation,
   type ChatSession,
   type StoredChatMessage,
 } from './chat-history-store'
@@ -18,6 +19,7 @@ import type {
   AgentRunMetrics,
   AgentChatHistoryMessage,
   AgentRunResponse,
+  AgentRoundDetail,
 } from '@shared'
 
 export type ChatMessage = StoredChatMessage
@@ -85,6 +87,65 @@ function emptyRunMetrics(): AgentRunMetrics {
     toolMs: 0,
     rounds: [],
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function optionalString(value: unknown): string | null | undefined {
+  if (value === null) return null
+  return typeof value === 'string' ? value : undefined
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function citationFromUnknown(value: unknown): AIChatCitation | null {
+  if (!isRecord(value) || typeof value.title !== 'string') return null
+  return {
+    documentId: optionalString(value.documentId) ?? undefined,
+    chunkId: optionalString(value.chunkId) ?? undefined,
+    title: value.title,
+    url: optionalString(value.url),
+    sourceTitle: optionalString(value.sourceTitle),
+    category: optionalString(value.category),
+    publishedAt: optionalString(value.publishedAt),
+    snippet:
+      typeof value.snippet === 'string' && value.snippet.trim()
+        ? value.snippet
+        : undefined,
+    score: optionalNumber(value.score),
+  }
+}
+
+function extractRagCitations(
+  toolRounds: AgentRoundDetail[] | undefined,
+): AIChatCitation[] {
+  const citations: AIChatCitation[] = []
+  const seen = new Set<string>()
+  for (const round of toolRounds ?? []) {
+    if (round.name !== 'search_livo_knowledge' || round.status !== 'success') {
+      continue
+    }
+    const results = round.resultData?.results
+    if (!Array.isArray(results)) continue
+    for (const result of results) {
+      const citation = citationFromUnknown(result)
+      if (!citation) continue
+      const key =
+        citation.chunkId ||
+        citation.documentId ||
+        citation.url ||
+        citation.title
+      if (seen.has(key)) continue
+      seen.add(key)
+      citations.push(citation)
+      if (citations.length >= 8) return citations
+    }
+  }
+  return citations
 }
 
 function sumOptional(
@@ -223,7 +284,10 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
       })
   }
 
-  function finishAssistantResponse(text: string): void {
+  function finishAssistantResponse(
+    text: string,
+    citations: AIChatCitation[] = [],
+  ): void {
     set({ isLoading: false, isConfirming: false, currentRequestId: null })
     const streamedContent = get().streamingContent
     if (streamedContent) {
@@ -233,6 +297,7 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
         role: 'assistant',
         content: text || streamedContent,
         timestamp: Date.now(),
+        ...(citations.length > 0 && { citations }),
       }
       set((state) => ({
         messages: [...state.messages, assistantMessage],
@@ -252,6 +317,7 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
           role: 'assistant',
           content: text,
           timestamp: Date.now(),
+          ...(citations.length > 0 && { citations }),
         }
         set((state) => ({
           messages: [...state.messages, assistantMessage],
@@ -298,7 +364,7 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
       return
     }
 
-    finishAssistantResponse(result.text)
+    finishAssistantResponse(result.text, extractRagCitations(result.toolRounds))
   }
 
   function pushSystemError(message: string): void {

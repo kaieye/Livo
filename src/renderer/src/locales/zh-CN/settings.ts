@@ -384,6 +384,12 @@ export const zhCNSettings = {
   agentTemperatureDesc: '0 更稳定，数值越高越发散。',
   agentMaxTokens: 'Agent max tokens',
   agentMaxTokensDesc: '限制 Agent 单次模型回复长度。',
+  serverKnowledge: '服务端知识库',
+  serverKnowledgeDesc:
+    '控制 AI 助手是否可以检索 Livo-Server 已索引的资讯资料。',
+  enableServerKnowledge: '允许 AI 使用服务端知识库',
+  enableServerKnowledgeDesc:
+    '关闭后，AI 对话不会注册 search_livo_knowledge 工具，也不会访问服务端 RAG 检索接口。',
   webSearchProviders: '网络搜索源',
   webSearchProvidersDesc:
     '控制 Agent 网络搜索的搜索源优先级；失败或无结果时会自动尝试下一项。',

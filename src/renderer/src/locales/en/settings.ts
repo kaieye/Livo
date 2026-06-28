@@ -410,6 +410,12 @@ export const enSettings = {
   agentTemperatureDesc: '0 is steadier; higher values are more exploratory.',
   agentMaxTokens: 'Agent max tokens',
   agentMaxTokensDesc: 'Caps the length of each agent model response.',
+  serverKnowledge: 'Server Knowledge',
+  serverKnowledgeDesc:
+    'Controls whether the AI assistant can search indexed Livo-Server articles.',
+  enableServerKnowledge: 'Allow AI to use server knowledge',
+  enableServerKnowledgeDesc:
+    'When off, AI chat does not register the search_livo_knowledge tool or call the server RAG search API.',
   webSearchProviders: 'Web search providers',
   webSearchProvidersDesc:
     'Controls the Agent web-search priority. Failed or empty providers fall back to the next enabled source.',

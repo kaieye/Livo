@@ -11,6 +11,19 @@ export interface StoredChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: number
+  citations?: AIChatCitation[]
+}
+
+export interface AIChatCitation {
+  documentId?: string
+  chunkId?: string
+  title: string
+  url?: string | null
+  sourceTitle?: string | null
+  category?: string | null
+  publishedAt?: string | null
+  snippet?: string
+  score?: number
 }
 
 export interface ChatSession {

@@ -254,6 +254,61 @@ describe('useAIChatStore.cancelPending', () => {
     })
   })
 
+  it('attaches RAG tool results as assistant citations', async () => {
+    const { useAIChatStore, useSettingsStore, api } = await loadAIChatStore()
+    useSettingsStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        ai: {
+          ...state.settings.ai,
+          apiKey: 'sk-test',
+          model: 'gpt-test',
+        },
+      },
+    }))
+    api.agent.run.mockResolvedValueOnce({
+      success: true,
+      status: 'completed',
+      text: 'ok',
+      metrics: { totalMs: 1, llmMs: 1, toolMs: 0, rounds: [] },
+      toolRounds: [
+        {
+          name: 'search_livo_knowledge',
+          args: '{"query":"AI Agent"}',
+          status: 'success',
+          resultSummary: 'search_livo_knowledge 执行完毕',
+          resultData: {
+            results: [
+              {
+                documentId: 'doc_1',
+                chunkId: 'chunk_1',
+                title: 'AI Agent 观察',
+                url: 'https://example.com/post',
+                sourceTitle: 'Example Feed',
+                publishedAt: '2026-06-20T10:00:00.000Z',
+                snippet: '相关片段',
+                score: 0.82,
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    await useAIChatStore.getState().sendMessage('最近 AI Agent 有什么文章？')
+
+    const assistant = useAIChatStore
+      .getState()
+      .messages.find((message) => message.role === 'assistant')
+    expect(assistant?.citations).toEqual([
+      expect.objectContaining({
+        title: 'AI Agent 观察',
+        url: 'https://example.com/post',
+        sourceTitle: 'Example Feed',
+      }),
+    ])
+  })
+
   it('applies agent content delta events directly to streaming content', async () => {
     const { useAIChatStore } = await loadAIChatStore()
 

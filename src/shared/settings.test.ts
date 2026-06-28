@@ -135,6 +135,20 @@ describe('settings normalization', () => {
     ).toEqual(DEFAULT_SETTINGS.agent.webSearchProviders)
   })
 
+  it('defaults server knowledge on and repairs invalid values', () => {
+    expect(normalizeSettings().agent.enableServerKnowledge).toBe(true)
+    expect(
+      normalizeSettings({
+        agent: { enableServerKnowledge: false } as any,
+      }).agent.enableServerKnowledge,
+    ).toBe(false)
+    expect(
+      normalizeSettings({
+        agent: { enableServerKnowledge: 'nope' } as any,
+      }).agent.enableServerKnowledge,
+    ).toBe(DEFAULT_SETTINGS.agent.enableServerKnowledge)
+  })
+
   it('keeps valid custom agent model parameters and caps excessive values', () => {
     const normalized = normalizeSettings({
       ai: {

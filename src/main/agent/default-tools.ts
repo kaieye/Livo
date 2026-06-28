@@ -130,6 +130,13 @@ export function buildDefaultAgentToolRegistry(): AgentToolRegistry {
 
 export function buildAllowedAgentToolRegistry(
   permissions?: AgentPermissionSettings,
+  options: { enableServerKnowledge?: boolean } = {},
 ): AgentToolRegistry {
-  return agentToolRegistryProvider.forPermissions(permissions)
+  const registry = agentToolRegistryProvider.forPermissions(permissions)
+  if (options.enableServerKnowledge !== false) {
+    return registry
+  }
+  return new AgentToolRegistry(
+    registry.list().filter((tool) => tool.name !== 'search_livo_knowledge'),
+  )
 }
