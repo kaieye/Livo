@@ -3,9 +3,45 @@ import { WechatRssSearchSection } from '../wechat-rss/WechatRssSearchSection'
 import type { WechatSearchResult } from '../../lib/wechat-rss-api'
 
 const POLL_INTERVAL_MS = 3_000
+const STORAGE_KEY_TOKEN = 'livo-wechat-mp-token'
+const STORAGE_KEY_LOGGED_IN = 'livo-wechat-mp-logged-in'
+
+function loadPersistedToken(): string {
+  try {
+    return localStorage.getItem(STORAGE_KEY_TOKEN) || ''
+  } catch {
+    return ''
+  }
+}
+
+function savePersistedToken(token: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_TOKEN, token)
+    localStorage.setItem(STORAGE_KEY_LOGGED_IN, '1')
+  } catch {
+    // ignore
+  }
+}
+
+function clearPersistedToken(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY_TOKEN)
+    localStorage.removeItem(STORAGE_KEY_LOGGED_IN)
+  } catch {
+    // ignore
+  }
+}
+
+function wasPreviouslyLoggedIn(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY_LOGGED_IN) === '1'
+  } catch {
+    return false
+  }
+}
 
 export function WechatRssSettings() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(wasPreviouslyLoggedIn)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [results, setResults] = useState<WechatSearchResult[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -40,6 +76,7 @@ export function WechatRssSettings() {
       const result = await window.api.auth.wechatMpLogin()
       if (result?.token) {
         setToken(result.token)
+        savePersistedToken(result.token)
         setIsLoggedIn(true)
       } else {
         throw new Error('未获取到登录凭证')
@@ -52,6 +89,18 @@ export function WechatRssSettings() {
       }
     } finally {
       setIsLoggingIn(false)
+    }
+  }, [])
+
+  // On mount: re-send persisted token to server (in case of server restart)
+  useEffect(() => {
+    const persisted = loadPersistedToken()
+    if (persisted) {
+      fetch(`${API_BASE}/api/wechat-rss/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: persisted }),
+      }).catch(() => {})
     }
   }, [])
 
