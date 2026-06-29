@@ -50,6 +50,12 @@ const routes: RouteObject[] = [
         }),
       },
       {
+        path: 'wechat-rss',
+        lazy: async () => ({
+          Component: (await import('../pages/WechatRssPage')).default,
+        }),
+      },
+      {
         path: 'login/:provider?',
         lazy: async () => ({
           Component: (await import('../pages/AccountLoginPage')).default,
