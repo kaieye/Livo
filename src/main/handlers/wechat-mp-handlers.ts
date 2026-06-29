@@ -17,12 +17,19 @@ function extractTokenFromUrl(url: string): string | null {
   return null
 }
 
-async function saveTokenToServer(token: string): Promise<void> {
+function buildCookieString(cookies: Electron.Cookie[]): string {
+  return cookies.map((c) => `${c.name}=${c.value}`).join('; ')
+}
+
+async function saveCredentialsToServer(
+  token: string,
+  cookies: string,
+): Promise<void> {
   const serverUrl = getBackendBaseUrl()
   const res = await fetch(`${serverUrl}/api/wechat-rss/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token }),
+    body: JSON.stringify({ token, cookies }),
   })
   if (!res.ok) {
     const msg = await res.text().catch(() => '')
@@ -52,7 +59,11 @@ export function registerWechatMpHandlers(): void {
       )
 
       let resolved = false
-      const finish = async (token: string | null, error?: string) => {
+      const finish = async (
+        token: string | null,
+        cookies: string,
+        error?: string,
+      ) => {
         if (resolved) return
         resolved = true
         try {
@@ -60,9 +71,21 @@ export function registerWechatMpHandlers(): void {
         } catch {
           // ignore
         }
-        if (token) {
+        if (token && cookies) {
           try {
-            await saveTokenToServer(token)
+            await saveCredentialsToServer(token, cookies)
+            resolve({ token })
+          } catch (e) {
+            reject(
+              new Error(
+                `服务器保存失败: ${e instanceof Error ? e.message : String(e)}`,
+              ),
+            )
+          }
+        } else if (token) {
+          // Token but no cookies — try saving with empty cookies
+          try {
+            await saveCredentialsToServer(token, '')
             resolve({ token })
           } catch (e) {
             reject(
@@ -77,56 +100,58 @@ export function registerWechatMpHandlers(): void {
       }
 
       // Timeout safety
-      const timer = setTimeout(() => finish(null, '登录超时'), LOGIN_TIMEOUT_MS)
+      const timer = setTimeout(
+        () => finish(null, '', '登录超时'),
+        LOGIN_TIMEOUT_MS,
+      )
 
       // Monitor page navigation for login success
       win.webContents.on('did-navigate', (_event, url) => {
-        // Check if we reached the WeChat MP home page (login successful)
         if (url.includes('/cgi-bin/home') || url.includes('/cgi-bin/appmsg')) {
           clearTimeout(timer)
-          // Try to extract token from URL first
-          const token = extractTokenFromUrl(url)
-          if (token) {
-            finish(token)
-            return
-          }
-          // If no token in URL, try to get it from cookies
+
+          // Get ALL cookies from the session
           win.webContents.session.cookies
             .get({ url: WX_MP_LOGIN_URL })
             .then((cookies) => {
-              for (const cookie of cookies) {
+              const cookieStr = buildCookieString(cookies)
+
+              // Try to extract token from URL first
+              const urlToken = extractTokenFromUrl(url)
+              if (urlToken) {
+                finish(urlToken, cookieStr)
+                return
+              }
+
+              // Look for token in cookies
+              for (const c of cookies) {
                 if (
-                  cookie.name === 'token' ||
-                  cookie.name.toLowerCase().includes('token')
+                  c.name === 'token' ||
+                  c.name.toLowerCase().includes('token')
                 ) {
-                  finish(cookie.value)
+                  finish(c.value, cookieStr)
                   return
                 }
               }
-              // Try to extract token from page
+
+              // Try extracting from page JS
               win.webContents
                 .executeJavaScript(
                   'new URL(window.location.href).searchParams.get("token") || ""',
                 )
                 .then((jsToken: string) => {
-                  if (jsToken) {
-                    finish(jsToken)
-                  } else {
-                    // Token not found in URL or cookies — but we're on the home page,
-                    // so login DID succeed. Try extracting cookies broadly.
-                    finish('logged-in-without-token')
-                  }
+                  finish(jsToken || 'logged-in', cookieStr)
                 })
-                .catch(() => finish('logged-in-without-token'))
+                .catch(() => finish('logged-in', cookieStr))
             })
-            .catch(() => finish('logged-in-without-token'))
+            .catch(() => finish('logged-in', ''))
         }
       })
 
       // Handle window close (user cancelled)
       win.on('closed', () => {
         clearTimeout(timer)
-        finish(null, '登录窗口已关闭')
+        finish(null, '', '登录窗口已关闭')
       })
 
       win.loadURL(WX_MP_LOGIN_URL)
