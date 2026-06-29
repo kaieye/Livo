@@ -73,7 +73,12 @@ async function invokeIpc<T = any>(
   return unwrapIpcEnvelope<T>(result)
 }
 
+import { getBackendBaseUrl } from '../main/services/backend/backend-config'
+
+const serverUrl = getBackendBaseUrl()
+
 const api = {
+  serverUrl,
   // Feed operations
   feeds: {
     add: (

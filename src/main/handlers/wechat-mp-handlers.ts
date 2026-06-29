@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { registerChannel } from '../ipc/register-channel'
 import { IPC } from '../../shared/ipc-contracts'
+import { getBackendBaseUrl } from '../services/backend/backend-config'
 
 const WX_MP_LOGIN_URL = 'https://mp.weixin.qq.com/'
 const LOGIN_TIMEOUT_MS = 180_000 // 3 minutes
@@ -14,6 +15,19 @@ function extractTokenFromUrl(url: string): string | null {
     // Not a valid URL
   }
   return null
+}
+
+async function saveTokenToServer(token: string): Promise<void> {
+  const serverUrl = getBackendBaseUrl()
+  const res = await fetch(`${serverUrl}/api/wechat-rss/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  })
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '')
+    throw new Error(msg || `Server responded with ${res.status}`)
+  }
 }
 
 export function registerWechatMpHandlers(): void {
@@ -38,7 +52,7 @@ export function registerWechatMpHandlers(): void {
       )
 
       let resolved = false
-      const finish = (token: string | null, error?: string) => {
+      const finish = async (token: string | null, error?: string) => {
         if (resolved) return
         resolved = true
         try {
@@ -47,7 +61,16 @@ export function registerWechatMpHandlers(): void {
           // ignore
         }
         if (token) {
-          resolve({ token })
+          try {
+            await saveTokenToServer(token)
+            resolve({ token })
+          } catch (e) {
+            reject(
+              new Error(
+                `服务器保存失败: ${e instanceof Error ? e.message : String(e)}`,
+              ),
+            )
+          }
         } else {
           reject(new Error(error || '登录超时或已取消'))
         }

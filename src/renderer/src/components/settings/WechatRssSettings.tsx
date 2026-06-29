@@ -14,7 +14,7 @@ export function WechatRssSettings() {
   const [token, setToken] = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const API_BASE = 'http://localhost:8787'
+  const API_BASE = window.api.serverUrl
 
   // Check if we already have a token on the server
   const checkLoginStatus = useCallback(async () => {
@@ -35,32 +35,14 @@ export function WechatRssSettings() {
     setIsLoggingIn(true)
 
     try {
-      // Invoke Electron IPC to open WeChat MP login window
+      // Invoke Electron IPC to open WeChat MP login window.
+      // Main process captures token AND saves it to Livo-Server.
       const result = await window.api.auth.wechatMpLogin()
-      const mpToken = result?.token || ''
-
-      if (!mpToken) {
-        throw new Error('未获取到登录凭证')
-      }
-
-      // Send token to Livo-Server
-      const res = await fetch(`${API_BASE}/api/wechat-rss/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: mpToken }),
-      })
-
-      if (!res.ok) {
-        const msg = await res.text().catch(() => '')
-        throw new Error(msg || `服务器错误: ${res.status}`)
-      }
-
-      const data = await res.json()
-      if (data.success) {
-        setToken(mpToken)
+      if (result?.token) {
+        setToken(result.token)
         setIsLoggedIn(true)
       } else {
-        throw new Error(data.message || '服务器拒绝此凭证')
+        throw new Error('未获取到登录凭证')
       }
     } catch (e) {
       if (e instanceof Error && e.message.includes('登录窗口已关闭')) {
