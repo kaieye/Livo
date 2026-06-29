@@ -96,6 +96,7 @@ export const IPC = {
   AUTH_GET_CURRENT_USER: 'auth:get-current-user',
   AUTH_LOGOUT: 'auth:logout',
   AUTH_CHECK_SESSION: 'auth:check-session',
+  WECHAT_MP_LOGIN: 'wechat-mp:login',
   DATA_CLEANUP: 'data:cleanup',
   DATA_STATS: 'data:stats',
   REFRESH_LOG_LIST: 'refresh-log:list',
@@ -375,6 +376,7 @@ export type IpcArgsByChannel = {
   [IPC.AUTH_GET_CURRENT_USER]: []
   [IPC.AUTH_LOGOUT]: []
   [IPC.AUTH_CHECK_SESSION]: []
+  [IPC.WECHAT_MP_LOGIN]: []
   [IPC.DATA_CLEANUP]: [
     options?: { entriesPerFeed?: number; maxEntryAgeDays?: number },
   ]
@@ -1246,6 +1248,7 @@ export const IPC_CONTRACTS = {
   [IPC.AUTH_GET_CURRENT_USER]: noArgs(IPC.AUTH_GET_CURRENT_USER),
   [IPC.AUTH_LOGOUT]: noArgs(IPC.AUTH_LOGOUT),
   [IPC.AUTH_CHECK_SESSION]: noArgs(IPC.AUTH_CHECK_SESSION),
+  [IPC.WECHAT_MP_LOGIN]: noArgs(IPC.WECHAT_MP_LOGIN),
   [IPC.DATA_CLEANUP]: {
     channel: IPC.DATA_CLEANUP,
     validateArgs: (args) => {

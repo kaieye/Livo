@@ -105,6 +105,7 @@ export type SettingsTabId =
   | 'refreshLogs'
   | 'favorites'
   | 'fever'
+  | 'wechat-rss'
 
 export const DEFAULT_SETTINGS: AppSettings = {
   ai: {
