@@ -586,6 +586,7 @@ const api = {
     getCurrentUser: () => invokeIpc(IPC.AUTH_GET_CURRENT_USER),
     logout: () => invokeIpc(IPC.AUTH_LOGOUT),
     checkSession: () => invokeIpc(IPC.AUTH_CHECK_SESSION),
+    wechatMpLogin: () => invokeIpc(IPC.WECHAT_MP_LOGIN),
     onLoginProgress: (
       callback: (data: { status: string }) => void,
     ): (() => void) => {

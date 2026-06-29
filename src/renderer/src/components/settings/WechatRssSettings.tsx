@@ -36,8 +36,7 @@ export function WechatRssSettings() {
 
     try {
       // Invoke Electron IPC to open WeChat MP login window
-      const { ipcRenderer } = window.require('electron')
-      const result = await ipcRenderer.invoke('wechat-mp:login')
+      const result = await window.api.auth.wechatMpLogin()
       const mpToken = result?.token || ''
 
       if (!mpToken) {
