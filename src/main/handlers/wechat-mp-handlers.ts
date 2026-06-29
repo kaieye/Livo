@@ -27,8 +27,15 @@ export function registerWechatMpHandlers(): void {
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
+          // Use persistent session so cookies survive across login attempts
+          partition: 'persist:wechat-mp',
         },
       })
+
+      // Set a standard browser UA to avoid being blocked by WeChat
+      win.webContents.setUserAgent(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      )
 
       let resolved = false
       const finish = (token: string | null, error?: string) => {
