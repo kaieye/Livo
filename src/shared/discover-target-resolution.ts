@@ -7,6 +7,12 @@ import { FeedViewType, type FeedWithCount } from './types'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
 
+export interface DiscoverSubscribeTargetMetadata {
+  fakeId?: string
+  source?: 'wechat-rss'
+  requiresLogin?: boolean
+}
+
 export interface DiscoverSubscribeTarget {
   feedId?: string
   url: string
@@ -16,6 +22,7 @@ export interface DiscoverSubscribeTarget {
   description?: string
   category?: string
   view?: FeedViewType
+  metadata?: DiscoverSubscribeTargetMetadata
 }
 
 export interface ResolvedDiscoverSubscribeConfig {
@@ -53,6 +60,11 @@ export function parseDiscoverSubscribeTarget(
     description: params.get('description') || undefined,
     category: params.get('category') || undefined,
     view,
+    metadata: {
+      fakeId: params.get('fakeId') || undefined,
+      source: params.get('source') === 'wechat-rss' ? 'wechat-rss' : undefined,
+      requiresLogin: params.get('requiresLogin') === 'true' ? true : undefined,
+    },
   }
 }
 
@@ -60,6 +72,9 @@ export function resolveDiscoverSubscribeView(
   target: DiscoverSubscribeTarget,
   existingFeed?: Pick<FeedWithCount, 'view' | 'url'> | null,
 ): FeedViewType {
+  if (target.metadata?.source === 'wechat-rss') {
+    return FeedViewType.Articles
+  }
   return (
     existingFeed?.view ??
     target.view ??

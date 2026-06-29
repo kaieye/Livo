@@ -19,6 +19,7 @@ import type {
   DiscoverFeedPreviewEntry,
 } from '../../../shared/types'
 import { FeedViewType } from '../../../shared/types'
+import type { DiscoverSubscribeTargetMetadata } from '../../../shared/discover-target-resolution'
 import { EntryContent } from '../components/entry/EntryContent'
 import { SocialDetailView } from '../components/entry/SocialDetailView'
 import { FeedAvatar } from '../components/feed/FeedAvatar'
@@ -38,6 +39,7 @@ interface DiscoverPreviewTarget {
   imageUrl?: string
   description?: string
   view?: FeedViewType
+  metadata?: DiscoverSubscribeTargetMetadata
 }
 
 export default function DiscoverPreviewPage() {
@@ -164,6 +166,7 @@ export default function DiscoverPreviewPage() {
         imageUrl: preview?.imageUrl || target.imageUrl,
         description: preview?.description || target.description,
         view: preferredView,
+        metadata: target.metadata,
       }),
     )
   }, [navigate, preferredView, preview, target])
@@ -395,6 +398,11 @@ function parseDiscoverPreviewTarget(search: string): DiscoverPreviewTarget {
     imageUrl: params.get('imageUrl') || undefined,
     description: params.get('description') || undefined,
     view: Number.isFinite(view) ? (view as FeedViewType) : undefined,
+    metadata: {
+      fakeId: params.get('fakeId') || undefined,
+      source: params.get('source') === 'wechat-rss' ? 'wechat-rss' : undefined,
+      requiresLogin: params.get('requiresLogin') === 'true' ? true : undefined,
+    },
   }
 }
 

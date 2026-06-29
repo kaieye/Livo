@@ -43,8 +43,8 @@ export function DiscoverResultRow({
 }) {
   const { t } = useTranslation()
   const platform = useMemo(
-    () => inferDiscoverPlatform(result.url),
-    [result.url],
+    () => inferDiscoverPlatform(result.url, result.metadata),
+    [result.metadata, result.url],
   )
   const isInstagram = platform.id === 'instagram'
 

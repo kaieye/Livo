@@ -8,6 +8,7 @@ export type AccountProvider =
   | 'x'
   | 'instagram'
   | 'bilibili'
+  | 'wechat-mp'
 
 export interface AccountSessionState {
   provider: AccountProvider

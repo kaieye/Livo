@@ -21,6 +21,7 @@ import { inferDiscoverFeedViewFromUrl } from '../../lib/discover-feed'
 import { canonicalizeDiscoverRoute } from '../../lib/discover-subscribe-config'
 import { inferDiscoverPlatform } from '../../lib/discover-platform-presentation'
 import { useDiscoverStore } from '../../store/discover-store'
+import { useAuthStore } from '../../store/auth-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useEntryStore } from '../../store/entry-store'
 import { useStoreShallow } from '../../store/helpers'
@@ -99,6 +100,16 @@ const platformIcons: Record<string, React.ReactNode> = {
       <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z" />
     </svg>
   ),
+  'wechat-mp': (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className="h-4 w-4"
+    >
+      <path d="M8.072 3C4.167 3 1 5.615 1 8.84c0 1.85 1.02 3.49 2.62 4.56l-.66 2.43a.5.5 0 0 0 .72.57l2.93-1.46c.48.08.97.12 1.46.12 3.9 0 7.07-2.62 7.07-5.84C15.14 5.615 11.972 3 8.072 3Zm-2.25 4.7a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Zm4.5 0a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8ZM16.2 8.18c-3.76 0-6.8 2.45-6.8 5.47 0 3.03 3.04 5.48 6.8 5.48.75 0 1.49-.1 2.18-.3l2.43 1.22a.5.5 0 0 0 .72-.57l-.56-2.03c1.28-.97 2.03-2.29 2.03-3.8 0-3.02-3.04-5.47-6.8-5.47Zm-2.17 4.38a.78.78 0 1 1 0-1.56.78.78 0 0 1 0 1.56Zm4.33 0a.78.78 0 1 1 0-1.56.78.78 0 0 1 0 1.56Z" />
+    </svg>
+  ),
 }
 
 const SEARCH_RESULTS_PAGE_SIZE = 6
@@ -146,6 +157,7 @@ export function DiscoverPanel() {
   //    results and the user is not signed in.
   const youtubeAccount = useAccountStatusQuery('youtube')
   const youtubeNeedsLogin = !youtubeAccount.data?.linked
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
   const [searchPage, setSearchPage] = useState(1)
@@ -176,6 +188,7 @@ export function DiscoverPanel() {
     imageUrl?: string
     description?: string
     view?: FeedViewType
+    metadata?: DiscoverSearchResult['metadata']
   } | null>(null)
   const [previewData, setPreviewData] = useState<DiscoverFeedPreview | null>(
     null,
@@ -192,6 +205,7 @@ export function DiscoverPanel() {
     imageUrl?: string
     description?: string
     view?: FeedViewType
+    metadata?: DiscoverSearchResult['metadata']
   } | null>(null)
 
   // Inline entry detail — when set, EntryContent renders inside the preview
@@ -380,6 +394,7 @@ export function DiscoverPanel() {
     { value: 'bilibili', label: 'Bilibili', icon: platformIcons.bilibili },
     { value: 'x', label: 'X', icon: platformIcons.x },
     { value: 'instagram', label: 'Instagram', icon: platformIcons.instagram },
+    { value: 'wechat-mp', label: '公众号', icon: platformIcons['wechat-mp'] },
   ]
 
   // Sync subscribedUrls with existing user feeds
@@ -524,7 +539,11 @@ export function DiscoverPanel() {
       siteUrl: result.siteUrl,
       imageUrl: result.image,
       description: result.description,
-      view: inferDiscoverFeedViewFromUrl(result.url),
+      view:
+        result.metadata?.source === 'wechat-rss'
+          ? FeedViewType.Articles
+          : inferDiscoverFeedViewFromUrl(result.url),
+      metadata: result.metadata,
     }),
     [],
   )
@@ -537,6 +556,10 @@ export function DiscoverPanel() {
   )
 
   const handleToggleSubscribe = (result: DiscoverSearchResult) => {
+    if (result.metadata?.source === 'wechat-rss' && !isAuthenticated) {
+      navigate(ROUTES.login('wechat'))
+      return
+    }
     if (isSubscribed(result.url)) {
       handleUnsubscribe(result.url)
     } else {
@@ -546,7 +569,11 @@ export function DiscoverPanel() {
         siteUrl: result.siteUrl,
         imageUrl: result.image,
         description: result.description,
-        view: inferDiscoverFeedViewFromUrl(result.url),
+        view:
+          result.metadata?.source === 'wechat-rss'
+            ? FeedViewType.Articles
+            : inferDiscoverFeedViewFromUrl(result.url),
+        metadata: result.metadata,
       })
     }
   }
@@ -581,12 +608,11 @@ export function DiscoverPanel() {
   /** Whether a result should display the inline "sign in required" hint. */
   const resultRequiresSignIn = useCallback(
     (result: DiscoverSearchResult) => {
-      // Today only YouTube is gated; extend when backend adds requiresAccount to discover:search.
-      const platform = inferDiscoverPlatform(result.url)
-      if (platform.id !== 'youtube') return false
-      return youtubeNeedsLogin
+      if (result.metadata?.source === 'wechat-rss') return !isAuthenticated
+      const platform = inferDiscoverPlatform(result.url, result.metadata)
+      return platform.id === 'youtube' ? youtubeNeedsLogin : false
     },
-    [youtubeNeedsLogin],
+    [isAuthenticated, youtubeNeedsLogin],
   )
 
   /**
@@ -611,6 +637,25 @@ export function DiscoverPanel() {
     searchPlatform,
     searchResults.length,
     youtubeNeedsLogin,
+  ])
+
+  const wechatLoginBanner = useMemo(() => {
+    if (!hasSearchQuery) return null
+    if (isSearching || hasSearchError) return null
+    if (searchResults.length > 0) return null
+    if (searchPlatform !== 'wechat-mp') return null
+    if (isAuthenticated) return null
+    return {
+      platformLabel: '微信',
+      provider: 'wechat' as const,
+    }
+  }, [
+    hasSearchError,
+    hasSearchQuery,
+    isAuthenticated,
+    isSearching,
+    searchPlatform,
+    searchResults.length,
   ])
 
   const searchBar = (
@@ -1021,6 +1066,7 @@ export function DiscoverPanel() {
                                   inferDiscoverFeedViewFromUrl(
                                     previewTarget.url,
                                   ),
+                                metadata: previewTarget.metadata,
                               }),
                             )
                           }}
@@ -1111,17 +1157,23 @@ export function DiscoverPanel() {
               </div>
             ) : searchResults.length === 0 && !isSearching ? (
               <>
-                {platformLoginBanner && (
+                {(platformLoginBanner || wechatLoginBanner) && (
                   <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300">
                     <span>
                       {t('discover.signInForMoreResults', {
-                        platform: platformLoginBanner.platformLabel,
+                        platform: (platformLoginBanner || wechatLoginBanner)
+                          ?.platformLabel,
                       })}
                     </span>
                     <button
                       type="button"
                       onClick={() =>
-                        navigate(ROUTES.login(platformLoginBanner.provider))
+                        navigate(
+                          ROUTES.login(
+                            (platformLoginBanner || wechatLoginBanner)
+                              ?.provider,
+                          ),
+                        )
                       }
                       className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-amber-500/15 px-2.5 py-1 font-medium text-amber-700 transition-colors hover:bg-amber-500/25 dark:text-amber-200"
                     >

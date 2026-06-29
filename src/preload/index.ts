@@ -27,6 +27,9 @@ import type {
   SaveTextFileOptions,
   SaveTextFileResult,
   DiscoverFeedPreviewResult,
+  EnsureWechatMpFeedInput,
+  EnsureWechatMpFeedResult,
+  WechatMpDiscoverResult,
   AISemanticFilterInput,
   AISemanticFilterResult,
   AITranslateEntrySegmentsInput,
@@ -324,8 +327,27 @@ const api = {
     popular: (category?: string) => invokeIpc(IPC.DISCOVER_POPULAR, category),
     search: (
       query: string,
-      platform?: 'all' | 'youtube' | 'bilibili' | 'x' | 'instagram',
+      platform?:
+        | 'all'
+        | 'youtube'
+        | 'bilibili'
+        | 'x'
+        | 'instagram'
+        | 'wechat-mp',
     ) => invokeIpc(IPC.DISCOVER_SEARCH, query, platform),
+    searchWechatMp: (
+      query: string,
+      options?: { limit?: number; offset?: number },
+    ): Promise<{
+      results: WechatMpDiscoverResult[]
+      total: number
+      limit: number
+      offset: number
+    }> => invokeIpc(IPC.DISCOVER_SEARCH_WECHAT_MP, query, options),
+    ensureWechatMpFeed: (
+      input: EnsureWechatMpFeedInput,
+    ): Promise<EnsureWechatMpFeedResult> =>
+      invokeIpc(IPC.DISCOVER_ENSURE_WECHAT_MP_FEED, input),
     rsshubRoutes: (category?: string) =>
       invokeIpc(IPC.DISCOVER_RSSHUB_ROUTES, category),
     rsshubInstance: () => invokeIpc(IPC.DISCOVER_RSSHUB_INSTANCE),

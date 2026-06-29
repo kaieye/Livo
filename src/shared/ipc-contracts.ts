@@ -82,6 +82,8 @@ export const IPC = {
   DISCOVER_PROBE_BILIBILI_UID: 'discover:probe-bilibili-uid',
   DISCOVER_PROBE_BILIBILI_USERS: 'discover:probe-bilibili-users',
   DISCOVER_PROBE_INSTAGRAM_USER: 'instagram:probe-user',
+  DISCOVER_SEARCH_WECHAT_MP: 'discover:search-wechat-mp',
+  DISCOVER_ENSURE_WECHAT_MP_FEED: 'discover:ensure-wechat-mp-feed',
   ACCOUNT_STATUS: 'account:status',
   ACCOUNT_LINK: 'account:link',
   ACCOUNT_UNLINK: 'account:unlink',
@@ -346,6 +348,18 @@ export type IpcArgsByChannel = {
   [IPC.DISCOVER_PROBE_BILIBILI_UID]: [uid: string]
   [IPC.DISCOVER_PROBE_BILIBILI_USERS]: [query: string]
   [IPC.DISCOVER_PROBE_INSTAGRAM_USER]: [username: string]
+  [IPC.DISCOVER_SEARCH_WECHAT_MP]: [
+    query: string,
+    options?: { limit?: number; offset?: number },
+  ]
+  [IPC.DISCOVER_ENSURE_WECHAT_MP_FEED]: [
+    input: {
+      mpName: string
+      fakeId: string
+      avatar: string
+      intro?: string
+    },
+  ]
   [IPC.ACCOUNT_STATUS]: [provider: AccountProvider]
   [IPC.ACCOUNT_LINK]: [provider: AccountProvider]
   [IPC.ACCOUNT_UNLINK]: [provider: AccountProvider]
@@ -1177,6 +1191,19 @@ export const IPC_CONTRACTS = {
   [IPC.DISCOVER_PROBE_INSTAGRAM_USER]: oneString(
     IPC.DISCOVER_PROBE_INSTAGRAM_USER,
     'username',
+  ),
+  [IPC.DISCOVER_SEARCH_WECHAT_MP]: {
+    channel: IPC.DISCOVER_SEARCH_WECHAT_MP,
+    validateArgs: (args) => {
+      assertArity(IPC.DISCOVER_SEARCH_WECHAT_MP, args, 1, 2)
+      assertString(args[0], 'query')
+      if (args[1] !== undefined) assertObject(args[1], 'options')
+      return args as IpcArgs<typeof IPC.DISCOVER_SEARCH_WECHAT_MP>
+    },
+  },
+  [IPC.DISCOVER_ENSURE_WECHAT_MP_FEED]: oneObject(
+    IPC.DISCOVER_ENSURE_WECHAT_MP_FEED,
+    'input',
   ),
   [IPC.ACCOUNT_STATUS]: {
     channel: IPC.ACCOUNT_STATUS,

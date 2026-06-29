@@ -4,6 +4,7 @@ export type DiscoverSearchPlatform =
   | 'bilibili'
   | 'x'
   | 'instagram'
+  | 'wechat-mp'
 
 export const DISCOVER_SEARCH_DEBOUNCE_MS = 150
 export const X_DISCOVER_SEARCH_DEBOUNCE_MS = 500
@@ -13,9 +14,14 @@ export interface DiscoverSearchResult {
   url: string
   siteUrl: string
   description: string
-  source: 'curated' | 'url' | 'rsshub'
+  source: 'curated' | 'url' | 'rsshub' | 'wechat-rss'
   image?: string
   followers?: string
+  requiresLogin?: boolean
+  metadata?: {
+    fakeId?: string
+    source?: 'wechat-rss'
+  }
 }
 
 export function hasDiscoverSearchQuery(query: string): boolean {

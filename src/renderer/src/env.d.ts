@@ -1,5 +1,9 @@
 import type { ElectronAPI } from '../../preload/index'
-import type { DiscoverFeedPreviewResult } from '../../shared/types'
+import type {
+  DiscoverFeedPreviewResult,
+  EnsureWechatMpFeedResult,
+  WechatMpDiscoverResult,
+} from '../../shared/types'
 
 declare module '*.svg' {
   const content: string
@@ -79,18 +83,44 @@ declare global {
         >
         search: (
           query: string,
-          platform?: 'all' | 'youtube' | 'bilibili' | 'x' | 'instagram',
+          platform?:
+            | 'all'
+            | 'youtube'
+            | 'bilibili'
+            | 'x'
+            | 'instagram'
+            | 'wechat-mp',
         ) => Promise<
           Array<{
             title: string
             url: string
             siteUrl: string
             description: string
-            source: 'curated' | 'url' | 'rsshub'
+            source: 'curated' | 'url' | 'rsshub' | 'wechat-rss'
             image?: string
             followers?: string
+            requiresLogin?: boolean
+            metadata?: {
+              fakeId?: string
+              source?: 'wechat-rss'
+            }
           }>
         >
+        searchWechatMp: (
+          query: string,
+          options?: { limit?: number; offset?: number },
+        ) => Promise<{
+          results: WechatMpDiscoverResult[]
+          total: number
+          limit: number
+          offset: number
+        }>
+        ensureWechatMpFeed: (input: {
+          mpName: string
+          fakeId: string
+          avatar: string
+          intro?: string
+        }) => Promise<EnsureWechatMpFeedResult>
         rsshubRoutes: (category?: string) => Promise<
           Array<{
             name: string
@@ -275,21 +305,51 @@ declare global {
       }
       accounts: {
         status: (
-          provider: 'google' | 'youtube' | 'x' | 'instagram' | 'bilibili',
+          provider:
+            | 'google'
+            | 'youtube'
+            | 'x'
+            | 'instagram'
+            | 'bilibili'
+            | 'wechat-mp',
         ) => Promise<{
-          provider: 'google' | 'youtube' | 'x' | 'instagram' | 'bilibili'
+          provider:
+            | 'google'
+            | 'youtube'
+            | 'x'
+            | 'instagram'
+            | 'bilibili'
+            | 'wechat-mp'
           linked: boolean
           displayName?: string | null
           error?: string
         }>
         link: (
-          provider: 'google' | 'youtube' | 'x' | 'instagram' | 'bilibili',
+          provider:
+            | 'google'
+            | 'youtube'
+            | 'x'
+            | 'instagram'
+            | 'bilibili'
+            | 'wechat-mp',
         ) => Promise<{ success: boolean; error?: string }>
         unlink: (
-          provider: 'google' | 'youtube' | 'x' | 'instagram' | 'bilibili',
+          provider:
+            | 'google'
+            | 'youtube'
+            | 'x'
+            | 'instagram'
+            | 'bilibili'
+            | 'wechat-mp',
         ) => Promise<{ success: boolean; error?: string }>
         setDisplayName: (
-          provider: 'google' | 'youtube' | 'x' | 'instagram' | 'bilibili',
+          provider:
+            | 'google'
+            | 'youtube'
+            | 'x'
+            | 'instagram'
+            | 'bilibili'
+            | 'wechat-mp',
           displayName: string,
         ) => Promise<{ success: boolean; error?: string }>
         bilibiliFollowings: () => Promise<{

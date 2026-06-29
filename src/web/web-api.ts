@@ -2440,7 +2440,12 @@ export function createWebAPI(): ElectronAPI {
           url: string
           siteUrl: string
           description: string
-          source: 'curated' | 'url' | 'rsshub'
+          source: 'curated' | 'url' | 'rsshub' | 'wechat-rss'
+          requiresLogin?: boolean
+          metadata?: {
+            fakeId?: string
+            source?: 'wechat-rss'
+          }
         }> = []
         const curated = searchCuratedFeeds(query)
         for (const f of curated)
@@ -2505,6 +2510,16 @@ export function createWebAPI(): ElectronAPI {
         }
         return results
       },
+      searchWechatMp: async () => ({
+        results: [],
+        total: 0,
+        limit: 10,
+        offset: 0,
+      }),
+      ensureWechatMpFeed: async () => ({
+        success: false,
+        error: 'Web 平台暂不支持微信公众号订阅接入',
+      }),
       rsshubRoutes: async (category?: string) =>
         category
           ? RSSHUB_ROUTES.filter((r) => r.category === category)

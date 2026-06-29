@@ -3,9 +3,14 @@ export type DiscoverSearchResult = {
   url: string
   siteUrl: string
   description: string
-  source: 'curated' | 'url' | 'rsshub'
+  source: 'curated' | 'url' | 'rsshub' | 'wechat-rss'
   image?: string
   followers?: string
+  requiresLogin?: boolean
+  metadata?: {
+    fakeId?: string
+    source?: 'wechat-rss'
+  }
 }
 
 function stripPlatformSuffix(input: string): string {

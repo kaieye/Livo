@@ -121,3 +121,32 @@ export interface NativeContextMenuItem {
   separator?: boolean
   disabled?: boolean
 }
+
+export interface WechatMpDiscoverResult {
+  title: string
+  description: string
+  image: string
+  fakeId: string
+  rssUrl: string
+  siteUrl: string
+  source: 'wechat-rss'
+  requiresLogin: true
+}
+
+export interface EnsureWechatMpFeedInput {
+  mpName: string
+  fakeId: string
+  avatar: string
+  intro?: string
+}
+
+export interface EnsureWechatMpFeedResult {
+  success: boolean
+  title?: string
+  description?: string
+  image?: string
+  fakeId?: string
+  rssUrl?: string
+  siteUrl?: string
+  error?: string
+}

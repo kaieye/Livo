@@ -37,6 +37,7 @@ import {
 } from './discover-x'
 import { probeBilibiliUsersByKeyword } from './discover-bilibili'
 import { probeInstagramUsersByKeyword } from './discover-instagram-search'
+import { searchWechatMp } from './wechat-mp-client'
 
 export type DiscoverSearchPlatform =
   | 'all'
@@ -44,6 +45,7 @@ export type DiscoverSearchPlatform =
   | 'bilibili'
   | 'x'
   | 'instagram'
+  | 'wechat-mp'
 
 const DISCOVER_SEARCH_CACHE_TTL = 30 * 1000
 
@@ -248,6 +250,33 @@ async function runPlatformProbes(
     )
   }
 
+  if (platform === 'all' || platform === 'wechat-mp') {
+    searchPromises.push(
+      searchWechatMp(query, { limit: 10, offset: 0 }).then((payload) => {
+        logInfo(
+          '[discover-search] wechat mp candidates',
+          payload.results.length,
+        )
+        for (const candidate of payload.results) {
+          if (results.some((r) => r.url === candidate.rssUrl)) continue
+          results.push({
+            title: candidate.title,
+            url: candidate.rssUrl,
+            siteUrl: candidate.siteUrl,
+            description: candidate.description,
+            source: 'wechat-rss',
+            image: candidate.image || '',
+            requiresLogin: candidate.requiresLogin,
+            metadata: {
+              fakeId: candidate.fakeId,
+              source: candidate.source,
+            },
+          })
+        }
+      }),
+    )
+  }
+
   await Promise.all(searchPromises)
 }
 
@@ -257,7 +286,7 @@ function appendProfileResolutionCandidates(
   platform: DiscoverSearchPlatform,
   results: DiscoverSearchResult[],
 ): void {
-  if (platform === 'instagram') return
+  if (platform === 'instagram' || platform === 'wechat-mp') return
 
   const trimmedQuery = query.trim()
   const profileInputs = new Set<string>()
@@ -299,6 +328,7 @@ function looksLikeDirectUrl(
     /^rsshub:\/\//i.test(trimmed) ||
     /^https?:\/\//i.test(trimmed) ||
     (platform !== 'instagram' &&
+      platform !== 'wechat-mp' &&
       trimmed.includes('.') &&
       !trimmed.includes(' '))
   )

@@ -17,6 +17,15 @@ vi.mock('./discover-x', () => ({
 vi.mock('./discover-instagram-search', () => ({
   probeInstagramUsersByKeyword: vi.fn().mockResolvedValue([]),
 }))
+vi.mock('./wechat-mp-client', () => ({
+  searchWechatMp: vi.fn().mockResolvedValue({
+    results: [],
+    total: 0,
+    limit: 10,
+    offset: 0,
+  }),
+  ensureWechatMpFeed: vi.fn(),
+}))
 vi.mock('../feed/rss-parser', () => ({
   fetchAndParseFeed: vi.fn().mockRejectedValue(new Error('not used')),
 }))

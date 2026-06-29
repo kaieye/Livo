@@ -1,4 +1,5 @@
 import { FeedViewType } from '@shared'
+import type { DiscoverSubscribeTargetMetadata } from '../../../shared/discover-target-resolution'
 
 export interface DiscoverRouteTarget {
   feedId?: string
@@ -9,6 +10,7 @@ export interface DiscoverRouteTarget {
   description?: string
   category?: string
   view?: FeedViewType
+  metadata?: DiscoverSubscribeTargetMetadata
 }
 
 export function getEntryIdFromSearch(search: string): string | null {
@@ -41,6 +43,9 @@ function buildDiscoverTargetSearch(target: DiscoverRouteTarget): string {
   if (target.description) search.set('description', target.description)
   if (target.category) search.set('category', target.category)
   if (typeof target.view === 'number') search.set('view', String(target.view))
+  if (target.metadata?.fakeId) search.set('fakeId', target.metadata.fakeId)
+  if (target.metadata?.source) search.set('source', target.metadata.source)
+  if (target.metadata?.requiresLogin) search.set('requiresLogin', 'true')
   const query = search.toString()
   return query ? `?${query}` : ''
 }

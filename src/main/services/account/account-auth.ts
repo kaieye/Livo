@@ -53,7 +53,10 @@ interface ProviderConfig {
   timeoutMs?: number
 }
 
-type CookieAccountProvider = Exclude<AccountProvider, 'google' | 'wechat'>
+type CookieAccountProvider = Exclude<
+  AccountProvider,
+  'google' | 'wechat' | 'wechat-mp'
+>
 
 const PROVIDER_CONFIGS: Record<CookieAccountProvider, ProviderConfig> = {
   youtube: {
@@ -330,6 +333,15 @@ export async function getAccountState(
     }
   }
 
+  if (provider === 'wechat-mp') {
+    return {
+      provider,
+      linked: false,
+      displayName: null,
+      error: 'WeChat MP does not use a local linked-account session',
+    }
+  }
+
   if (provider === 'bilibili') {
     const nav = await fetchBilibiliNavState()
     if (!nav.loggedIn) {
@@ -412,6 +424,13 @@ export async function linkAccount(
     return {
       success: false,
       error: 'WeChat OAuth not yet implemented',
+    }
+  }
+
+  if (provider === 'wechat-mp') {
+    return {
+      success: false,
+      error: 'WeChat MP does not support local account linking',
     }
   }
 
@@ -605,6 +624,13 @@ export async function unlinkAccount(
     return {
       success: false,
       error: 'WeChat OAuth not yet implemented',
+    }
+  }
+
+  if (provider === 'wechat-mp') {
+    return {
+      success: false,
+      error: 'WeChat MP does not support local account unlinking',
     }
   }
 

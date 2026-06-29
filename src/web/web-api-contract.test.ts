@@ -96,6 +96,8 @@ const ELECTRON_API_SHAPE = {
     categories: true,
     popular: true,
     search: true,
+    searchWechatMp: true,
+    ensureWechatMpFeed: true,
     rsshubRoutes: true,
     rsshubInstance: true,
     validateFeed: true,

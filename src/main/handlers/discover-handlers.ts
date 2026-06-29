@@ -44,6 +44,11 @@ import {
   probeBilibiliUsersByKeyword,
 } from '../services/discovery/discover-bilibili'
 import { fetchInstagramAvatarByUsername } from '../services/discovery/discover-instagram-search'
+import {
+  ensureWechatMpFeed,
+  searchWechatMp,
+} from '../services/discovery/wechat-mp-client'
+import { toHandlerError } from '../ipc/handler-error'
 
 /** Return the configured RSSHub instance URL (no trailing slash) */
 function getRSSHubInstance(): string {
@@ -96,6 +101,21 @@ export function registerDiscoverHandlers(): void {
     (_event, query: string, platform: DiscoverSearchPlatform = 'all') =>
       discoverSearch(query, platform, getRSSHubInstance()),
   )
+
+  registerChannel(
+    IPC.DISCOVER_SEARCH_WECHAT_MP,
+    async (_event, query: string, options) => {
+      return searchWechatMp(query, options)
+    },
+  )
+
+  registerChannel(IPC.DISCOVER_ENSURE_WECHAT_MP_FEED, async (_event, input) => {
+    try {
+      return await ensureWechatMpFeed(input)
+    } catch (error) {
+      return toHandlerError(error)
+    }
+  })
 
   // Get RSSHub routes - prepend instance URL to make them subscribable
   registerChannel(IPC.DISCOVER_RSSHUB_ROUTES, (_event, category?: string) => {

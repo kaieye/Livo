@@ -3,6 +3,7 @@ export type DiscoverPlatformId =
   | 'bilibili'
   | 'x'
   | 'instagram'
+  | 'wechat-mp'
   | 'nitter'
   | 'rsshub'
   | 'rss'
@@ -27,8 +28,19 @@ export interface DiscoverPlatformBadge {
  * threading that through instead of re-introducing platform-keyed gating
  * here.
  */
-export function inferDiscoverPlatform(url: string): DiscoverPlatformBadge {
+export function inferDiscoverPlatform(
+  url: string,
+  metadata?: { source?: 'wechat-rss' },
+): DiscoverPlatformBadge {
   const lower = (url || '').toLowerCase()
+
+  if (metadata?.source === 'wechat-rss') {
+    return {
+      id: 'wechat-mp',
+      label: '公众号',
+      color: '#07C160',
+    }
+  }
 
   if (/\/youtube\//i.test(lower) || /(^|\.)youtube\.com\//i.test(lower)) {
     return {

@@ -19,6 +19,7 @@ const PROVIDER_VALUES: AccountProvider[] = [
   'x',
   'instagram',
   'bilibili',
+  'wechat-mp',
 ]
 const PROVIDER_LABELS: Record<AccountProvider, string> = {
   google: 'Google',
@@ -27,6 +28,7 @@ const PROVIDER_LABELS: Record<AccountProvider, string> = {
   x: 'X',
   instagram: 'Instagram',
   bilibili: 'Bilibili',
+  'wechat-mp': 'WeChat MP',
 }
 
 function providerParams(description: string) {
