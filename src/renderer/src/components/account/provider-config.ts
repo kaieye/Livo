@@ -35,6 +35,12 @@ export const PROVIDER_CONFIGS: ProviderConfig[] = [
     colorClass: 'text-sky-500',
     description: '关联 B站账号，可一键导入关注列表和获取动态订阅。',
   },
+  {
+    provider: 'wechat-mp',
+    name: '微信公众号',
+    colorClass: 'text-green-500',
+    description: '关联微信公众号，可搜索和订阅公众号内容。',
+  },
 ]
 
 export function findProviderConfig(

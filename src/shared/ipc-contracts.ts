@@ -700,6 +700,7 @@ const accountProviders = new Set<AccountProvider>([
   'x',
   'instagram',
   'bilibili',
+  'wechat-mp',
 ])
 
 function assertAccountProvider(
