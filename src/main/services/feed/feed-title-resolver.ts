@@ -237,5 +237,18 @@ export async function resolveFeedTitleFallback(
     if (name) return `${name} - Ins`
   }
 
+  // Generic RSS/Atom feed: fetch the feed and extract <title> from the XML.
+  // This handles feeds synced from the server (which only stores URLs, not titles).
+  const httpUrl = toHttpUrl(feedUrl, rsshubBase)
+  if (httpUrl) {
+    const xml = await fetchText(httpUrl)
+    if (xml) {
+      const rssTitle = extractTitleFromXml(xml)
+      if (rssTitle && !/^https?:\/\//i.test(rssTitle) && rssTitle.length > 1) {
+        return rssTitle
+      }
+    }
+  }
+
   return undefined
 }
