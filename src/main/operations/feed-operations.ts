@@ -58,12 +58,17 @@ function recordSubscriptionChange(
   const session = sessionStore.getSession()
   if (!session?.userId) return
 
+  const title = feed.title.trim()
   getDb().syncChanges.upsertChange({
     url: feed.url,
     action,
     updatedAt: Date.now(),
     userId: session.userId,
     synced: false,
+    title:
+      action === 'subscribe' && title !== feed.url && title !== feed.upstreamUrl
+        ? title
+        : undefined,
   })
 }
 

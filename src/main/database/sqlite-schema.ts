@@ -261,6 +261,29 @@ const MIGRATIONS: Array<{
         ON sync_changes (user_id, synced, updated_at DESC);
     `,
   },
+  {
+    version: 9,
+    name: 'feed-sync-title',
+    sql: `
+      ALTER TABLE sync_changes ADD COLUMN title TEXT;
+
+      UPDATE sync_changes
+      SET title = (
+        SELECT feeds.title
+        FROM feeds
+        WHERE feeds.url = sync_changes.url
+      )
+      WHERE action = 'subscribe'
+        AND EXISTS (
+          SELECT 1
+          FROM feeds
+          WHERE feeds.url = sync_changes.url
+            AND feeds.title IS NOT NULL
+            AND feeds.title != ''
+            AND feeds.title != feeds.url
+        );
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

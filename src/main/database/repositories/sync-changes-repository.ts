@@ -8,6 +8,7 @@ export interface SyncChange {
   updatedAt: number
   userId: string
   synced: boolean
+  title?: string
 }
 
 export interface UpsertSyncChangeInput {
@@ -16,6 +17,7 @@ export interface UpsertSyncChangeInput {
   updatedAt: number
   userId: string
   synced?: boolean
+  title?: string
 }
 
 export interface ISyncChangesRepository {
@@ -34,6 +36,7 @@ function syncChangeFromRow(row: any): SyncChange {
     updatedAt: row.updated_at,
     userId: row.user_id,
     synced: row.synced === 1,
+    title: row.title ?? undefined,
   }
 }
 
@@ -70,12 +73,16 @@ export class SyncChangesRepository implements ISyncChangesRepository {
   upsertChange(change: UpsertSyncChangeInput): void {
     this.db
       .prepare(
-        `INSERT INTO sync_changes (url, action, updated_at, user_id, synced)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO sync_changes (url, action, updated_at, user_id, synced, title)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(user_id, url) DO UPDATE SET
            action = excluded.action,
            updated_at = excluded.updated_at,
-           synced = excluded.synced
+           synced = excluded.synced,
+           title = CASE
+             WHEN excluded.title IS NOT NULL AND excluded.title != '' THEN excluded.title
+             ELSE sync_changes.title
+           END
          WHERE excluded.updated_at >= sync_changes.updated_at`,
       )
       .run(
@@ -84,6 +91,7 @@ export class SyncChangesRepository implements ISyncChangesRepository {
         change.updatedAt,
         change.userId,
         change.synced ? 1 : 0,
+        change.title?.trim() || null,
       )
   }
 

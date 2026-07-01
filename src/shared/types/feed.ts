@@ -90,6 +90,7 @@ export interface FeedSyncRecord {
   url: string
   action: FeedSyncAction
   updatedAt: number
+  title?: string
 }
 
 export interface FeedSyncStatus {

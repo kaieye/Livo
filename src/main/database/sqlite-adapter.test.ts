@@ -220,6 +220,7 @@ describeSqliteAdapter('SqliteAdapter repository contracts', () => {
       action: 'subscribe',
       updatedAt: 1000,
       synced: false,
+      title: 'Example Feed',
     })
     adapter.syncChanges.upsertChange({
       userId: 'user-1',
@@ -227,6 +228,7 @@ describeSqliteAdapter('SqliteAdapter repository contracts', () => {
       action: 'unsubscribe',
       updatedAt: 2000,
       synced: true,
+      title: 'Example Feed',
     })
     adapter.syncChanges.upsertChange({
       userId: 'user-2',
@@ -234,6 +236,7 @@ describeSqliteAdapter('SqliteAdapter repository contracts', () => {
       action: 'subscribe',
       updatedAt: 1500,
       synced: false,
+      title: 'Other Feed',
     })
 
     expect(
@@ -244,6 +247,7 @@ describeSqliteAdapter('SqliteAdapter repository contracts', () => {
       action: 'unsubscribe',
       updatedAt: 2000,
       synced: true,
+      title: 'Example Feed',
     })
     expect(adapter.syncChanges.getChangesByUser('user-1')).toHaveLength(1)
     expect(adapter.syncChanges.getUnsyncedChangesByUser('user-1')).toEqual([])

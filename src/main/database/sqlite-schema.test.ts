@@ -134,6 +134,7 @@ describeSqliteSchema('sqlite schema migrations', () => {
           'updated_at',
           'user_id',
           'synced',
+          'title',
         ]),
       )
 

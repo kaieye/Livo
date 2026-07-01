@@ -11,6 +11,7 @@ import { addFeed, removeFeed } from '../../operations/feed-operations'
 import { sessionStore } from '../auth/session-store'
 import { logInfo } from '../system/logger'
 import { settingsProvider } from '../system/settings-provider'
+import { getEventBus } from '../system/event-bus'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import { normalizeRsshubProtocolUrl, toRsshubProtocolUrl } from './rsshub-url'
 import type { FeedSyncAction, SyncChange } from '../../database/repositories'
@@ -43,10 +44,12 @@ function parseFeedSyncRecord(value: unknown): FeedSyncRecord | null {
   if (!isFeedSyncAction(value.action)) return null
   const updatedAt = Number(value.updatedAt)
   if (!Number.isFinite(updatedAt) || updatedAt < 0) return null
+  const title = typeof value.title === 'string' ? value.title.trim() : ''
   return {
     url: value.url,
     action: value.action,
     updatedAt,
+    ...(title ? { title } : {}),
   }
 }
 
@@ -80,7 +83,37 @@ function toRemoteRecord(change: SyncChange): FeedSyncRecord {
     url: change.url,
     action: change.action,
     updatedAt: change.updatedAt,
+    ...(change.title ? { title: change.title } : {}),
   }
+}
+
+function getSyncTitle(feed: Feed): string | undefined {
+  const title = feed.title.trim()
+  if (!title || title === feed.url || title === feed.upstreamUrl) {
+    return undefined
+  }
+  return title
+}
+
+function needsRemoteTitleBackfill(
+  remote: FeedSyncRecord,
+  local: FeedSyncRecord,
+): boolean {
+  return (
+    remote.action === 'subscribe' &&
+    local.action === 'subscribe' &&
+    !!local.title &&
+    !remote.title
+  )
+}
+
+function shouldApplyRemoteTitle(
+  feed: Feed,
+  title: string | undefined,
+): boolean {
+  if (!title) return false
+  const current = feed.title.trim()
+  return !current || current === feed.url || current === feed.upstreamUrl
 }
 
 function toBatches<T>(items: T[], size: number): T[][] {
@@ -237,13 +270,29 @@ export class FeedSyncService {
     for (const feed of db.feeds.getAllFeeds()) {
       // Fever 账号订阅由 Fever 自己同步，避免把第三方账号源写入 Livo 账号云端。
       if (feed.provider === 'fever') continue
-      if (db.syncChanges.getChange(userId, feed.url)) continue
+      const title = getSyncTitle(feed)
+      const existing = db.syncChanges.getChange(userId, feed.url)
+      if (existing) {
+        if (
+          existing.action === 'subscribe' &&
+          title &&
+          !existing.title?.trim()
+        ) {
+          db.syncChanges.upsertChange({
+            ...existing,
+            title,
+            synced: false,
+          })
+        }
+        continue
+      }
       db.syncChanges.upsertChange({
         url: feed.url,
         action: 'subscribe',
         updatedAt: feed.createdAt,
         userId,
         synced: false,
+        title,
       })
     }
   }
@@ -277,10 +326,19 @@ export class FeedSyncService {
       if (!existing) {
         await addFeed({
           url: record.url,
+          title: record.title,
           deferInitialFetch: true,
           recordSyncChange: false,
         })
         return { subscribed: 1, unsubscribed: 0 }
+      }
+      if (shouldApplyRemoteTitle(existing, record.title)) {
+        getDb().feeds.updateFeed(existing.id, { title: record.title })
+        getEventBus().send('feeds:updated', {
+          feedId: existing.id,
+          feedIds: [existing.id],
+          feeds: [{ id: existing.id, title: record.title }],
+        })
       }
     } else if (existing) {
       removeFeed(existing.id, { recordSyncChange: false })
@@ -296,7 +354,6 @@ export class FeedSyncService {
   ): Promise<{ subscribed: number; unsubscribed: number }> {
     const applied = await this.ensureFeedMaterialized(record)
 
-    // 本地快照只保存云端同步所需的 URL/action/updatedAt，不保存标题等元数据。
     getDb().syncChanges.upsertChange({
       ...record,
       userId,
@@ -390,6 +447,8 @@ export class FeedSyncService {
         } else if (remote.action !== local.action) {
           // 同一毫秒内冲突时以云端为准，避免两端反复覆盖。
           remoteToApply.push(remote)
+        } else if (needsRemoteTitleBackfill(remote, local)) {
+          localToUpload.push(local)
         } else {
           alignedRecords.push(remote)
         }
