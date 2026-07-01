@@ -8,6 +8,7 @@ import type { AppCommandPayload } from '../shared/types'
 import { getAppIconPath } from './app-icon'
 import { logError, logInfo, logWarn } from './services/system/logger'
 import {
+  hasSavedWindowState,
   persistWindowState,
   readWindowState,
 } from './services/system/window-state'
@@ -187,6 +188,8 @@ export class WindowManager {
     this.bindWindowEvents(mainWindow)
     if (windowState.isMaximized) {
       mainWindow.maximize()
+    } else if (!hasSavedWindowState()) {
+      mainWindow.center()
     }
 
     if (this.options.isDev && !process.env['LIVO_E2E']) {

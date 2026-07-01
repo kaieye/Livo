@@ -58,13 +58,21 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: false,
   error: null,
 
-  setUser: (user, token = null) =>
+  setUser: (user, token = null) => {
+    const wasAuthenticated = useAuthStore.getState().isAuthenticated
     set({
       user,
       token: token ?? null,
       isAuthenticated: !!user,
       error: null,
-    }),
+    })
+    // Trigger subscription cloud sync on login
+    if (user && !wasAuthenticated) {
+      window.api.feeds.syncNow().catch(() => {
+        // Silently ignore — cloud sync is best-effort
+      })
+    }
+  },
 
   setLoading: (loading) => set({ isLoading: loading }),
 

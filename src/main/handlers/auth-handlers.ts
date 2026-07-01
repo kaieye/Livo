@@ -1,4 +1,4 @@
-import { shell, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import { authService, type CurrentUser } from '../services/auth/auth-service'
 import { sessionStore } from '../services/auth/session-store'
 import { getValidatedSession } from '../services/auth/session-validation'
@@ -7,6 +7,30 @@ import { toHandlerError } from '../ipc/handler-error'
 import { IPC } from '../../shared/ipc-contracts'
 import { feedSyncService } from '../services/feed/feed-sync-service'
 import { logError } from '../services/system/logger'
+
+/**
+ * 创建一个用于 OAuth 登录/绑定的弹窗
+ */
+function createAuthPopup(url: string, title: string): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 500,
+    height: 650,
+    title,
+    autoHideMenuBar: true,
+    resizable: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  })
+
+  win.loadURL(url).catch((err) => {
+    logError('[auth] failed to load auth url', err)
+  })
+
+  return win
+}
 
 /**
  * 轮询登录状态直到完成或超时
@@ -101,11 +125,20 @@ async function bindProvider(
       ? await authService.getGoogleBindUrl(validatedSession.token)
       : await authService.getWechatBindUrl(validatedSession.token)
 
-  await shell.openExternal(url)
+  const authWindow = createAuthPopup(
+    url,
+    provider === 'google' ? 'Google 账号绑定' : '微信账号绑定',
+  )
 
-  await pollUntilComplete(loginId, (status) => {
-    sendAuthProgress(status)
-  })
+  try {
+    await pollUntilComplete(loginId, (status) => {
+      sendAuthProgress(status)
+    })
+  } finally {
+    if (!authWindow.isDestroyed()) {
+      authWindow.close()
+    }
+  }
 
   const user = await refreshStoredUser(validatedSession.token)
 
@@ -122,20 +155,25 @@ export function registerAuthHandlers(): void {
       // 1. 获取登录 URL 和 loginId
       const { url, loginId } = await authService.getGoogleLoginUrl()
 
-      // 2. 打开系统浏览器
-      await shell.openExternal(url)
+      // 2. 打开弹窗（不再跳转系统浏览器）
+      const authWindow = createAuthPopup(url, 'Google 登录')
 
       // 3. 轮询登录状态
-      const { token, user } = await pollUntilComplete(loginId, (status) => {
-        // 可以通过 IPC 发送进度更新到渲染进程
-        sendAuthProgress(status)
-      })
+      try {
+        const { token, user } = await pollUntilComplete(loginId, (status) => {
+          sendAuthProgress(status)
+        })
 
-      // 4. 保存 session（30 天有效期）
-      saveLoginSession(token, user)
-      triggerFeedSyncAfterLogin()
+        // 4. 保存 session（30 天有效期）
+        saveLoginSession(token, user)
+        triggerFeedSyncAfterLogin()
 
-      return { success: true, token, user }
+        return { success: true, token, user }
+      } finally {
+        if (!authWindow.isDestroyed()) {
+          authWindow.close()
+        }
+      }
     } catch (error) {
       return toHandlerError(error)
     }
@@ -147,19 +185,25 @@ export function registerAuthHandlers(): void {
       // 1. 获取登录 URL 和 loginId
       const { url, loginId } = await authService.getWechatLoginUrl()
 
-      // 2. 打开系统浏览器
-      await shell.openExternal(url)
+      // 2. 打开弹窗（不再跳转系统浏览器）
+      const authWindow = createAuthPopup(url, '微信扫码登录')
 
       // 3. 轮询登录状态
-      const { token, user } = await pollUntilComplete(loginId, (status) => {
-        sendAuthProgress(status)
-      })
+      try {
+        const { token, user } = await pollUntilComplete(loginId, (status) => {
+          sendAuthProgress(status)
+        })
 
-      // 4. 保存 session
-      saveLoginSession(token, user)
-      triggerFeedSyncAfterLogin()
+        // 4. 保存 session
+        saveLoginSession(token, user)
+        triggerFeedSyncAfterLogin()
 
-      return { success: true, token, user }
+        return { success: true, token, user }
+      } finally {
+        if (!authWindow.isDestroyed()) {
+          authWindow.close()
+        }
+      }
     } catch (error) {
       return toHandlerError(error)
     }

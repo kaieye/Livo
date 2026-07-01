@@ -722,40 +722,39 @@ export function DiscoverPanel() {
   return (
     <div className="dark:bg-surface-dark relative flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
       {/* Header */}
-      <div className="dark:bg-surface-dark/80 flex-shrink-0 border-b bg-white/80 backdrop-blur-sm">
-        <div className="flex items-center gap-3 px-6 py-3">
+      <div className="no-drag dark:bg-surface-dark/80 flex-shrink-0 border-b bg-white/80 pt-[calc(var(--titlebar-drag-height)+0.75rem)] backdrop-blur-sm">
+        <div className="flex items-center gap-3 px-6 pb-3">
           <div className="flex items-center gap-2">
             <Sparkles size={20} className="text-accent" />
             <h2 className="text-lg font-semibold">{t('discover.title')}</h2>
           </div>
           <div className="flex-1" />
-          <button
-            type="button"
-            onClick={handleImportOPML}
-            disabled={isImporting}
-            className="text-text-secondary hover:bg-surface-secondary hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            title={t('settings.importOPML')}
-          >
-            <Upload size={14} className={isImporting ? 'animate-pulse' : ''} />
-            <span>{t('settings.importOPML')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void exportOPML()
-            }}
-            className="text-text-secondary hover:bg-surface-secondary hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors"
-            title={t('settings.exportOPML')}
-          >
-            <Download size={14} />
-            <span>{t('settings.exportOPML')}</span>
-          </button>
-          <button
-            onClick={() => setOpen(false)}
-            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5 transition-colors"
-          >
-            <X size={18} />
-          </button>
+          <div className="titlebar-safe-pr flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleImportOPML}
+              disabled={isImporting}
+              className="text-text-secondary hover:bg-surface-secondary hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              title={t('settings.importOPML')}
+            >
+              <Upload
+                size={14}
+                className={isImporting ? 'animate-pulse' : ''}
+              />
+              <span>{t('settings.importOPML')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void exportOPML()
+              }}
+              className="text-text-secondary hover:bg-surface-secondary hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors"
+              title={t('settings.exportOPML')}
+            >
+              <Download size={14} />
+              <span>{t('settings.exportOPML')}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1047,28 +1046,22 @@ export function DiscoverPanel() {
                           type="button"
                           onClick={() => {
                             if (!previewTarget?.url) return
-                            navigate(
-                              ROUTES.discoverSubscribe({
-                                url:
-                                  previewData?.targetUrl || previewTarget.url,
-                                title:
-                                  previewData?.feedTitle || previewTarget.title,
-                                siteUrl:
-                                  previewData?.siteUrl || previewTarget.siteUrl,
-                                imageUrl:
-                                  previewData?.imageUrl ||
-                                  previewTarget.imageUrl,
-                                description:
-                                  previewData?.description ||
-                                  previewTarget.description,
-                                view:
-                                  previewTarget.view ??
-                                  inferDiscoverFeedViewFromUrl(
-                                    previewTarget.url,
-                                  ),
-                                metadata: previewTarget.metadata,
-                              }),
-                            )
+                            setSubscribeTarget({
+                              url: previewData?.targetUrl || previewTarget.url,
+                              title:
+                                previewData?.feedTitle || previewTarget.title,
+                              siteUrl:
+                                previewData?.siteUrl || previewTarget.siteUrl,
+                              imageUrl:
+                                previewData?.imageUrl || previewTarget.imageUrl,
+                              description:
+                                previewData?.description ||
+                                previewTarget.description,
+                              view:
+                                previewTarget.view ??
+                                inferDiscoverFeedViewFromUrl(previewTarget.url),
+                              metadata: previewTarget.metadata,
+                            })
                           }}
                           disabled={!previewData || previewLoading}
                           className="bg-accent self-center rounded-md px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"

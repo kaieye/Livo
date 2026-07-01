@@ -27,6 +27,10 @@ function getWindowStatePath(): string {
   return join(app.getPath('userData'), 'data', 'window-state.json')
 }
 
+export function hasSavedWindowState(): boolean {
+  return existsSync(getWindowStatePath())
+}
+
 function isWindowState(value: unknown): value is WindowState {
   if (!value || typeof value !== 'object') return false
   const state = value as Record<string, unknown>

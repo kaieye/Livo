@@ -171,6 +171,13 @@ async function bootstrap(): Promise<void> {
           console.log(
             `[Livo] Background refresh complete in ${result.timings.total.toFixed(0)}ms`,
           )
+
+          // Sync subscription list from cloud on app startup (best-effort)
+          if (result.session?.success && result.session?.isValid) {
+            window.api.feeds.syncNow().catch(() => {
+              // Silently ignore — cloud sync may be unavailable
+            })
+          }
         })
         .catch((err) => {
           console.error('[Livo] Background hydration failed:', err)

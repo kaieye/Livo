@@ -406,6 +406,11 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
       await window.api.feeds.refreshAll()
       // Feed list will be updated via feeds:updated event in setupBackgroundEventListeners (queue.ts)
       // No need to call loadFeeds() here - reduces IPC overhead
+
+      // Also sync subscription list to/from cloud (best-effort, silently skip if not logged in)
+      window.api.feeds.syncNow().catch(() => {
+        // Ignore — user may not be logged in or cloud sync may be unavailable
+      })
     } finally {
       removeListener()
       set({ isRefreshing: false })

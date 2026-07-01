@@ -24,6 +24,8 @@ import { EntryContent } from '../components/entry/EntryContent'
 import { SocialDetailView } from '../components/entry/SocialDetailView'
 import { FeedAvatar } from '../components/feed/FeedAvatar'
 import { DiscoverCenteredState } from '../components/discover/DiscoverCenteredState'
+import { SubscribeConfigDialog } from '../components/discover/SubscribeConfigDialog'
+import type { DiscoverSubscribeTarget } from '../lib/discover-subscribe-config'
 import { inferDiscoverFeedViewFromUrl } from '../lib/discover-feed'
 import { VIEW_TYPE_I18N_KEYS } from '../lib/view-type-keys'
 import { splitHtmlIntoParagraphs } from '../lib/entry-text'
@@ -51,6 +53,8 @@ export default function DiscoverPreviewPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [openedEntryId, setOpenedEntryId] = useState<string | null>(null)
+  const [subscribeTarget, setSubscribeTarget] =
+    useState<DiscoverSubscribeTarget | null>(null)
 
   const target = useMemo(
     () => parseDiscoverPreviewTarget(location.search),
@@ -158,18 +162,16 @@ export default function DiscoverPreviewPage() {
 
   const handleContinue = useCallback(() => {
     if (!target.url) return
-    navigate(
-      ROUTES.discoverSubscribe({
-        url: preview?.targetUrl || target.url,
-        title: preview?.feedTitle || target.title,
-        siteUrl: preview?.siteUrl || target.siteUrl,
-        imageUrl: preview?.imageUrl || target.imageUrl,
-        description: preview?.description || target.description,
-        view: preferredView,
-        metadata: target.metadata,
-      }),
-    )
-  }, [navigate, preferredView, preview, target])
+    setSubscribeTarget({
+      url: preview?.targetUrl || target.url,
+      title: preview?.feedTitle || target.title,
+      siteUrl: preview?.siteUrl || target.siteUrl,
+      imageUrl: preview?.imageUrl || target.imageUrl,
+      description: preview?.description || target.description,
+      view: preferredView,
+      metadata: target.metadata,
+    })
+  }, [preferredView, preview, target])
 
   // Open a preview entry inline within this page — same rendering as the
   // subscribed feeds' article detail. Pre-populates the entry store so
@@ -194,8 +196,8 @@ export default function DiscoverPreviewPage() {
   }, [])
 
   return (
-    <div className="titlebar-safe-pt flex h-full w-full flex-col overflow-hidden bg-[var(--color-bg-primary)]">
-      <header className="no-drag flex flex-shrink-0 items-center gap-3 border-b border-[var(--color-border-secondary)] px-6 py-3">
+    <div className="relative z-10 flex h-full w-full flex-col overflow-hidden bg-[var(--color-bg-primary)]">
+      <header className="no-drag flex flex-shrink-0 items-center gap-3 border-b border-[var(--color-border-secondary)] px-6 pb-3 pt-[calc(var(--titlebar-drag-height)+0.75rem)]">
         <button
           type="button"
           onClick={handleBack}
@@ -383,6 +385,12 @@ export default function DiscoverPreviewPage() {
             <ArrowRight size={15} aria-hidden="true" />
           </button>
         </footer>
+      )}
+      {subscribeTarget && (
+        <SubscribeConfigDialog
+          target={subscribeTarget}
+          onClose={() => setSubscribeTarget(null)}
+        />
       )}
     </div>
   )

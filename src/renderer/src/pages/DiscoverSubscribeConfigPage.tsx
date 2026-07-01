@@ -210,8 +210,8 @@ export default function DiscoverSubscribeConfigPage() {
   const isSubmitDisabled = isSubmitting || isMissingTarget
 
   return (
-    <div className="titlebar-safe-pt flex h-full w-full flex-col overflow-hidden bg-[var(--color-bg-primary)]">
-      <header className="no-drag flex flex-shrink-0 items-center gap-3 border-b border-[var(--color-border-secondary)] px-6 py-3">
+    <div className="relative z-10 flex h-full w-full flex-col overflow-hidden bg-[var(--color-bg-primary)]">
+      <header className="no-drag flex flex-shrink-0 items-center gap-3 border-b border-[var(--color-border-secondary)] px-6 pb-3 pt-[calc(var(--titlebar-drag-height)+0.75rem)]">
         <button
           type="button"
           onClick={handleBack}
