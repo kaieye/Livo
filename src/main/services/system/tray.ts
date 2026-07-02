@@ -1,9 +1,9 @@
 import { Menu, Tray, nativeImage } from 'electron'
-import { getAppIconPath } from '../../app-icon'
+import { getTrayIconPath } from '../../app-icon'
 import { logInfo, logWarn } from './logger'
 
 function createTrayImage() {
-  const iconPath = getAppIconPath()
+  const iconPath = getTrayIconPath()
 
   logInfo('[tray] loading icon from', iconPath)
 

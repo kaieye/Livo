@@ -1,5 +1,3 @@
-import { resolve } from 'node:path'
-
 import {
   getBuildTimestamp,
   getGitCommitHash,
@@ -36,8 +34,11 @@ export default {
       from: 'resources/yuanjiao-Livo.ico',
       to: 'yuanjiao-Livo.ico',
     },
+    {
+      from: 'resources/tray.png',
+      to: 'tray.png',
+    },
   ],
-  electronDist: resolve('node_modules/electron/dist'),
   protocols: [
     {
       name: 'Livo',
@@ -60,6 +61,8 @@ export default {
   mac: {
     target: ['dmg'],
     category: 'public.app-category.news',
+    icon: 'resources/yuanjiao-Livo.icns',
+    identity: null,
   },
   linux: {
     target: ['AppImage'],

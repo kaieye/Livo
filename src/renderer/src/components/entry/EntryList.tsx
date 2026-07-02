@@ -320,6 +320,7 @@ export function EntryList({ width }: { width?: number }) {
           onMarkBelowRead={markBelowRead}
           onContextMenu={showMenu}
           onMediaAllFailed={handleEntryMediaAllFailed}
+          lastRefreshError={currentFeed?.lastRefreshError}
         />
 
         {menuState.visible &&

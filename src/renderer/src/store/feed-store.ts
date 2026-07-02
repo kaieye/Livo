@@ -404,8 +404,10 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
     )
     try {
       await window.api.feeds.refreshAll()
-      // Feed list will be updated via feeds:updated event in setupBackgroundEventListeners (queue.ts)
-      // No need to call loadFeeds() here - reduces IPC overhead
+      // 批量刷新后主动重新加载订阅列表和条目，
+      // 不依赖 feeds:updated 事件（该事件在批量刷新完成时可能未触发）。
+      await get().loadFeeds()
+      await reloadEntriesForCurrentScope(get())
 
       // Also sync subscription list to/from cloud (best-effort, silently skip if not logged in)
       window.api.feeds.syncNow().catch(() => {
