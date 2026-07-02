@@ -265,12 +265,11 @@ export class AppManager {
         concurrency: settings.data?.refreshConcurrency ?? 5,
       })
       // 免登录启动时不会触发登录后同步，这里在会话有效时主动对账一次，
-      // 把云端订阅补齐到本地（修复“云端有、本地 0 条”需重新登录才能恢复的问题）。
-      if (sessionStore.isSessionValid()) {
-        feedSyncService.syncNow().catch((error) => {
-          logError('[startup-feed-sync-failed]', error)
-        })
-      }
+      // 把云端订阅补齐到本地（修复"云端有、本地 0 条"需重新登录才能恢复的问题）。
+      // 即使 session 过期也尝试同步——本地有缓存 token 时仍可拉取云端订阅快照。
+      feedSyncService.syncNow().catch((error) => {
+        logError('[startup-feed-sync-failed]', error)
+      })
     }, STARTUP_BACKGROUND_DELAY_MS)
   }
 
