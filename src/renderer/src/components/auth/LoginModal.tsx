@@ -74,7 +74,7 @@ export function LoginModal() {
   }
 
   return (
-    <div className="backdrop-animate fixed inset-0 z-[100] flex items-center justify-center">
+    <div className="backdrop-animate fixed inset-0 z-[55] flex items-center justify-center">
       {/* 半透明蒙层 */}
       <div className="absolute inset-0 bg-black/40 dark:bg-black/60" />
 

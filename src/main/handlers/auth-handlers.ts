@@ -33,16 +33,22 @@ function createAuthPopup(url: string, title: string): BrowserWindow {
 }
 
 /**
- * 轮询登录状态直到完成或超时
+ * 轮询登录状态直到完成、超时或被取消。
+ * 当 signal 被 abort 时立即抛出取消错误，不再等待剩余轮询。
  */
 async function pollUntilComplete(
   loginId: string,
+  signal: AbortSignal,
   onProgress?: (status: string) => void,
 ): Promise<{ token: string; user: any }> {
-  const maxAttempts = 60 // 最多轮询 60 次
-  const intervalMs = 2000 // 每 2 秒轮询一次
+  const maxAttempts = 60
+  const intervalMs = 1000
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (signal.aborted) {
+      throw new Error('Login cancelled — window was closed')
+    }
+
     try {
       const result = await authService.pollLoginStatus(loginId)
 
@@ -54,14 +60,30 @@ async function pollUntilComplete(
         throw new Error('Login session expired')
       }
 
-      // 通知进度
       onProgress?.(
         `Waiting for authentication... (${attempt + 1}/${maxAttempts})`,
       )
 
-      // 等待后继续轮询
-      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+      // 使用可中断的 delay，窗口关闭时立即退出
+      await new Promise<void>((resolve, reject) => {
+        if (signal.aborted) {
+          reject(new Error('Login cancelled — window was closed'))
+          return
+        }
+        const onAbort = () => {
+          clearTimeout(timer)
+          reject(new Error('Login cancelled — window was closed'))
+        }
+        signal.addEventListener('abort', onAbort, { once: true })
+        const timer = setTimeout(() => {
+          signal.removeEventListener('abort', onAbort)
+          resolve()
+        }, intervalMs)
+      })
     } catch (error) {
+      if (signal.aborted) {
+        throw new Error('Login cancelled — window was closed')
+      }
       throw new Error(
         `Failed to poll login status: ${error instanceof Error ? error.message : String(error)}`,
       )
@@ -112,6 +134,45 @@ async function refreshStoredUser(token: string): Promise<CurrentUser> {
   return user
 }
 
+async function runOAuthLogin(
+  provider: 'google' | 'wechat',
+  getUrl: () => Promise<{ url: string; loginId: string }>,
+  title: string,
+): Promise<{ success: true; token: string; user: CurrentUser }> {
+  const { url, loginId } = await getUrl()
+  const authWindow = createAuthPopup(url, title)
+  const controller = new AbortController()
+
+  // 用户手动关闭弹窗时立即取消轮询，不再等待服务端超时
+  authWindow.on('closed', () => {
+    controller.abort()
+  })
+
+  try {
+    const { token, user } = await pollUntilComplete(
+      loginId,
+      controller.signal,
+      (status) => {
+        sendAuthProgress(status)
+      },
+    )
+
+    // 登录成功 → 立刻关闭弹窗，再做后续保存
+    if (!authWindow.isDestroyed()) {
+      authWindow.close()
+    }
+
+    saveLoginSession(token, user)
+    triggerFeedSyncAfterLogin()
+    return { success: true, token, user }
+  } catch (error) {
+    if (!authWindow.isDestroyed()) {
+      authWindow.close()
+    }
+    throw error
+  }
+}
+
 async function bindProvider(
   provider: 'google' | 'wechat',
 ): Promise<{ success: true; user: CurrentUser }> {
@@ -129,9 +190,14 @@ async function bindProvider(
     url,
     provider === 'google' ? 'Google 账号绑定' : '微信账号绑定',
   )
+  const controller = new AbortController()
+
+  authWindow.on('closed', () => {
+    controller.abort()
+  })
 
   try {
-    await pollUntilComplete(loginId, (status) => {
+    await pollUntilComplete(loginId, controller.signal, (status) => {
       sendAuthProgress(status)
     })
   } finally {
@@ -152,28 +218,11 @@ export function registerAuthHandlers(): void {
   // Google 登录
   registerChannel(IPC.AUTH_LOGIN_GOOGLE, async () => {
     try {
-      // 1. 获取登录 URL 和 loginId
-      const { url, loginId } = await authService.getGoogleLoginUrl()
-
-      // 2. 打开弹窗（不再跳转系统浏览器）
-      const authWindow = createAuthPopup(url, 'Google 登录')
-
-      // 3. 轮询登录状态
-      try {
-        const { token, user } = await pollUntilComplete(loginId, (status) => {
-          sendAuthProgress(status)
-        })
-
-        // 4. 保存 session（30 天有效期）
-        saveLoginSession(token, user)
-        triggerFeedSyncAfterLogin()
-
-        return { success: true, token, user }
-      } finally {
-        if (!authWindow.isDestroyed()) {
-          authWindow.close()
-        }
-      }
+      return await runOAuthLogin(
+        'google',
+        () => authService.getGoogleLoginUrl(),
+        'Google 登录',
+      )
     } catch (error) {
       return toHandlerError(error)
     }
@@ -182,28 +231,11 @@ export function registerAuthHandlers(): void {
   // 微信登录
   registerChannel(IPC.AUTH_LOGIN_WECHAT, async () => {
     try {
-      // 1. 获取登录 URL 和 loginId
-      const { url, loginId } = await authService.getWechatLoginUrl()
-
-      // 2. 打开弹窗（不再跳转系统浏览器）
-      const authWindow = createAuthPopup(url, '微信扫码登录')
-
-      // 3. 轮询登录状态
-      try {
-        const { token, user } = await pollUntilComplete(loginId, (status) => {
-          sendAuthProgress(status)
-        })
-
-        // 4. 保存 session
-        saveLoginSession(token, user)
-        triggerFeedSyncAfterLogin()
-
-        return { success: true, token, user }
-      } finally {
-        if (!authWindow.isDestroyed()) {
-          authWindow.close()
-        }
-      }
+      return await runOAuthLogin(
+        'wechat',
+        () => authService.getWechatLoginUrl(),
+        '微信扫码登录',
+      )
     } catch (error) {
       return toHandlerError(error)
     }

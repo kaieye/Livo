@@ -139,7 +139,7 @@ export function DigestContent() {
   }, [loadRuns, preset])
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col">
+    <main className="titlebar-safe-pt flex min-h-0 flex-1 flex-col">
       <header className="border-border dark:border-border-dark flex h-14 items-center gap-3 border-b px-4">
         <button
           onClick={() => navigate('/')}
