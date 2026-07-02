@@ -5,6 +5,7 @@ import { settingsProvider } from '../system/settings-provider'
 import { fetchAndParseFeed, type FetchFeedOptions } from './rss-parser'
 import { isAbortError, throwIfAborted } from '../../utils/abort-signal'
 import { normalizeFeedUrl } from './rsshub-url'
+import { rewriteWechatMpFeedUrlToBackendProxy } from './wechat-mp-feed-url'
 import {
   getAggregatorSnapshot,
   pruneAggregatorSnapshots,
@@ -68,12 +69,14 @@ function getFeedKey(feed: Feed, normalizedUrl: string): string {
 
 function getNormalizedFeedUrl(feed: Feed): string {
   if (feed.upstreamUrl && /^https?:\/\//i.test(feed.upstreamUrl)) {
-    return feed.upstreamUrl
+    return rewriteWechatMpFeedUrlToBackendProxy(feed.upstreamUrl)
   }
   const rsshubInstance =
     settingsProvider.get().general.rsshubInstance?.trim() ||
     DEFAULT_RSSHUB_INSTANCE
-  return normalizeFeedUrl(feed.url, rsshubInstance)
+  return rewriteWechatMpFeedUrlToBackendProxy(
+    normalizeFeedUrl(feed.url, rsshubInstance),
+  )
 }
 
 function getDesiredSource(feed: Feed): AggregatedFeedPayload['source'] {

@@ -18,6 +18,7 @@ import { getEventBus } from '../system/event-bus'
 import { settingsProvider } from '../system/settings-provider'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import { inferDiscoverFeedViewFromUrl } from '../../../shared/subscription-intake'
+import { rewriteWechatMpFeedUrlToBackendProxy } from './wechat-mp-feed-url'
 
 export interface SubscribeFeedOptions {
   url: string
@@ -65,13 +66,15 @@ export async function subscribeFeed(
     DEFAULT_RSSHUB_INSTANCE
 
   // ---- URL normalization ----
-  const rawProtocolUrl = toRsshubProtocolUrl(url)
+  const originalProtocolUrl = toRsshubProtocolUrl(url)
+  const rawProtocolUrl =
+    rewriteWechatMpFeedUrlToBackendProxy(originalProtocolUrl)
   const limitedProtocolUrl = ensureTwitterUserFeedLimit(
     ensureInstagramUserFeedLimit(rawProtocolUrl, 100),
     120,
   )
   const storedUrl = limitedProtocolUrl
-  const legacyStoredUrl = rawProtocolUrl
+  const legacyStoredUrl = originalProtocolUrl
   const normalizedUrl = normalizeRsshubProtocolUrl(storedUrl, rsshubInstance)
   const normalizedLegacyUrl = normalizeRsshubProtocolUrl(
     legacyStoredUrl,
@@ -88,12 +91,17 @@ export async function subscribeFeed(
     getDb().feeds.getFeedByUrl(toRsshubProtocolUrl(normalizedLegacyUrl))
 
   if (existingFeed) {
-    const upgradedUrl = ensureTwitterUserFeedLimit(
-      ensureInstagramUserFeedLimit(existingFeed.url, 100),
-      120,
+    const upgradedUrl = rewriteWechatMpFeedUrlToBackendProxy(
+      ensureTwitterUserFeedLimit(
+        ensureInstagramUserFeedLimit(existingFeed.url, 100),
+        120,
+      ),
     )
     if (upgradedUrl !== existingFeed.url) {
-      getDb().feeds.updateFeed(existingFeed.id, { url: upgradedUrl })
+      getDb().feeds.updateFeed(existingFeed.id, {
+        url: upgradedUrl,
+        upstreamUrl: upgradedUrl,
+      })
       const updated = getDb().feeds.getFeedById(existingFeed.id)
       if (updated) {
         return {
@@ -132,7 +140,7 @@ export async function subscribeFeed(
       id: optimisticId,
       title: formatFeedTitle(storedUrl, undefined, options.title || storedUrl),
       url: storedUrl,
-      upstreamUrl: url,
+      upstreamUrl: rawProtocolUrl,
       siteUrl: undefined,
       description: undefined,
       imageUrl: getImmediateFeedAvatar(normalizedUrl),
@@ -179,7 +187,9 @@ export async function subscribeFeed(
 
   // ---- Fetch + parse ----
   const now = Date.now()
-  const fetchUrl = /^https?:\/\//i.test(url) ? url : normalizedUrl
+  const fetchUrl = /^https?:\/\//i.test(rawProtocolUrl)
+    ? rawProtocolUrl
+    : normalizedUrl
   let parsed: Awaited<ReturnType<typeof fetchAndParseFeed>>['data'] | null =
     null
   try {
@@ -215,7 +225,7 @@ export async function subscribeFeed(
       options.title || storedUrl,
     ),
     url: storedUrl,
-    upstreamUrl: url,
+    upstreamUrl: rawProtocolUrl,
     siteUrl: parsed?.link,
     description: parsed?.description,
     imageUrl,
