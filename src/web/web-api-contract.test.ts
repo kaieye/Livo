@@ -11,6 +11,7 @@ type ApiShape = {
 }
 
 const ELECTRON_API_SHAPE = {
+  serverUrl: 'string',
   feeds: {
     add: true,
     remove: true,
@@ -170,6 +171,7 @@ const ELECTRON_API_SHAPE = {
     logout: true,
     checkSession: true,
     onLoginProgress: true,
+    wechatMpLogin: true,
   },
   notifications: {
     list: true,
