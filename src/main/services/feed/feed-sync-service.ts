@@ -159,8 +159,8 @@ export class FeedSyncService {
   }
 
   private requireAuth(): FeedSyncAuth {
-    const token = sessionStore.getValidToken()
     const current = sessionStore.getSession()
+    const token = current?.token
     if (!token || !current?.userId) {
       throw new Error('Feed sync requires a valid login session')
     }
