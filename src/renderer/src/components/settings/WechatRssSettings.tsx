@@ -41,7 +41,7 @@ function wasPreviouslyLoggedIn(): boolean {
 }
 
 export function WechatRssSettings() {
-  const [isLoggedIn, setIsLoggedIn] = useState(wasPreviouslyLoggedIn)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [results, setResults] = useState<WechatSearchResult[]>([])
   const [searchQuery, setSearchQuery] = useState('')
