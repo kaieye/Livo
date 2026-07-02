@@ -1382,6 +1382,7 @@ function listWebTaskRuns(options?: TaskRunListOptions): TaskRunRecord[] {
 
 export function createWebAPI(): ElectronAPI {
   const api: ElectronAPI = {
+    serverUrl: typeof window !== 'undefined' ? window.location.origin : '',
     feeds: {
       add: async (
         url: string,
@@ -2852,6 +2853,9 @@ export function createWebAPI(): ElectronAPI {
         isValid: false,
         user: null,
       }),
+      wechatMpLogin: async () => {
+        throw new Error('Not available on web')
+      },
       onLoginProgress: () => (() => {}) as any,
     },
 
