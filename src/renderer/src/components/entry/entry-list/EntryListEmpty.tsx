@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Inbox, RefreshCw } from 'lucide-react'
+import { AlertCircle, Inbox, RefreshCw } from 'lucide-react'
 import { ViewRecommendations } from '../ViewRecommendations'
 import type { FeedViewType } from '../../../../../shared/types'
 
@@ -8,6 +8,7 @@ interface EntryListEmptyProps {
   activeView: FeedViewType | null
   isRefreshing: boolean
   onRefresh: () => void
+  lastRefreshError?: string | null
 }
 
 /**
@@ -19,6 +20,7 @@ export function EntryListEmpty({
   activeView,
   isRefreshing,
   onRefresh,
+  lastRefreshError,
 }: EntryListEmptyProps) {
   const { t } = useTranslation()
 
@@ -26,8 +28,14 @@ export function EntryListEmpty({
   if (selectedFeedId && selectedFeedId !== 'starred') {
     return (
       <div className="text-text-secondary dark:text-text-dark-secondary flex flex-col items-center justify-center py-12">
-        <Inbox size={40} className="text-text-tertiary mb-3" />
-        <p className="text-sm">{t('entryList.noArticles')}</p>
+        {lastRefreshError ? (
+          <AlertCircle size={40} className="mb-3 text-red-400" />
+        ) : (
+          <Inbox size={40} className="text-text-tertiary mb-3" />
+        )}
+        <p className="text-sm">
+          {lastRefreshError || t('entryList.noArticles')}
+        </p>
         <button
           onClick={onRefresh}
           disabled={isRefreshing}

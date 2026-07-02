@@ -6,3 +6,9 @@ export function getAppIconPath(): string {
     ? join(process.resourcesPath, 'yuanjiao-Livo.png')
     : join(app.getAppPath(), 'resources', 'yuanjiao-Livo.png')
 }
+
+export function getTrayIconPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'tray.png')
+    : join(app.getAppPath(), 'resources', 'tray.png')
+}

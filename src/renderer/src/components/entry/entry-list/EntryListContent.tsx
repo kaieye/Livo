@@ -32,6 +32,7 @@ export interface EntryListContentProps {
   feedUrlById: Map<string, string | undefined>
   dimRead: boolean
   imageProxy: boolean
+  lastRefreshError?: string | null
   onRefresh: () => void | Promise<void>
   onSelectEntry: (entry: Entry) => void
   onMarkAboveRead: (entryId: string) => void
@@ -62,6 +63,7 @@ export function EntryListContent({
   feedUrlById,
   dimRead,
   imageProxy,
+  lastRefreshError,
   onRefresh,
   onSelectEntry,
   onMarkAboveRead,
@@ -96,6 +98,7 @@ export function EntryListContent({
             activeView={activeView}
             isRefreshing={isRefreshing}
             onRefresh={onRefresh}
+            lastRefreshError={lastRefreshError}
           />
         )
       }
