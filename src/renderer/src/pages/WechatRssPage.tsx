@@ -5,6 +5,10 @@ import type { WechatQrStatus, WechatSearchResult } from '../lib/wechat-rss-api'
 
 const POLL_INTERVAL_MS = 2_000
 
+function getServerUrl(): string {
+  return window.api.serverUrl || 'http://localhost:8787'
+}
+
 export default function WechatRssPage() {
   const [status, setStatus] = useState<WechatQrStatus>({
     isLoggedIn: false,
@@ -18,18 +22,18 @@ export default function WechatRssPage() {
   const [error, setError] = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const serverUrl = getServerUrl()
+
   // Poll QR status
   const pollStatus = useCallback(async () => {
     try {
-      const res = await fetch('http://localhost:8787/api/wechat-rss/qr/status')
+      const res = await fetch(`${serverUrl}/api/wechat-rss/qr/status`)
       const data: WechatQrStatus = await res.json()
       setStatus(data)
 
       if (data.qrPending && !qrImageUrl) {
         // Fetch QR image
-        const imgRes = await fetch(
-          'http://localhost:8787/api/wechat-rss/qr/image',
-        )
+        const imgRes = await fetch(`${serverUrl}/api/wechat-rss/qr/image`)
         const imgData = await imgRes.json()
         setQrImageUrl(imgData.base64Image || '')
       }
@@ -40,18 +44,18 @@ export default function WechatRssPage() {
     } catch {
       setError('无法连接到 Livo Server')
     }
-  }, [qrImageUrl])
+  }, [qrImageUrl, serverUrl])
 
   // Generate QR code
   const generateQr = useCallback(async () => {
     setError('')
     try {
-      await fetch('http://localhost:8787/api/wechat-rss/qr/code')
+      await fetch(`${serverUrl}/api/wechat-rss/qr/code`)
       await pollStatus()
     } catch {
       setError('生成二维码失败')
     }
-  }, [pollStatus])
+  }, [pollStatus, serverUrl])
 
   // Polling
   useEffect(() => {
@@ -74,7 +78,7 @@ export default function WechatRssPage() {
         offset: '0',
       })
       const res = await fetch(
-        `http://localhost:8787/api/wechat-rss/search?${params.toString()}`,
+        `${serverUrl}/api/wechat-rss/search?${params.toString()}`,
       )
       const data = await res.json()
       setResults(data.results || [])
@@ -83,14 +87,13 @@ export default function WechatRssPage() {
     } finally {
       setIsSearching(false)
     }
-  }, [searchQuery])
+  }, [searchQuery, serverUrl])
 
-  const handleSubscribe = useCallback(async (item: WechatSearchResult) => {
-    setError('')
-    try {
-      const res = await fetch(
-        'http://localhost:8787/api/wechat-rss/ensure-feed',
-        {
+  const handleSubscribe = useCallback(
+    async (item: WechatSearchResult) => {
+      setError('')
+      try {
+        const res = await fetch(`${serverUrl}/api/wechat-rss/ensure-feed`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -99,16 +102,27 @@ export default function WechatRssPage() {
             avatar: item.image,
             intro: item.description,
           }),
-        },
-      )
-      const data = await res.json()
-      if (!res.ok) {
-        setError(typeof data.message === 'string' ? data.message : '订阅失败')
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          setError(typeof data.message === 'string' ? data.message : '订阅失败')
+          return
+        }
+        // Create local feed subscription to fetch articles
+        if (data.rssUrl) {
+          await window.api.feeds.add(
+            data.rssUrl,
+            undefined,
+            undefined,
+            data.title,
+          )
+        }
+      } catch {
+        setError('订阅失败')
       }
-    } catch {
-      setError('订阅失败')
-    }
-  }, [])
+    },
+    [serverUrl],
+  )
 
   return (
     <div className="flex h-full w-full flex-col bg-white dark:bg-neutral-950">

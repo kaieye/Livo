@@ -153,6 +153,16 @@ export function WechatRssSettings() {
       const data = await res.json()
       if (!res.ok) {
         setError(typeof data.message === 'string' ? data.message : '订阅失败')
+        return
+      }
+      // Create local feed subscription to fetch articles
+      if (data.rssUrl) {
+        await window.api.feeds.add(
+          data.rssUrl,
+          undefined,
+          undefined,
+          data.title,
+        )
       }
     } catch {
       setError('订阅失败')
