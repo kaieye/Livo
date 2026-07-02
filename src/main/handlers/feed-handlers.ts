@@ -67,7 +67,7 @@ export function registerFeedHandlers(): void {
           title,
           category,
           view,
-          deferInitialFetch: true,
+          deferInitialFetch: false,
         })
         return {
           success: true,
