@@ -42,6 +42,7 @@ function wasPreviouslyLoggedIn(): boolean {
 
 export function WechatRssSettings() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isChecking, setIsChecking] = useState(true)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [results, setResults] = useState<WechatSearchResult[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -62,6 +63,8 @@ export function WechatRssSettings() {
       }
     } catch {
       // Server may not be running yet
+    } finally {
+      setIsChecking(false)
     }
   }, [])
 
@@ -168,6 +171,16 @@ export function WechatRssSettings() {
       setError('订阅失败')
     }
   }, [])
+
+  // Still checking server status
+  if (isChecking) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-8">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-transparent" />
+        <p className="text-sm text-neutral-400">正在检查授权状态…</p>
+      </div>
+    )
+  }
 
   // Not logged in — show login prompt
   if (!isLoggedIn) {
