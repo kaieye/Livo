@@ -7,6 +7,11 @@
 <p align="center"><em>开源 RSS 阅读器 — 订阅、阅读、搜索、收藏与 AI</em></p>
 
 <p align="center">
+  <a href="./EN.md">EN.md</a>
+  <a href="./README.md">中文.md</a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Electron-33-47848f" alt="Electron" />
   <img src="https://img.shields.io/badge/React-19-149eca" alt="React" />
   <img src="https://img.shields.io/badge/TypeScript-5.9-3178c6" alt="TypeScript" />
@@ -166,6 +171,7 @@ pnpm test
 ## 社区
 
 本开源项目已链接并认可 [LINUX DO 社区](https://linux.do)。
+
 ## Star History
 
 <a href="https://www.star-history.com/?repos=kaieye%2FLivo&type=date&legend=top-left">
