@@ -147,6 +147,11 @@ export function SettingsDialog() {
 
   const tabs = [
     { id: 'user' as const, label: '账户', icon: User },
+    {
+      id: 'wechat-rss' as const,
+      label: '微信公众号',
+      icon: MessageCircle,
+    },
     { id: 'general' as const, label: t('settings.general'), icon: Settings },
     {
       id: 'appearance' as const,
@@ -188,11 +193,6 @@ export function SettingsDialog() {
       icon: Flame,
     },
     { id: 'about' as const, label: t('settings.about'), icon: Info },
-    {
-      id: 'wechat-rss' as const,
-      label: '微信公众号',
-      icon: MessageCircle,
-    },
   ]
 
   useEffect(() => {
