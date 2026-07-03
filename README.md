@@ -163,10 +163,19 @@ pnpm test
 - 架构分层、IPC 契约和数据路径见 [`docs/architecture.md`](docs/architecture.md)
 - 设计与实现文档见 `docs/superpowers/specs` 与 `docs/superpowers/plans`
 
-## 许可证
-
-AGPL-3.0
-
 ## 社区
 
 本开源项目已链接并认可 [LINUX DO 社区](https://linux.do)。
+## Star History
+
+<a href="https://www.star-history.com/?repos=kaieye%2FLivo&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=kaieye/Livo&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=kaieye/Livo&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=kaieye/Livo&type=date&legend=top-left" />
+ </picture>
+</a>
+
+## 许可证
+
+AGPL-3.0
