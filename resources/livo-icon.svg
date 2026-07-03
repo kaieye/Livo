@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none">
+  <!-- RSS-style icon: dot + radio waves -->
+  <circle cx="24" cy="72" r="10" fill="#0ea5e9"/>
+  <path d="M14 56a28 28 0 0 1 28 28" stroke="#0ea5e9" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <path d="M14 40a44 44 0 0 1 44 44" stroke="#0ea5e9" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <!-- Subtle book/reading element -->
+  <path d="M72 18h-6v48h6a8 8 0 0 0 8-8V26a8 8 0 0 0-8-8z" fill="#38bdf8" opacity="0.6"/>
+  <path d="M66 18h4v48h-4z" fill="#0ea5e9" opacity="0.4"/>
+</svg>
