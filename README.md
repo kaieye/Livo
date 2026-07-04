@@ -7,8 +7,8 @@
 <p align="center"><em>开源 RSS 阅读器 — 订阅、阅读、搜索、收藏与 AI</em></p>
 
 <p align="center">
-  <a href="./EN.md">EN.md</a>
-  <a href="./README.md">中文.md</a>
+  <a href="./EN.md">English</a>
+  <a href="./README.md">中文</a>
 </p>
 
 <p align="center">
