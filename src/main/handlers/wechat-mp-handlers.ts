@@ -3,13 +3,21 @@ import { registerChannel } from '../ipc/register-channel'
 import { IPC } from '../../shared/ipc-contracts'
 import { getBackendBaseUrl } from '../services/backend/backend-config'
 
-const WX_MP_LOGIN_URL = 'https://mp.weixin.qq.com/'
+const WX_MP_ORIGIN = 'https://mp.weixin.qq.com'
+const WX_MP_LOGIN_URL = `${WX_MP_ORIGIN}/`
 const LOGIN_TIMEOUT_MS = 180_000 // 3 minutes
+const AUTHENTICATED_PATHS = new Set([
+  '/cgi-bin/home',
+  '/cgi-bin/appmsg',
+  '/cgi-bin/appmsgpublish',
+])
 
-function extractTokenFromUrl(url: string): string | null {
+export function extractTokenFromUrl(url: string): string | null {
   try {
     const parsed = new URL(url)
-    const token = parsed.searchParams.get('token')
+    const token =
+      parsed.searchParams.get('token') ||
+      new URLSearchParams(parsed.hash.replace(/^#/, '')).get('token')
     if (token) return token
   } catch {
     // Not a valid URL
@@ -17,8 +25,58 @@ function extractTokenFromUrl(url: string): string | null {
   return null
 }
 
-function buildCookieString(cookies: Electron.Cookie[]): string {
+export function isWechatMpAuthenticatedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.origin !== WX_MP_ORIGIN) return false
+    if (extractTokenFromUrl(url)) return true
+    return AUTHENTICATED_PATHS.has(parsed.pathname)
+  } catch {
+    return false
+  }
+}
+
+export function extractTokenFromCookies(
+  cookies: Electron.Cookie[],
+): string | null {
+  const exact = cookies.find((c) => c.name === 'token')
+  if (exact?.value) return exact.value
+  const tokenLike = cookies.find((c) => c.name.toLowerCase().includes('token'))
+  return tokenLike?.value || null
+}
+
+export function buildCookieString(cookies: Electron.Cookie[]): string {
   return cookies.map((c) => `${c.name}=${c.value}`).join('; ')
+}
+
+export function getWechatMpCookieLookupUrls(currentUrl: string): string[] {
+  const urls = new Set<string>([WX_MP_LOGIN_URL])
+  try {
+    const parsed = new URL(currentUrl)
+    if (parsed.origin === WX_MP_ORIGIN) {
+      urls.add(parsed.toString())
+    }
+  } catch {
+    // Ignore malformed URLs.
+  }
+  return Array.from(urls)
+}
+
+async function getWechatMpCookies(
+  session: Electron.Session,
+  currentUrl: string,
+): Promise<Electron.Cookie[]> {
+  const allCookies = await Promise.all(
+    getWechatMpCookieLookupUrls(currentUrl).map((url) =>
+      session.cookies.get({ url }).catch(() => []),
+    ),
+  )
+  const byIdentity = new Map<string, Electron.Cookie>()
+  for (const cookie of allCookies.flat()) {
+    const key = `${cookie.domain || ''}\n${cookie.path || ''}\n${cookie.name}`
+    byIdentity.set(key, cookie)
+  }
+  return Array.from(byIdentity.values())
 }
 
 async function saveCredentialsToServer(
@@ -105,47 +163,51 @@ export function registerWechatMpHandlers(): void {
         LOGIN_TIMEOUT_MS,
       )
 
+      const finishFromAuthenticatedUrl = async (url: string) => {
+        if (!isWechatMpAuthenticatedUrl(url)) return
+        clearTimeout(timer)
+
+        const cookies = await getWechatMpCookies(win.webContents.session, url)
+        const cookieStr = buildCookieString(cookies)
+        const tokenFromUrl = extractTokenFromUrl(url)
+        if (tokenFromUrl) {
+          await finish(tokenFromUrl, cookieStr)
+          return
+        }
+
+        const tokenFromCookies = extractTokenFromCookies(cookies)
+        if (tokenFromCookies) {
+          await finish(tokenFromCookies, cookieStr)
+          return
+        }
+
+        try {
+          const jsToken = await win.webContents.executeJavaScript(
+            'new URL(window.location.href).searchParams.get("token") || new URLSearchParams(window.location.hash.replace(/^#/, "")).get("token") || ""',
+          )
+          await finish(jsToken || 'logged-in', cookieStr)
+        } catch {
+          await finish('logged-in', cookieStr)
+        }
+      }
+
+      const maybeFinishLogin = (url: string) => {
+        void finishFromAuthenticatedUrl(url).catch(() => {
+          void finish(null, '', '登录凭证读取失败')
+        })
+      }
+
       // Monitor page navigation for login success
       win.webContents.on('did-navigate', (_event, url) => {
-        if (url.includes('/cgi-bin/home') || url.includes('/cgi-bin/appmsg')) {
-          clearTimeout(timer)
+        maybeFinishLogin(url)
+      })
 
-          // Get ALL cookies from the session
-          win.webContents.session.cookies
-            .get({ url: WX_MP_LOGIN_URL })
-            .then((cookies) => {
-              const cookieStr = buildCookieString(cookies)
+      win.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+        if (isMainFrame) maybeFinishLogin(url)
+      })
 
-              // Try to extract token from URL first
-              const urlToken = extractTokenFromUrl(url)
-              if (urlToken) {
-                finish(urlToken, cookieStr)
-                return
-              }
-
-              // Look for token in cookies
-              for (const c of cookies) {
-                if (
-                  c.name === 'token' ||
-                  c.name.toLowerCase().includes('token')
-                ) {
-                  finish(c.value, cookieStr)
-                  return
-                }
-              }
-
-              // Try extracting from page JS
-              win.webContents
-                .executeJavaScript(
-                  'new URL(window.location.href).searchParams.get("token") || ""',
-                )
-                .then((jsToken: string) => {
-                  finish(jsToken || 'logged-in', cookieStr)
-                })
-                .catch(() => finish('logged-in', cookieStr))
-            })
-            .catch(() => finish('logged-in', ''))
-        }
+      win.webContents.on('did-finish-load', () => {
+        maybeFinishLogin(win.webContents.getURL())
       })
 
       // Handle window close (user cancelled)

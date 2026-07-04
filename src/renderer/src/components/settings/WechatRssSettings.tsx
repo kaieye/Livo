@@ -11,18 +11,28 @@ const POLL_INTERVAL_MS = 5_000
 const STORAGE_KEY_TOKEN = 'livo-wechat-mp-token'
 const STORAGE_KEY_LOGGED_IN = 'livo-wechat-mp-logged-in'
 
-function loadPersistedToken(): string {
+export function resolveWechatAuthorizationState(input: {
+  serverIsLoggedIn: boolean
+  hasPersistedAuthorization: boolean
+}): boolean {
+  return input.serverIsLoggedIn || input.hasPersistedAuthorization
+}
+
+function hasPersistedAuthorization(): boolean {
   try {
-    return localStorage.getItem(STORAGE_KEY_TOKEN) || ''
+    return (
+      localStorage.getItem(STORAGE_KEY_LOGGED_IN) === '1' ||
+      Boolean(localStorage.getItem(STORAGE_KEY_TOKEN))
+    )
   } catch {
-    return ''
+    return false
   }
 }
 
-function savePersistedToken(token: string): void {
+function rememberAuthorizationSuccess(): void {
   try {
-    localStorage.setItem(STORAGE_KEY_TOKEN, token)
     localStorage.setItem(STORAGE_KEY_LOGGED_IN, '1')
+    localStorage.removeItem(STORAGE_KEY_TOKEN)
   } catch {
     // ignore
   }
@@ -48,10 +58,11 @@ function formatExpiryTime(isoString: string): string {
 }
 
 export function WechatRssSettings() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [hasLocalAuthorization] = useState(hasPersistedAuthorization)
+  const [isLoggedIn, setIsLoggedIn] = useState(hasLocalAuthorization)
   const [tokenExpired, setTokenExpired] = useState(false)
   const [expiryTime, setExpiryTime] = useState<string | undefined>()
-  const [isChecking, setIsChecking] = useState(true)
+  const [isChecking, setIsChecking] = useState(!hasLocalAuthorization)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [error, setError] = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -64,7 +75,15 @@ export function WechatRssSettings() {
       const res = await fetch(`${API_BASE}/api/wechat-rss/qr/status`)
       if (res.ok) {
         const data = await res.json()
-        setIsLoggedIn(data.isLoggedIn)
+        if (data.isLoggedIn) {
+          rememberAuthorizationSuccess()
+        }
+        setIsLoggedIn(
+          resolveWechatAuthorizationState({
+            serverIsLoggedIn: Boolean(data.isLoggedIn),
+            hasPersistedAuthorization: hasPersistedAuthorization(),
+          }),
+        )
         setTokenExpired(data.tokenExpired || false)
         setExpiryTime(data.expiryTime)
       }
@@ -83,7 +102,10 @@ export function WechatRssSettings() {
     try {
       const result = await window.api.auth.wechatMpLogin()
       if (result?.token) {
-        savePersistedToken(result.token)
+        rememberAuthorizationSuccess()
+        setIsLoggedIn(true)
+        setTokenExpired(false)
+        setExpiryTime(undefined)
         await checkLoginStatus()
       } else {
         throw new Error('未获取到登录凭证')
@@ -113,20 +135,6 @@ export function WechatRssSettings() {
       body: JSON.stringify({ token: '', cookies: '' }),
     }).catch(() => {})
   }, [API_BASE])
-
-  // On mount: re-send persisted token to server
-  useEffect(() => {
-    const persisted = loadPersistedToken()
-    if (persisted) {
-      fetch(`${API_BASE}/api/wechat-rss/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: persisted }),
-      })
-        .then(() => checkLoginStatus())
-        .catch(() => {})
-    }
-  }, [API_BASE, checkLoginStatus])
 
   // Poll for login status changes
   useEffect(() => {
