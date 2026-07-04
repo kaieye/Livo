@@ -49,53 +49,80 @@ export function normalizePicnobImageUrl(url: string): string {
   try {
     const parsed = new URL(raw)
     const host = parsed.hostname.toLowerCase()
-    if (!isPicnobMirrorHost(host) || parsed.pathname !== '/get') return raw
+    if (!isPicnobMirrorHost(host)) return raw
 
-    const fromSearchParams = (parsed.searchParams.get('url') || '').trim()
-    const questionIndex = raw.indexOf('?')
-    const rawQuery = questionIndex >= 0 ? raw.slice(questionIndex + 1) : ''
-    const markerIndex = rawQuery.indexOf('url=')
-    const rawSlice =
-      markerIndex >= 0 ? rawQuery.slice(markerIndex + 4).trim() : ''
-    let fromRawSlice = rawSlice
-    if (fromRawSlice) {
-      try {
-        fromRawSlice = decodeURIComponent(fromRawSlice)
-      } catch {
-        // Keep the raw value if decoding fails.
+    // Handle /get?url=... format (existing path)
+    if (parsed.pathname === '/get') {
+      const fromSearchParams = (parsed.searchParams.get('url') || '').trim()
+      const questionIndex = raw.indexOf('?')
+      const rawQuery = questionIndex >= 0 ? raw.slice(questionIndex + 1) : ''
+      const markerIndex = rawQuery.indexOf('url=')
+      const rawSlice =
+        markerIndex >= 0 ? rawQuery.slice(markerIndex + 4).trim() : ''
+      let fromRawSlice = rawSlice
+      if (fromRawSlice) {
+        try {
+          fromRawSlice = decodeURIComponent(fromRawSlice)
+        } catch {
+          // Keep the raw value if decoding fails.
+        }
+      }
+
+      const candidates = [fromRawSlice, fromSearchParams].filter((candidate) =>
+        /^https?:\/\//i.test(candidate),
+      )
+      if (candidates.length === 0) return raw
+
+      const score = (value: string) => {
+        let total = 0
+        const lower = value.toLowerCase()
+        if (/cdninstagram|fbcdn\.net|scontent\./i.test(lower)) total += 4
+        if (/\.(jpe?g|png|webp|gif|bmp|avif)(\?|$)/i.test(lower)) total += 3
+        if (lower.includes('ig_cache_key=')) total += 1
+        if (lower.includes('oh=')) total += 2
+        if (lower.includes('oe=')) total += 2
+        if ((lower.match(/&_nc_/g) || []).length >= 2) total += 2
+        if (
+          /cdninstagram|fbcdn\.net|scontent\./i.test(lower) &&
+          !lower.includes('oh=')
+        )
+          total -= 3
+        if (
+          /cdninstagram|fbcdn\.net|scontent\./i.test(lower) &&
+          !lower.includes('oe=')
+        )
+          total -= 3
+        if ((value.match(/https?:\/\//gi) || []).length > 1) total -= 6
+        return total
+      }
+
+      candidates.sort((a, b) => score(b) - score(a))
+      return candidates[0] || raw
+    }
+
+    // Handle /p/...?o=BASE64 format (picnob proxy image with base64-encoded CDN URL)
+    if (parsed.searchParams.has('o')) {
+      const encoded = parsed.searchParams.get('o') || ''
+      if (encoded) {
+        const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/')
+        const padded =
+          normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+        try {
+          const decoded = atob(padded)
+          const nestedUrl = decoded.match(/https?:\/\/\S+/i)?.[0] || decoded
+          if (
+            /^https?:\/\//i.test(nestedUrl) &&
+            /cdninstagram|fbcdn\.net|scontent\./i.test(nestedUrl)
+          ) {
+            return nestedUrl
+          }
+        } catch {
+          // Ignore invalid base64 payload
+        }
       }
     }
 
-    const candidates = [fromRawSlice, fromSearchParams].filter((candidate) =>
-      /^https?:\/\//i.test(candidate),
-    )
-    if (candidates.length === 0) return raw
-
-    const score = (value: string) => {
-      let total = 0
-      const lower = value.toLowerCase()
-      if (/cdninstagram|fbcdn\.net|scontent\./i.test(lower)) total += 4
-      if (/\.(jpe?g|png|webp|gif|bmp|avif)(\?|$)/i.test(lower)) total += 3
-      if (lower.includes('ig_cache_key=')) total += 1
-      if (lower.includes('oh=')) total += 2
-      if (lower.includes('oe=')) total += 2
-      if ((lower.match(/&_nc_/g) || []).length >= 2) total += 2
-      if (
-        /cdninstagram|fbcdn\.net|scontent\./i.test(lower) &&
-        !lower.includes('oh=')
-      )
-        total -= 3
-      if (
-        /cdninstagram|fbcdn\.net|scontent\./i.test(lower) &&
-        !lower.includes('oe=')
-      )
-        total -= 3
-      if ((value.match(/https?:\/\//gi) || []).length > 1) total -= 6
-      return total
-    }
-
-    candidates.sort((a, b) => score(b) - score(a))
-    return candidates[0] || raw
+    return raw
   } catch {
     return raw
   }
@@ -293,4 +320,65 @@ export function isDecorativeSocialImageUrl(url: string): boolean {
     // Ignore malformed URLs.
   }
   return false
+}
+
+/**
+ * Convert a numeric Instagram media ID to a shortcode.
+ * Instagram uses a base64 alphabet: A-Z, a-z, 0-9, -, _
+ */
+function instagramIdToShortcode(instagramId: string): string {
+  const alphabet =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  if (!/^\d+$/.test(instagramId)) return ''
+  let value = BigInt(instagramId)
+  if (value === 0n) return alphabet[0]
+  let shortcode = ''
+  while (value > 0n) {
+    const idx = Number(value % 64n)
+    shortcode = alphabet[idx] + shortcode
+    value /= 64n
+  }
+  return shortcode
+}
+
+/**
+ * Normalize an entry's URL for opening in a browser.
+ * Converts picnob.com/post/ links to instagram.com/p/{shortcode}/
+ * by extracting the ig_cache_key from the entry's content.
+ */
+export function normalizeEntryUrlForBrowser(entry: {
+  url?: string | null
+  content?: string | null
+  summary?: string | null
+}): string {
+  const rawUrl = (entry.url || '').trim()
+  if (!rawUrl) return rawUrl
+
+  // Check if this is a picnob/mirror post URL that needs conversion
+  const isPicnobPostUrl =
+    /picnob\.com\/post\/|picnob\.info\/post\/|pixnoy\.com\/post\/|pixwox\.com\/post\/|piokok\.com\/post\//i.test(
+      rawUrl,
+    )
+
+  if (!isPicnobPostUrl) return rawUrl
+
+  // Search entry content for Instagram CDN URLs with ig_cache_key
+  const contentText = `${entry.content || ''}\n${entry.summary || ''}`
+  const urls = contentText.match(/https?:\/\/[^\s"'<>]+/g) || []
+
+  for (const candidate of urls) {
+    const igCacheKeyRaw = extractIgCacheKeyFromUrl(candidate)
+    if (!igCacheKeyRaw) continue
+    const base64Part = decodeURIComponent(igCacheKeyRaw).split('.')[0] || ''
+    if (!base64Part) continue
+    try {
+      const instagramId = atob(base64Part)
+      const shortcode = instagramIdToShortcode(instagramId)
+      if (shortcode) return `https://www.instagram.com/p/${shortcode}/`
+    } catch {
+      // Ignore invalid payload
+    }
+  }
+
+  return rawUrl
 }

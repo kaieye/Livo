@@ -611,7 +611,19 @@ export function resolveEntryBrowserOpenUrl(entry: Entry): string {
   }
 
   const direct = (entry.url || '').trim()
-  if (/^https?:\/\//i.test(direct)) return canonicalizeSocialUrl(direct)
+  if (/^https?:\/\//i.test(direct)) {
+    const canon = canonicalizeSocialUrl(direct)
+    // If the URL is a picnob/mirror post URL, try to resolve the real Instagram URL
+    if (
+      /picnob\.com\/post\/|picnob\.info\/post\/|pixnoy\.com\/post\/|pixwox\.com\/post\/|piokok\.com\/post\//i.test(
+        canon,
+      )
+    ) {
+      const igPostUrl = buildInstagramPostUrlFromMedia()
+      if (igPostUrl) return canonicalizeSocialUrl(igPostUrl)
+    }
+    return canon
+  }
   const postUrlFromContent = extractSocialPostUrl(
     `${entry.content || ''}\n${entry.summary || ''}`,
   )

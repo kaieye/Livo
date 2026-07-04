@@ -49,6 +49,7 @@ import {
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
 import { resolvePreferredEntryVideo } from '../../lib/entry-video-source'
+import { resolveEntryBrowserOpenUrl } from '../../lib/social-entry-utils'
 import { ROUTES } from '../../router/route-paths'
 import { Maximize2 } from 'lucide-react'
 import { useAISummary } from '../../hooks/useAISummary'
@@ -688,7 +689,8 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
         e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
-      window.open(selectedEntry.url, '_blank')
+      const browserUrl = resolveEntryBrowserOpenUrl(selectedEntry)
+      window.open(browserUrl || selectedEntry.url, '_blank')
     },
   })
 
@@ -930,7 +932,10 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
 
           {selectedEntry.url && (
             <ToolbarButton
-              onClick={() => window.open(selectedEntry.url, '_blank')}
+              onClick={() => {
+                const browserUrl = resolveEntryBrowserOpenUrl(selectedEntry)
+                window.open(browserUrl || selectedEntry.url, '_blank')
+              }}
               title={t('entry.openInBrowser')}
             >
               <ExternalLink size={16} />
