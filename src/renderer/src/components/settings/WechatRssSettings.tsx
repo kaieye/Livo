@@ -1,8 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { WechatRssSearchSection } from '../wechat-rss/WechatRssSearchSection'
-import type { WechatSearchResult } from '../../lib/wechat-rss-api'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
+  LogOut,
+  Clock,
+} from 'lucide-react'
 
-const POLL_INTERVAL_MS = 3_000
+const POLL_INTERVAL_MS = 5_000
 const STORAGE_KEY_TOKEN = 'livo-wechat-mp-token'
 const STORAGE_KEY_LOGGED_IN = 'livo-wechat-mp-logged-in'
 
@@ -32,41 +37,43 @@ function clearPersistedToken(): void {
   }
 }
 
-function wasPreviouslyLoggedIn(): boolean {
+function formatExpiryTime(isoString: string): string {
   try {
-    return localStorage.getItem(STORAGE_KEY_LOGGED_IN) === '1'
+    const d = new Date(isoString)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
   } catch {
-    return false
+    return isoString
   }
 }
 
 export function WechatRssSettings() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [tokenExpired, setTokenExpired] = useState(false)
+  const [expiryTime, setExpiryTime] = useState<string | undefined>()
   const [isChecking, setIsChecking] = useState(true)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
-  const [results, setResults] = useState<WechatSearchResult[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
   const [error, setError] = useState('')
-  const [token, setToken] = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const API_BASE = window.api.serverUrl
 
-  // Check if we already have a token on the server
+  // Check login + expiry status from server
   const checkLoginStatus = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/wechat-rss/qr/status`)
       if (res.ok) {
         const data = await res.json()
         setIsLoggedIn(data.isLoggedIn)
+        setTokenExpired(data.tokenExpired || false)
+        setExpiryTime(data.expiryTime)
       }
     } catch {
       // Server may not be running yet
     } finally {
       setIsChecking(false)
     }
-  }, [])
+  }, [API_BASE])
 
   // Start WeChat MP login via Electron
   const startLogin = useCallback(async () => {
@@ -74,13 +81,10 @@ export function WechatRssSettings() {
     setIsLoggingIn(true)
 
     try {
-      // Invoke Electron IPC to open WeChat MP login window.
-      // Main process captures token AND saves it to Livo-Server.
       const result = await window.api.auth.wechatMpLogin()
       if (result?.token) {
-        setToken(result.token)
         savePersistedToken(result.token)
-        setIsLoggedIn(true)
+        await checkLoginStatus()
       } else {
         throw new Error('未获取到登录凭证')
       }
@@ -93,9 +97,24 @@ export function WechatRssSettings() {
     } finally {
       setIsLoggingIn(false)
     }
-  }, [])
+  }, [checkLoginStatus])
 
-  // On mount: re-send persisted token to server (in case of server restart)
+  // Log out: clear token
+  const handleLogout = useCallback(() => {
+    clearPersistedToken()
+    setIsLoggedIn(false)
+    setTokenExpired(false)
+    setExpiryTime(undefined)
+    setError('')
+    // Also clear token on server side
+    fetch(`${API_BASE}/api/wechat-rss/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: '', cookies: '' }),
+    }).catch(() => {})
+  }, [API_BASE])
+
+  // On mount: re-send persisted token to server
   useEffect(() => {
     const persisted = loadPersistedToken()
     if (persisted) {
@@ -103,9 +122,11 @@ export function WechatRssSettings() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: persisted }),
-      }).catch(() => {})
+      })
+        .then(() => checkLoginStatus())
+        .catch(() => {})
     }
-  }, [])
+  }, [API_BASE, checkLoginStatus])
 
   // Poll for login status changes
   useEffect(() => {
@@ -115,62 +136,6 @@ export function WechatRssSettings() {
       if (pollRef.current) clearInterval(pollRef.current)
     }
   }, [checkLoginStatus])
-
-  // Search
-  const handleSearch = useCallback(async () => {
-    if (!searchQuery.trim()) return
-    setIsSearching(true)
-    setError('')
-    try {
-      const params = new URLSearchParams({
-        query: searchQuery.trim(),
-        limit: '10',
-        offset: '0',
-      })
-      const res = await fetch(
-        `${API_BASE}/api/wechat-rss/search?${params.toString()}`,
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setResults(data.results || [])
-    } catch {
-      setError('搜索失败')
-    } finally {
-      setIsSearching(false)
-    }
-  }, [searchQuery])
-
-  const handleSubscribe = useCallback(async (item: WechatSearchResult) => {
-    setError('')
-    try {
-      const res = await fetch(`${API_BASE}/api/wechat-rss/ensure-feed`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mpName: item.title,
-          fakeId: item.fakeId,
-          avatar: item.image,
-          intro: item.description,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(typeof data.message === 'string' ? data.message : '订阅失败')
-        return
-      }
-      // Create local feed subscription to fetch articles
-      if (data.rssUrl) {
-        await window.api.feeds.add(
-          data.rssUrl,
-          undefined,
-          undefined,
-          data.title,
-        )
-      }
-    } catch {
-      setError('订阅失败')
-    }
-  }, [])
 
   // Still checking server status
   if (isChecking) {
@@ -234,7 +199,7 @@ export function WechatRssSettings() {
     )
   }
 
-  // Logged in — show search
+  // Logged in — show status with expiry info
   return (
     <div className="flex flex-col gap-4">
       {error && (
@@ -242,34 +207,102 @@ export function WechatRssSettings() {
           {error}
         </div>
       )}
-      <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 dark:border-green-800 dark:bg-green-950">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#07C160]">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="white"
-            className="h-4 w-4"
-          >
-            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-          </svg>
+
+      {/* Token expired warning */}
+      {tokenExpired && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              Token 已过期
+            </p>
+            <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+              {expiryTime ? (
+                <>
+                  过期时间：{formatExpiryTime(expiryTime)}，请重新扫码授权以恢复
+                  订阅更新
+                </>
+              ) : (
+                '请重新扫码授权以恢复订阅更新'
+              )}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-medium text-green-800 dark:text-green-200">
-            微信已授权
-          </p>
-          <p className="text-xs text-green-600 dark:text-green-400">
-            可搜索和订阅公众号
-          </p>
+      )}
+
+      {/* Authorised status banner */}
+      {!tokenExpired && (
+        <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 dark:border-green-800 dark:bg-green-950">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#07C160]">
+            <CheckCircle2 className="h-4 w-4 text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-green-800 dark:text-green-200">
+              微信已授权
+            </p>
+            <p className="text-xs text-green-600 dark:text-green-400">
+              公众号订阅源将正常更新
+              {expiryTime && (
+                <span className="ml-1 opacity-70">
+                  · 有效期至 {formatExpiryTime(expiryTime)}
+                </span>
+              )}
+            </p>
+          </div>
         </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900">
+        <p className="mb-2 text-xs font-medium text-neutral-500">授权操作</p>
+
+        {/* Refresh token button — always available */}
+        <button
+          onClick={startLogin}
+          disabled={isLoggingIn}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#07C160] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#06AD56] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isLoggingIn ? (
+            <>
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              等待扫码...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4" />
+              重新授权
+            </>
+          )}
+        </button>
+        {isLoggingIn && (
+          <p className="text-center text-xs text-neutral-400">
+            请在打开的微信公众平台页面中扫描二维码
+          </p>
+        )}
+
+        {/* Expiry info */}
+        {!isLoggingIn && expiryTime && (
+          <div className="flex items-center justify-center gap-1.5 text-xs text-neutral-400">
+            <Clock className="h-3 w-3" />
+            {tokenExpired ? (
+              <span className="text-amber-600 dark:text-amber-400">
+                Token 已于 {formatExpiryTime(expiryTime)} 过期
+              </span>
+            ) : (
+              <span>Token 有效期至 {formatExpiryTime(expiryTime)}</span>
+            )}
+          </div>
+        )}
+
+        {/* Logout button */}
+        <button
+          onClick={handleLogout}
+          className="mt-2 inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:border-red-800 dark:hover:bg-red-950 dark:hover:text-red-400"
+        >
+          <LogOut className="h-4 w-4" />
+          注销授权
+        </button>
       </div>
-      <WechatRssSearchSection
-        searchQuery={searchQuery}
-        onSearchQueryChange={setSearchQuery}
-        onSearch={handleSearch}
-        isSearching={isSearching}
-        results={results}
-        onSubscribe={handleSubscribe}
-      />
     </div>
   )
 }

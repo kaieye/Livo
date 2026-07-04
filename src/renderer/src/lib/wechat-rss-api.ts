@@ -2,6 +2,9 @@ export interface WechatQrStatus {
   isLoggedIn: boolean
   qrPending: boolean
   message: string
+  tokenExpired?: boolean
+  expiryTimestamp?: number
+  expiryTime?: string
 }
 
 export interface WechatSearchResult {
