@@ -1,11 +1,26 @@
 import { IPC } from '../../shared/types'
 import type { FeverAccount } from '../../shared/types'
+import { IpcContractError } from '../../shared/ipc-contracts'
 import { registerChannel } from '../ipc/register-channel'
 import { toHandlerError } from '../ipc/handler-error'
 import { getDb } from '../database'
 import { createFeverClient } from '../services/fever/fever-client'
+import {
+  normalizeFeverAccountBaseUrl,
+  normalizeFeverBaseUrl,
+} from '../services/fever/fever-endpoint'
 import { queueFeverSyncAccount } from '../services/fever/fever-sync'
 import { v4 as uuidv4 } from 'uuid'
+
+async function verifyFeverConnection(
+  baseUrl: string,
+  username: string,
+  apiKey: string,
+): Promise<boolean> {
+  const normalizedBaseUrl = normalizeFeverBaseUrl(baseUrl)
+  const client = createFeverClient(normalizedBaseUrl, username, apiKey)
+  return client.verify()
+}
 
 export function registerFeverHandlers(): void {
   registerChannel(IPC.FEVER_ACCOUNTS_LIST, () => {
@@ -14,13 +29,25 @@ export function registerFeverHandlers(): void {
 
   registerChannel(
     IPC.FEVER_ACCOUNTS_CREATE,
-    (
+    async (
       _event,
       input: { baseUrl: string; username: string; apiKey: string },
-    ): FeverAccount => {
+    ): Promise<FeverAccount> => {
+      const verified = await verifyFeverConnection(
+        input.baseUrl,
+        input.username,
+        input.apiKey,
+      )
+      if (!verified) {
+        throw new IpcContractError(
+          'Fever authentication failed',
+          'service_unavailable',
+        )
+      }
+
       const account: FeverAccount = {
         id: uuidv4(),
-        baseUrl: input.baseUrl.replace(/\/+$/, ''),
+        baseUrl: normalizeFeverAccountBaseUrl(input.baseUrl),
         username: input.username,
         apiKey: input.apiKey,
         enabled: true,
@@ -66,12 +93,7 @@ export function registerFeverHandlers(): void {
       apiKey: string,
     ): Promise<{ success: boolean; error?: string }> => {
       try {
-        const client = createFeverClient(
-          baseUrl.replace(/\/+$/, ''),
-          username,
-          apiKey,
-        )
-        const ok = await client.verify()
+        const ok = await verifyFeverConnection(baseUrl, username, apiKey)
         return ok
           ? { success: true }
           : { success: false, error: 'Authentication failed' }

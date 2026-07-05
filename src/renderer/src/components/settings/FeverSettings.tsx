@@ -37,7 +37,7 @@ export function FeverSettings() {
 
       <div className="flex items-center gap-3">
         <button
-          onClick={() => setShowAddForm(!showAddForm)}
+          onClick={() => setShowAddForm((current) => !current)}
           className="bg-accent hover:bg-accent-hover flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors"
         >
           <Plus size={16} />
@@ -99,8 +99,7 @@ function AddFeverAccountForm({
     setError(null)
     try {
       await createMutation.mutateAsync({ baseUrl, username, apiKey })
-      setFeedback(t('settings.feverConnected'))
-      setTimeout(() => onClose(), 1000)
+      onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }

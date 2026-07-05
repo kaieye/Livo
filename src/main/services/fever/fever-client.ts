@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { normalizeFeverBaseUrl } from './fever-endpoint'
 
 export interface FeverRemoteFeed {
   id: number
@@ -70,7 +71,7 @@ export function createFeverClient(
   apiKey: string,
 ): FeverApiClient {
   const hash = feverHash(username, apiKey)
-  const base = baseUrl.replace(/\/+$/, '')
+  const base = normalizeFeverBaseUrl(baseUrl)
 
   async function post(
     query: string,
