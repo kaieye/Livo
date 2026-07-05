@@ -230,7 +230,16 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
     try {
       const feeds = await window.api.feeds.list()
       console.log('[FeedStore] loadFeeds:', feeds.length, 'feeds from IPC')
-      set({ feeds, isLoading: false })
+      set((state) => ({
+        feeds,
+        isLoading: false,
+        selectedFeedId:
+          state.selectedFeedId && state.selectedFeedId !== 'starred'
+            ? feeds.some((feed) => feed.id === state.selectedFeedId)
+              ? state.selectedFeedId
+              : null
+            : state.selectedFeedId,
+      }))
       saveFeedsToCache(feeds)
     } catch {
       set({ isLoading: false })

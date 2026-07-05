@@ -79,6 +79,13 @@ export function registerFeverHandlers(): void {
     (_event, id: string): { success: boolean; error?: string } => {
       const existing = getDb().fever.getFeverAccountById(id)
       if (!existing) return { success: false, error: 'Account not found' }
+      const mappings = getDb().fever.getFeverFeedMappings(id)
+      for (const mapping of mappings) {
+        const feed = getDb().feeds.getFeedById(mapping.localFeedId)
+        if (feed?.provider === 'fever') {
+          getDb().feeds.deleteFeed(mapping.localFeedId)
+        }
+      }
       getDb().fever.deleteFeverAccount(id)
       return { success: true }
     },

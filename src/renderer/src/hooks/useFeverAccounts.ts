@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { FeverAccount } from '../../../shared/types'
+import { useFeedStore } from '../store/feed-store'
 
 const FEVER_ACCOUNTS_KEY = ['fever', 'accounts']
 const feverSyncStateKey = (id: string) => ['fever', 'sync-state', id]
@@ -22,13 +23,19 @@ export function useFeverSyncStateQuery(accountId: string | undefined) {
 export function useFeverCreateAccountMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: {
+    mutationFn: async (input: {
       baseUrl: string
       username: string
       apiKey: string
-    }) => window.api.fever.createAccount(input),
+    }) => {
+      const account = await window.api.fever.createAccount(input)
+      await window.api.fever.sync(account.id)
+      await useFeedStore.getState().loadFeeds()
+      return account
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: FEVER_ACCOUNTS_KEY })
+      queryClient.invalidateQueries({ queryKey: ['fever', 'sync-state'] })
     },
   })
 }
@@ -52,7 +59,11 @@ export function useFeverUpdateAccountMutation() {
 export function useFeverDeleteAccountMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => window.api.fever.deleteAccount(id),
+    mutationFn: async (id: string) => {
+      const result = await window.api.fever.deleteAccount(id)
+      await useFeedStore.getState().loadFeeds()
+      return result
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: FEVER_ACCOUNTS_KEY })
     },
@@ -72,7 +83,11 @@ export function useFeverVerifyMutation() {
 export function useFeverSyncMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (accountId: string) => window.api.fever.sync(accountId),
+    mutationFn: async (accountId: string) => {
+      const result = await window.api.fever.sync(accountId)
+      await useFeedStore.getState().loadFeeds()
+      return result
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: FEVER_ACCOUNTS_KEY })
       queryClient.invalidateQueries({ queryKey: ['fever', 'sync-state'] })

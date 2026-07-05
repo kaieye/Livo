@@ -446,7 +446,7 @@ export const zhCNSettings = {
   feverDesc: '同步 FreshRSS 或兼容 Fever 协议的远程 RSS 阅读器',
   feverAddAccount: '添加 FreshRSS / Fever 账户',
   feverBaseUrl: '服务器地址',
-  feverBaseUrlPlaceholder: 'https://example.com/api/fever.php',
+  feverBaseUrlPlaceholder: 'https://example.com/api/greader.php',
   feverUsername: '用户名',
   feverApiKey: 'API 密码',
   feverTestConnection: '测试连接',

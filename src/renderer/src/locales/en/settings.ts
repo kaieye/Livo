@@ -478,7 +478,7 @@ export const enSettings = {
   feverDesc: 'Sync FreshRSS or any remote RSS reader using the Fever protocol',
   feverAddAccount: 'Add FreshRSS / Fever Account',
   feverBaseUrl: 'Server URL',
-  feverBaseUrlPlaceholder: 'https://example.com/api/fever.php',
+  feverBaseUrlPlaceholder: 'https://example.com/api/greader.php',
   feverUsername: 'Username',
   feverApiKey: 'API Password',
   feverTestConnection: 'Test Connection',

@@ -8,9 +8,12 @@ const mocks = vi.hoisted(() => ({
   getFeverAccounts: vi.fn(),
   insertFeverAccount: vi.fn(),
   getFeverAccountById: vi.fn(),
+  getFeverFeedMappings: vi.fn(),
   updateFeverAccount: vi.fn(),
   deleteFeverAccount: vi.fn(),
   getFeverSyncState: vi.fn(),
+  getFeedById: vi.fn(),
+  deleteFeed: vi.fn(),
   queueFeverSyncAccount: vi.fn(),
 }))
 
@@ -39,9 +42,14 @@ vi.mock('../database', () => ({
       getFeverAccounts: mocks.getFeverAccounts,
       insertFeverAccount: mocks.insertFeverAccount,
       getFeverAccountById: mocks.getFeverAccountById,
+      getFeverFeedMappings: mocks.getFeverFeedMappings,
       updateFeverAccount: mocks.updateFeverAccount,
       deleteFeverAccount: mocks.deleteFeverAccount,
       getFeverSyncState: mocks.getFeverSyncState,
+    },
+    feeds: {
+      getFeedById: mocks.getFeedById,
+      deleteFeed: mocks.deleteFeed,
     },
   }),
 }))
@@ -161,5 +169,55 @@ describe('registerFeverHandlers', () => {
         baseUrl: 'https://rss.example.com/api/greader.php',
       }),
     )
+  })
+
+  it('removes local Fever feeds when deleting an account', async () => {
+    mocks.getFeverAccountById.mockReturnValue({
+      id: 'account-1',
+      baseUrl: 'https://rss.example.com/api/greader.php',
+      username: 'alice',
+      apiKey: 'api-password',
+      enabled: true,
+      autoSync: true,
+      syncIntervalMin: 30,
+      createdAt: 1000,
+    })
+    mocks.getFeverFeedMappings.mockReturnValue([
+      {
+        accountId: 'account-1',
+        feverFeedId: 1,
+        localFeedId: 'fever-feed-1',
+        isActive: true,
+        lastSeenAt: 1000,
+      },
+      {
+        accountId: 'account-1',
+        feverFeedId: 2,
+        localFeedId: 'local-feed-2',
+        isActive: true,
+        lastSeenAt: 1000,
+      },
+    ])
+    mocks.getFeedById.mockImplementation((feedId: string) => ({
+      id: feedId,
+      title: feedId,
+      url: `https://example.com/${feedId}.xml`,
+      view: 0,
+      showInAll: true,
+      fetchSource: 'direct',
+      provider: feedId.startsWith('fever-') ? 'fever' : 'local',
+      errorCount: 0,
+      createdAt: 1000,
+    }))
+    const { registerFeverHandlers } = await import('./fever-handlers')
+    registerFeverHandlers()
+
+    const deleteAccount = getRegisteredHandler(IPC.FEVER_ACCOUNTS_DELETE)
+    const result = unwrapIpcEnvelope(await deleteAccount({}, 'account-1'))
+
+    expect(result).toEqual({ success: true })
+    expect(mocks.deleteFeed).toHaveBeenCalledWith('fever-feed-1')
+    expect(mocks.deleteFeed).not.toHaveBeenCalledWith('local-feed-2')
+    expect(mocks.deleteFeverAccount).toHaveBeenCalledWith('account-1')
   })
 })
