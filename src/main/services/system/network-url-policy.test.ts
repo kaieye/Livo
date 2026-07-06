@@ -1,7 +1,22 @@
-import { describe, expect, it } from 'vitest'
-import { classifyNetworkFetchUrl } from './network-url-policy'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  assertNetworkFetchTarget,
+  classifyNetworkFetchUrl,
+} from './network-url-policy'
+
+const mocks = vi.hoisted(() => ({
+  lookup: vi.fn(),
+}))
+
+vi.mock('dns/promises', () => ({
+  lookup: mocks.lookup,
+}))
 
 describe('network-url-policy', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('blocks credential-bearing network URLs', async () => {
     const result = await classifyNetworkFetchUrl(
       'https://user:pass@example.com/feed.xml',
@@ -48,5 +63,45 @@ describe('network-url-policy', () => {
     )
 
     expect(result.allowed).toBe(true)
+  })
+
+  it('returns a pinned public address for allowed network fetch targets', async () => {
+    mocks.lookup.mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+      { address: '2606:2800:220:1:248:1893:25c8:1946', family: 6 },
+    ])
+
+    const target = await assertNetworkFetchTarget(
+      ' https://example.com/feed.xml ',
+    )
+
+    expect(target).toEqual({
+      url: 'https://example.com/feed.xml',
+      hostname: 'example.com',
+      resolvedAddresses: [
+        '93.184.216.34',
+        '2606:2800:220:1:248:1893:25c8:1946',
+      ],
+      pinnedAddress: '93.184.216.34',
+    })
+  })
+
+  it('blocks hostnames when any resolved address is private', async () => {
+    mocks.lookup.mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+      { address: '10.0.0.5', family: 4 },
+    ])
+
+    await expect(
+      assertNetworkFetchTarget('https://mixed.example/feed.xml'),
+    ).rejects.toThrow('private-network')
+  })
+
+  it('blocks targets that resolve to no address', async () => {
+    mocks.lookup.mockResolvedValue([])
+
+    await expect(
+      assertNetworkFetchTarget('https://empty.example/feed.xml'),
+    ).rejects.toThrow('missing-address')
   })
 })

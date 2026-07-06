@@ -1,6 +1,10 @@
-import { app, dialog, session } from 'electron'
+import { app, dialog } from 'electron'
 import { createWriteStream } from 'fs'
 import { mkdir, rm, writeFile } from 'fs/promises'
+import { request as httpRequest } from 'http'
+import type { IncomingMessage, RequestOptions } from 'http'
+import { request as httpsRequest } from 'https'
+import { isIP } from 'net'
 import { basename, dirname, extname, join } from 'path'
 import type {
   DownloadUrlOptions,
@@ -8,7 +12,7 @@ import type {
   SaveTextFileOptions,
   SaveTextFileResult,
 } from '../../../shared/types/index'
-import { assertNetworkFetchUrl } from './network-url-policy'
+import { assertNetworkFetchTarget } from './network-url-policy'
 
 const MAX_TEXT_FILE_BYTES = 10 * 1024 * 1024
 const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
@@ -97,6 +101,78 @@ function inferFileNameFromUrl(url: string): string {
   }
 }
 
+type PinnedLookupCallback = (
+  error: NodeJS.ErrnoException | null,
+  address: string | Array<{ address: string; family: number }>,
+  family?: number,
+) => void
+
+function createPinnedLookup(
+  address: string,
+): NonNullable<RequestOptions['lookup']> {
+  return ((...args: unknown[]) => {
+    const options =
+      typeof args[1] === 'object' && args[1] !== null
+        ? (args[1] as { all?: boolean })
+        : undefined
+    const callback = (
+      typeof args[1] === 'function' ? args[1] : args[2]
+    ) as PinnedLookupCallback
+    const family = isIP(address) || 4
+    if (options?.all) {
+      callback(null, [{ address, family }])
+      return
+    }
+    callback(null, address, family)
+  }) as NonNullable<RequestOptions['lookup']>
+}
+
+function getHeaderValue(
+  headers: IncomingMessage['headers'],
+  name: string,
+): string {
+  const value = headers[name.toLowerCase()]
+  if (Array.isArray(value)) return value[0] || ''
+  return value || ''
+}
+
+async function fetchDownloadResponse(
+  targetUrl: string,
+  signal: AbortSignal,
+): Promise<{ response: IncomingMessage; safeUrl: string }> {
+  const target = await assertNetworkFetchTarget(targetUrl)
+  const parsed = new URL(target.url)
+  const request =
+    parsed.protocol === 'https:'
+      ? httpsRequest
+      : parsed.protocol === 'http:'
+        ? httpRequest
+        : null
+  if (!request) {
+    throw new Error('URL 已被安全策略阻止：unsupported-protocol')
+  }
+
+  return new Promise((resolve, reject) => {
+    const requestOptions: RequestOptions & { servername?: string } = {
+      headers: {
+        Accept: '*/*',
+        'User-Agent': `Livo/${app.getVersion()}`,
+      },
+      lookup: createPinnedLookup(target.pinnedAddress),
+      signal,
+    }
+    if (parsed.protocol === 'https:' && isIP(parsed.hostname) === 0) {
+      requestOptions.servername = parsed.hostname
+    }
+
+    const req = request(parsed, requestOptions, (response) => {
+      resolve({ response, safeUrl: target.url })
+    })
+    req.once('error', reject)
+    req.end()
+  })
+}
+
 export async function downloadUrlToFile(
   options: DownloadUrlOptions,
 ): Promise<DownloadUrlResult> {
@@ -116,54 +192,47 @@ async function downloadUrlToFileWithRedirectDepth(
   }
 
   try {
-    const safeUrl = await assertNetworkFetchUrl(targetUrl)
     const abortController = new AbortController()
     const timeout = setTimeout(() => {
       abortController.abort()
     }, DOWNLOAD_TIMEOUT_MS)
-    let response: Response
+    let response: IncomingMessage
+    let safeUrl: string
     try {
-      response = await session.defaultSession.fetch(safeUrl, {
-        headers: {
-          Accept: '*/*',
-          'User-Agent': `Livo/${app.getVersion()}`,
-        },
-        redirect: 'manual',
-        signal: abortController.signal,
-      })
+      ;({ response, safeUrl } = await fetchDownloadResponse(
+        targetUrl,
+        abortController.signal,
+      ))
     } finally {
       clearTimeout(timeout)
     }
 
-    if (
-      response.status >= 300 &&
-      response.status < 400 &&
-      response.headers.get('location')
-    ) {
-      const redirectUrl = new URL(
-        response.headers.get('location') || '',
-        safeUrl,
-      ).href
-      await assertNetworkFetchUrl(redirectUrl)
+    const statusCode = response.statusCode || 0
+    const redirectLocation = getHeaderValue(response.headers, 'location')
+    if (statusCode >= 300 && statusCode < 400 && redirectLocation) {
+      response.resume()
+      const redirectUrl = new URL(redirectLocation, safeUrl).href
       return downloadUrlToFileWithRedirectDepth(
         { ...options, url: redirectUrl },
         redirectDepth + 1,
       )
     }
 
-    if (!response.ok) {
-      return { success: false, error: `HTTP ${response.status}` }
+    if (statusCode < 200 || statusCode >= 300) {
+      response.resume()
+      return { success: false, error: `HTTP ${statusCode}` }
     }
 
     const contentLength = Number.parseInt(
-      response.headers.get('content-length') || '',
+      getHeaderValue(response.headers, 'content-length'),
       10,
     )
     if (Number.isFinite(contentLength) && contentLength > MAX_DOWNLOAD_BYTES) {
+      response.resume()
       return { success: false, error: 'download_too_large' }
     }
 
-    const contentType = response.headers.get('content-type') || ''
+    const contentType = getHeaderValue(response.headers, 'content-type')
     let suggestedName = sanitizeSuggestedFileName(
       options.suggestedFileName || inferFileNameFromUrl(targetUrl),
     )
@@ -181,6 +250,7 @@ async function downloadUrlToFileWithRedirectDepth(
     })
 
     if (saveResult.canceled || !saveResult.filePath) {
+      response.resume()
       return { success: false, canceled: true }
     }
 
@@ -199,33 +269,21 @@ async function downloadUrlToFileWithRedirectDepth(
 }
 
 async function writeResponseToFileWithLimit(
-  response: Response,
+  response: IncomingMessage,
   filePath: string,
 ): Promise<void> {
-  const body = response.body
-  if (!body) {
-    const data = Buffer.from(await response.arrayBuffer())
-    if (data.byteLength > MAX_DOWNLOAD_BYTES) {
-      throw new Error('download_too_large')
-    }
-    await writeFile(filePath, data)
-    return
-  }
-
   const writer = createWriteStream(filePath)
-  const reader = body.getReader()
   let writtenBytes = 0
 
   try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      writtenBytes += value.byteLength
+    for await (const chunk of response) {
+      const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      writtenBytes += data.byteLength
       if (writtenBytes > MAX_DOWNLOAD_BYTES) {
         throw new Error('download_too_large')
       }
       await new Promise<void>((resolve, reject) => {
-        writer.write(Buffer.from(value), (error) => {
+        writer.write(data, (error) => {
           if (error) reject(error)
           else resolve()
         })
@@ -239,10 +297,9 @@ async function writeResponseToFileWithLimit(
       })
     })
   } catch (error) {
+    response.destroy()
     writer.destroy()
     await rm(filePath, { force: true }).catch(() => {})
     throw error
-  } finally {
-    reader.releaseLock()
   }
 }

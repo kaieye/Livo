@@ -22,6 +22,13 @@ export interface NetworkUrlPolicyResult {
   resolvedAddresses: string[]
 }
 
+export interface NetworkFetchTarget {
+  url: string
+  hostname: string
+  resolvedAddresses: string[]
+  pinnedAddress: string
+}
+
 const PRIVATE_IPV4_RANGES = [
   { base: '0.0.0.0', mask: 8 },
   { base: '10.0.0.0', mask: 8 },
@@ -182,4 +189,26 @@ export async function assertNetworkFetchUrl(
     throw new Error(`URL 已被安全策略阻止：${result.blockedReason}`)
   }
   return result.url
+}
+
+export async function assertNetworkFetchTarget(
+  rawUrl: string,
+  options: NetworkUrlPolicyOptions = {},
+): Promise<NetworkFetchTarget> {
+  const result = await classifyNetworkFetchUrl(rawUrl, options)
+  if (!result.allowed) {
+    throw new Error(`URL 已被安全策略阻止：${result.blockedReason}`)
+  }
+
+  const pinnedAddress = result.resolvedAddresses[0]
+  if (!pinnedAddress) {
+    throw new Error('URL 已被安全策略阻止：missing-address')
+  }
+
+  return {
+    url: result.url,
+    hostname: result.hostname,
+    resolvedAddresses: result.resolvedAddresses,
+    pinnedAddress,
+  }
 }

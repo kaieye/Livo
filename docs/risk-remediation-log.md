@@ -1135,3 +1135,46 @@ Renderer review findings to handle in later batches:
 
 - Download fetch policy still has a DNS rebinding gap between preflight DNS resolution and Electron session fetch connection time.
 - External-open policy still treats private IP HTTP(S) article links as suspicious rather than blocked; avoid broad changes without a dedicated impact review.
+
+## 2026-07-07 - Download DNS pinning hardening
+
+### Review inputs
+
+- Download/network review confirmed a DNS rebinding gap between `assertNetworkFetchUrl()` preflight DNS resolution and the later `session.defaultSession.fetch()` connection resolution.
+- Follow-up review recommended Node `http`/`https.request` with a pinned `lookup` over another preflight because Electron `session.fetch()` cannot bind an approved DNS answer to the later socket connection.
+- External-open review separately found private/loopback HTTP(S) external-open policy gaps; those are deferred below and intentionally not mixed into this download transport batch.
+
+### Fixed in this batch
+
+- Added `assertNetworkFetchTarget()` in `network-url-policy.ts` to return the normalized URL, resolved addresses, and a selected `pinnedAddress` only after the existing network fetch policy allows the target.
+- `downloadUrlToFile()` now uses Node `http`/`https.request` with a custom pinned `lookup` instead of Electron `session.defaultSession.fetch()`, closing the direct DNS preflight-to-connect TOCTOU for downloads.
+- HTTPS downloads preserve the original hostname for SNI/certificate verification while connecting through the pinned address.
+- Redirects continue to be handled manually; each redirected URL is resolved and pinned independently by the same target policy.
+- Redirect, non-2xx, oversized `content-length`, canceled save-dialog, and streaming-limit paths now drain or destroy the response as appropriate.
+- Added regression coverage for pinned HTTP lookup, pinned HTTPS lookup plus SNI, canceled save-dialog draining, public pinned target selection, mixed public/private DNS blocking, and empty DNS result blocking.
+
+### Impact analysis
+
+- `downloadUrlToFile`: LOW risk. Direct caller is `registerAppHandlers`; affected processes include `registerAppHandlers` and `onReady`.
+- `downloadUrlToFileWithRedirectDepth`: LOW risk. Direct caller is `downloadUrlToFile`; affected processes include `registerAppHandlers` and `onReady`.
+- `writeResponseToFileWithLimit`: LOW risk. Direct caller is `downloadUrlToFileWithRedirectDepth`; affected process is `registerAppHandlers`.
+- `assertNetworkFetchUrl` and existing shared network policy semantics were not changed; the new pinned target helper is opt-in for downloads.
+- Pre-commit `detect_changes --scope staged` reported LOW risk across 5 files, 9 symbols, and 0 affected processes.
+
+### Verification
+
+- `pnpm test -- src/main/services/system/download.test.ts src/main/services/system/network-url-policy.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 158 passed test files, 919 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/system/download.ts src/main/services/system/download.test.ts src/main/services/system/network-url-policy.ts src/main/services/system/network-url-policy.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- External-open policy still permits private/loopback HTTP(S) links through `classifyExternalUrl()`/`WindowManager.safeOpenExternal`; address this in a dedicated batch because relevant symbols have HIGH/CRITICAL impact.
+- Feed/article/media/video fallback open paths should be reviewed against the external-open policy once a narrower untrusted external URL policy is available.

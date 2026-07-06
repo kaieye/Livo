@@ -1,4 +1,5 @@
 import { existsSync, mkdtempSync, rmSync } from 'fs'
+import { Readable } from 'stream'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,7 +11,9 @@ import {
 
 const mocks = vi.hoisted(() => ({
   downloadsPath: '',
-  fetch: vi.fn(),
+  httpRequest: vi.fn(),
+  httpsRequest: vi.fn(),
+  lookup: vi.fn(),
   showSaveDialog: vi.fn(),
 }))
 
@@ -22,16 +25,69 @@ vi.mock('electron', () => ({
   dialog: {
     showSaveDialog: mocks.showSaveDialog,
   },
-  session: {
-    defaultSession: {
-      fetch: mocks.fetch,
-    },
-  },
 }))
 
-function responseWithBody(body: BodyInit, init?: ResponseInit): Response {
-  return new Response(body, init)
+vi.mock('dns/promises', () => ({
+  lookup: mocks.lookup,
+}))
+
+vi.mock('http', () => ({
+  request: mocks.httpRequest,
+}))
+
+vi.mock('https', () => ({
+  request: mocks.httpsRequest,
+}))
+
+function responseWithBody(
+  chunks: Array<Buffer | Uint8Array | string>,
+  init?: { statusCode?: number; headers?: Record<string, string> },
+): Readable & {
+  statusCode: number
+  headers: Record<string, string>
+  destroy: () => void
+} {
+  const response = Readable.from(chunks) as Readable & {
+    statusCode: number
+    headers: Record<string, string>
+    destroy: () => void
+  }
+  response.statusCode = init?.statusCode ?? 200
+  response.headers = init?.headers ?? {}
+  return response
 }
+
+function mockRequestWithResponse(
+  response: ReturnType<typeof responseWithBody>,
+): void {
+  const implementation = (
+    _url: URL,
+    _options: Record<string, unknown>,
+    callback: (response: ReturnType<typeof responseWithBody>) => void,
+  ) => {
+    callback(response)
+    return {
+      end: vi.fn(),
+      once: vi.fn(),
+    }
+  }
+  mocks.httpRequest.mockImplementation(implementation)
+  mocks.httpsRequest.mockImplementation(implementation)
+}
+
+function mockPublicDns(address = '93.184.216.34'): void {
+  mocks.lookup.mockResolvedValue([{ address, family: 4 }])
+}
+
+type RequestLookup = (
+  hostname: string,
+  options: { all?: boolean },
+  callback: (
+    error: NodeJS.ErrnoException | null,
+    address: string,
+    family: number,
+  ) => void,
+) => void
 
 describe('sanitizeSuggestedFileName', () => {
   it('removes invalid filename characters', () => {
@@ -59,6 +115,7 @@ describe('saveTextFile', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.downloadsPath = mkdtempSync(join(tmpdir(), 'livo-download-test-'))
+    mockPublicDns()
   })
 
   afterEach(() => {
@@ -80,6 +137,7 @@ describe('downloadUrlToFile', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.downloadsPath = mkdtempSync(join(tmpdir(), 'livo-download-test-'))
+    mockPublicDns()
   })
 
   afterEach(() => {
@@ -87,8 +145,8 @@ describe('downloadUrlToFile', () => {
   })
 
   it('rejects downloads with an oversized content-length before showing a save dialog', async () => {
-    mocks.fetch.mockResolvedValue(
-      responseWithBody('', {
+    mockRequestWithResponse(
+      responseWithBody([''], {
         headers: {
           'content-length': String(100 * 1024 * 1024 + 1),
         },
@@ -106,15 +164,9 @@ describe('downloadUrlToFile', () => {
   it('stops streaming downloads that exceed the byte limit and removes partial files', async () => {
     const filePath = join(mocks.downloadsPath, 'large.bin')
     const chunk = new Uint8Array(1024 * 1024)
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        for (let index = 0; index < 101; index += 1) {
-          controller.enqueue(chunk)
-        }
-        controller.close()
-      },
-    })
-    mocks.fetch.mockResolvedValue(responseWithBody(stream))
+    mockRequestWithResponse(
+      responseWithBody(Array.from({ length: 101 }, () => chunk)),
+    )
     mocks.showSaveDialog.mockResolvedValue({ canceled: false, filePath })
 
     const result = await downloadUrlToFile({
@@ -123,5 +175,102 @@ describe('downloadUrlToFile', () => {
 
     expect(result).toEqual({ success: false, error: 'download_too_large' })
     expect(existsSync(filePath)).toBe(false)
+  })
+
+  it('pins the allowed preflight DNS address into the request lookup', async () => {
+    const filePath = join(mocks.downloadsPath, 'image.jpg')
+    mockPublicDns('93.184.216.34')
+    mocks.showSaveDialog.mockResolvedValue({ canceled: false, filePath })
+    let lookupResult:
+      | {
+          error: NodeJS.ErrnoException | null
+          address: string
+          family: number
+        }
+      | undefined
+    mocks.httpRequest.mockImplementation(
+      (
+        _url: URL,
+        options: { lookup?: RequestLookup },
+        callback: (response: ReturnType<typeof responseWithBody>) => void,
+      ) => {
+        options.lookup?.(
+          'rebind.example',
+          {},
+          (
+            error: NodeJS.ErrnoException | null,
+            address: string,
+            family: number,
+          ) => {
+            lookupResult = { error, address, family }
+          },
+        )
+        callback(responseWithBody(['ok']))
+        return {
+          end: vi.fn(),
+          once: vi.fn(),
+        }
+      },
+    )
+
+    const result = await downloadUrlToFile({
+      url: 'http://rebind.example/image.jpg',
+    })
+
+    expect(result.success).toBe(true)
+    expect(mocks.lookup).toHaveBeenCalledTimes(1)
+    expect(lookupResult).toEqual({
+      error: null,
+      address: '93.184.216.34',
+      family: 4,
+    })
+  })
+
+  it('pins HTTPS requests and preserves the original hostname for SNI', async () => {
+    const filePath = join(mocks.downloadsPath, 'image.jpg')
+    mockPublicDns('93.184.216.34')
+    mocks.showSaveDialog.mockResolvedValue({ canceled: false, filePath })
+    let requestOptions:
+      | {
+          lookup?: RequestLookup
+          servername?: string
+        }
+      | undefined
+    mocks.httpsRequest.mockImplementation(
+      (
+        _url: URL,
+        options: typeof requestOptions,
+        callback: (response: ReturnType<typeof responseWithBody>) => void,
+      ) => {
+        requestOptions = options
+        callback(responseWithBody(['ok']))
+        return {
+          end: vi.fn(),
+          once: vi.fn(),
+        }
+      },
+    )
+
+    const result = await downloadUrlToFile({
+      url: 'https://cdn.example/image.jpg',
+    })
+
+    expect(result.success).toBe(true)
+    expect(requestOptions?.servername).toBe('cdn.example')
+    expect(requestOptions?.lookup).toBeTypeOf('function')
+  })
+
+  it('drains the response when the save dialog is canceled', async () => {
+    const response = responseWithBody(['ok'])
+    const resume = vi.spyOn(response, 'resume')
+    mockRequestWithResponse(response)
+    mocks.showSaveDialog.mockResolvedValue({ canceled: true })
+
+    const result = await downloadUrlToFile({
+      url: 'https://example.com/image.jpg',
+    })
+
+    expect(result).toEqual({ success: false, canceled: true })
+    expect(resume).toHaveBeenCalled()
   })
 })
