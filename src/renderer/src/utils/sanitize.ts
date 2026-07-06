@@ -11,10 +11,13 @@
  */
 import {
   createExternalUrlWarning,
-  isAllowedHtmlSrcset,
   isAllowedHtmlUrl,
   isExternalHttpUrl,
 } from '../../../shared/url-policy'
+import {
+  isAllowedPlaybackMediaSrcset,
+  isAllowedPlaybackMediaUrl,
+} from '../lib/media-source-policy'
 
 /** Tags allowed in sanitized output */
 const ALLOWED_TAGS = new Set([
@@ -139,6 +142,8 @@ const GLOBAL_ATTRS = new Set([
 const DANGEROUS_CSS =
   /expression\s*\(|url\s*\(\s*["']?javascript:|behavior\s*:|binding\s*:/i
 
+const MEDIA_TAGS = new Set(['img', 'video', 'audio', 'source'])
+
 /**
  * Sanitize HTML string — remove dangerous content, keep safe formatting.
  * Also adds lazy loading to all images to reduce bandwidth.
@@ -223,20 +228,36 @@ function sanitizeNode(node: Node): void {
         }
 
         // 检查 URL 属性，避免不同入口各自维护危险协议判断。
-        if (
+        if (attrName === 'src' && MEDIA_TAGS.has(tagName)) {
+          if (!isAllowedPlaybackMediaUrl(attr.value)) {
+            attrsToRemove.push(attr.name)
+            continue
+          }
+        } else if (
           attrName === 'href' ||
           attrName === 'src' ||
           attrName === 'action'
         ) {
-          const allowImageDataUrl =
-            tagName === 'img' || tagName === 'source' || tagName === 'video'
-          if (!isAllowedHtmlUrl(attr.value, { allowImageDataUrl })) {
+          if (!isAllowedHtmlUrl(attr.value)) {
             attrsToRemove.push(attr.name)
             continue
           }
         }
 
-        if (attrName === 'srcset' && !isAllowedHtmlSrcset(attr.value)) {
+        if (
+          attrName === 'poster' &&
+          tagName === 'video' &&
+          !isAllowedPlaybackMediaUrl(attr.value)
+        ) {
+          attrsToRemove.push(attr.name)
+          continue
+        }
+
+        if (
+          attrName === 'srcset' &&
+          MEDIA_TAGS.has(tagName) &&
+          !isAllowedPlaybackMediaSrcset(attr.value)
+        ) {
           attrsToRemove.push(attr.name)
           continue
         }

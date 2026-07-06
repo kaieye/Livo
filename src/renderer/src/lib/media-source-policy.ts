@@ -87,3 +87,11 @@ export function isAllowedPlaybackMediaUrl(rawUrl: string): boolean {
   if (!result.allowed) return false
   return !isPrivateOrLoopbackHost(result.hostname)
 }
+
+export function isAllowedPlaybackMediaSrcset(rawSrcset: string): boolean {
+  return rawSrcset
+    .split(',')
+    .map((part) => part.trim().split(/\s+/)[0] || '')
+    .filter(Boolean)
+    .every((url) => isAllowedPlaybackMediaUrl(url))
+}

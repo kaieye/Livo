@@ -752,3 +752,46 @@ Renderer review findings to handle in later batches:
 - Sanitized article HTML should validate `src`, `srcset`, and `poster` with the media-source policy rather than only the external-link policy.
 - Image rendering sinks such as `ImageViewerPage`, `CachedImage`, `QueuedImage`, `EntryFeaturedImage`, and feed/avatar images still need safe media-src fallbacks for old cached entries.
 - External-open policy still treats private IPs as suspicious rather than blocked; that is separate from passive media loading and should be reviewed explicitly.
+
+## 2026-07-07 - Sanitized HTML media-source hardening
+
+### Review inputs
+
+- Renderer media-source review sub-agent found that sanitized article HTML still permitted private and loopback media loads through `img`, `video`, `audio`, `source`, `srcset`, and `poster` attributes because sanitizer URL checks only used the external-link HTML policy.
+- Sanitizer review sub-agent confirmed the intended working-tree behavior is stricter than the previous image policy: article media attributes now require absolute public HTTP(S) URLs and no credentials.
+- GitNexus was refreshed before impact analysis because new media-source policy symbols from the previous batch were not yet indexed.
+
+### Fixed in this batch
+
+- `sanitizeHTML()` now applies the renderer media-source policy to media `src` attributes on `img`, `video`, `audio`, and `source`.
+- `sanitizeHTML()` now applies the same policy to `video poster`.
+- Added `isAllowedPlaybackMediaSrcset()` and use it for media `srcset` validation.
+- Sanitized article HTML now strips relative, data, unsupported-scheme, credentialed, localhost, loopback, link-local, and private-network media loads from article content.
+- Added sanitizer integration tests using a local `linkedom` DOM harness plus direct `srcset` policy tests.
+- Refreshed GitNexus metadata counts in `AGENTS.md` and `CLAUDE.md` from 7,897 symbols / 21,043 relationships to 7,916 symbols / 21,101 relationships.
+
+### Impact analysis
+
+- `sanitizeHTML`: LOW risk. Direct upstream callers are entry content sanitized content/readable content, wide-view description, and social text cleanup; no affected execution flows were reported.
+- `sanitizeNode`: LOW risk by sanitizer review. Direct upstream caller is `sanitizeHTML`; no affected execution flows were reported.
+- `isAllowedPlaybackMediaUrl`: CRITICAL risk if changed directly because it gates playback paths across entry, article, social, video page, and discovery preview flows. This batch reuses its existing semantics and adds only `srcset` validation on top.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 7 files, 5 symbols, and 0 affected execution flows. The changed production behavior is limited to stripping unsafe passive media attributes from sanitized article HTML.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/utils/sanitize.ts src/renderer/src/utils/sanitize.test.ts src/renderer/src/lib/media-source-policy.ts src/renderer/src/lib/media-source-policy.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/renderer/src/utils/sanitize.test.ts src/renderer/src/lib/media-source-policy.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 153 passed test files, 870 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- Feed ingestion should filter private/loopback media URLs before storing `Entry.media` and `Entry.imageUrl`.
+- Image rendering sinks outside sanitized article HTML still need safe media-src fallbacks for old cached entries.
+- External-open policy still treats private IPs as suspicious rather than blocked; that should be reviewed separately from passive media loading.

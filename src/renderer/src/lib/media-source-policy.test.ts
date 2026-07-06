@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { isAllowedPlaybackMediaUrl } from './media-source-policy'
+import {
+  isAllowedPlaybackMediaSrcset,
+  isAllowedPlaybackMediaUrl,
+} from './media-source-policy'
 
 describe('media-source-policy', () => {
   it('allows ordinary public http media URLs', () => {
@@ -26,6 +29,19 @@ describe('media-source-policy', () => {
     expect(isAllowedPlaybackMediaUrl('data:video/mp4;base64,aaaa')).toBe(false)
     expect(
       isAllowedPlaybackMediaUrl('https://user:pass@example.com/a.mp3'),
+    ).toBe(false)
+  })
+
+  it('validates every URL in a playback media srcset', () => {
+    expect(
+      isAllowedPlaybackMediaSrcset(
+        'https://cdn.example.com/a.jpg 1x, https://cdn.example.com/a@2x.jpg 2x',
+      ),
+    ).toBe(true)
+    expect(
+      isAllowedPlaybackMediaSrcset(
+        'https://cdn.example.com/a.jpg 1x, http://127.0.0.1/a.jpg 2x',
+      ),
     ).toBe(false)
   })
 })
