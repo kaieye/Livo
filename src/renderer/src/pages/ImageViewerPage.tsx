@@ -14,6 +14,7 @@ import {
 import { CachedImage } from '../components/ui/CachedImage'
 import { useDeepLinkEntry } from '../hooks/useDeepLinkEntry'
 import { resolveEntryImages, type EntryImage } from '../lib/entry-image-source'
+import { openExternalUrlSafe } from '../services/external-url'
 
 // Page shell for `/image/:entryId/:imageIndex?`. Mirrors VideoPlayerPage (1.4):
 // entry-store hydration via `useDeepLinkEntry` + dark chrome + fullscreen body.
@@ -209,7 +210,9 @@ export default function ImageViewerPage() {
         {externalUrl && (
           <button
             type="button"
-            onClick={() => window.open(externalUrl, '_blank')}
+            onClick={() => {
+              void openExternalUrlSafe(externalUrl)
+            }}
             aria-label={t('imageViewer.openExternal')}
             title={t('imageViewer.openExternal')}
             className="rounded-md p-1 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
@@ -306,7 +309,9 @@ function UnviewableState({
         {externalUrl && (
           <button
             type="button"
-            onClick={() => window.open(externalUrl, '_blank')}
+            onClick={() => {
+              void openExternalUrlSafe(externalUrl)
+            }}
             className="text-accent inline-flex items-center gap-1 hover:underline"
           >
             <ExternalLink size={14} aria-hidden="true" />

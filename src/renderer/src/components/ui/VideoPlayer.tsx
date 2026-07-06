@@ -19,6 +19,7 @@ import {
 } from '../../lib/bilibili-video'
 import { useSettingsStore } from '../../store/settings-store'
 import { isDirectVideoUrl } from '@shared/video-url'
+import { openExternalUrlSafe } from '../../services/external-url'
 
 export const PAUSE_INLINE_VIDEOS_EVENT = 'livo:pause-inline-videos'
 
@@ -171,7 +172,7 @@ export function VideoPlayer({
       e.stopPropagation()
       if (videoError) {
         // Codec not supported - open in browser
-        if (src) window.open(src, '_blank')
+        if (src) void openExternalUrlSafe(src)
         return
       }
       if (!hasStarted) {
@@ -323,7 +324,7 @@ export function VideoPlayer({
               setShowBilibiliModal(true)
               return
             }
-            window.open(src, '_blank')
+            void openExternalUrlSafe(src)
           }}
         >
           {activePreviewImage ? (

@@ -2,7 +2,10 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentTool } from '../../../shared/types'
-import { buildAllAgentTools } from '../default-tools'
+import {
+  buildAllAgentTools,
+  buildAllowedAgentToolRegistry,
+} from '../default-tools'
 import { validateToolArgs } from '../harness'
 
 vi.mock('electron', () => ({
@@ -142,5 +145,29 @@ describe('agent tool schema boundaries', () => {
   ])('accepts boundary-valid %s args', (toolName, args) => {
     const tool = toolByName(toolName)
     expect(validateToolArgs(tool.inputSchema, args)).toBe('')
+  })
+
+  it('treats Agent-opened media URLs as confirmed external tools', () => {
+    const videoTool = toolByName('open_video_player')
+    const imageTool = toolByName('open_image_viewer')
+
+    expect(videoTool.capability).toBe('external')
+    expect(videoTool.requiresConfirmation).toBe(true)
+    expect(imageTool.capability).toBe('external')
+    expect(imageTool.requiresConfirmation).toBe(true)
+  })
+
+  it('hides Agent-opened media URL tools when external access is disabled', () => {
+    const registry = buildAllowedAgentToolRegistry({
+      allowRead: true,
+      allowNavigate: true,
+      allowMutate: true,
+      allowDestructive: true,
+      allowExternal: false,
+    })
+
+    expect(registry.get('open_root_tab')).toBeTruthy()
+    expect(registry.get('open_video_player')).toBeUndefined()
+    expect(registry.get('open_image_viewer')).toBeUndefined()
   })
 })

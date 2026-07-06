@@ -11,6 +11,7 @@ import {
   extractYoutubeVideoId,
   resolveYoutubePlayback,
 } from '../lib/youtube-playback'
+import { openExternalUrlSafe } from '../services/external-url'
 import { isDirectVideoUrl } from '@shared/video-url'
 
 type YoutubePlayback = { kind: 'direct' | 'iframe'; url: string }
@@ -123,7 +124,9 @@ export default function VideoPlayerPage() {
         {externalUrl && (
           <button
             type="button"
-            onClick={() => window.open(externalUrl, '_blank')}
+            onClick={() => {
+              void openExternalUrlSafe(externalUrl)
+            }}
             aria-label={t('videoPlayer.openExternal')}
             title={t('videoPlayer.openExternal')}
             className="rounded-md p-1 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
@@ -220,7 +223,9 @@ function UnplayableState({
         {externalUrl && (
           <button
             type="button"
-            onClick={() => window.open(externalUrl, '_blank')}
+            onClick={() => {
+              void openExternalUrlSafe(externalUrl)
+            }}
             className="text-accent inline-flex items-center gap-1 hover:underline"
           >
             <ExternalLink size={14} aria-hidden="true" />

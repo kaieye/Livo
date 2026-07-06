@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { openEntryDetailFromAgent } from './useAgentNavigate'
+import {
+  handleAgentNavigationAction,
+  openEntryDetailFromAgent,
+} from './useAgentNavigate'
 import { useAIChatStore } from '../store/ai-chat-store'
 import { useDiscoverStore } from '../store/discover-store'
 import { useSettingsStore } from '../store/settings-store'
+import { openExternalUrlSafe } from '../services/external-url'
+
+vi.mock('../services/external-url', () => ({
+  openExternalUrlSafe: vi.fn(),
+}))
 
 function stubLocalStorage(): void {
   const store = new Map<string, string>()
@@ -50,5 +58,45 @@ describe('openEntryDetailFromAgent', () => {
     openEntryDetailFromAgent('   ', navigate)
 
     expect(navigate).not.toHaveBeenCalled()
+  })
+})
+
+describe('handleAgentNavigationAction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('routes Agent media opens through the safe external URL wrapper', () => {
+    const navigate = vi.fn()
+    const directOpenExternal = vi.fn()
+    ;(globalThis as unknown as { window: { api?: unknown } }).window = {
+      ...((globalThis as unknown as { window: object }).window ?? {}),
+      api: { app: { openExternal: directOpenExternal } },
+    }
+
+    handleAgentNavigationAction(
+      {
+        type: 'open-video-player',
+        videoUrl: 'https://example.com/movie.mp4',
+        title: 'Movie',
+      },
+      navigate,
+    )
+    handleAgentNavigationAction(
+      {
+        type: 'open-image-viewer',
+        imageUrl: 'https://example.com/image.png',
+        title: 'Image',
+      },
+      navigate,
+    )
+
+    expect(openExternalUrlSafe).toHaveBeenCalledWith(
+      'https://example.com/movie.mp4',
+    )
+    expect(openExternalUrlSafe).toHaveBeenCalledWith(
+      'https://example.com/image.png',
+    )
+    expect(directOpenExternal).not.toHaveBeenCalled()
   })
 })

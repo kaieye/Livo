@@ -209,8 +209,8 @@ export function buildOpenSettingsPanelTool(): AgentTool {
 export function buildOpenVideoPlayerTool(): AgentTool {
   return {
     name: 'open_video_player',
-    title: '打开视频播放',
-    description: '使用指定视频地址打开应用内视频播放',
+    title: '打开外部视频链接',
+    description: '经用户确认后，使用系统浏览器打开指定视频地址',
     inputSchema: objectParams(
       {
         videoUrl: {
@@ -236,9 +236,11 @@ export function buildOpenVideoPlayerTool(): AgentTool {
       },
       ['videoUrl'],
     ),
-    capability: 'navigate',
+    capability: 'external',
     risk: 'medium',
-    requiresConfirmation: false,
+    requiresConfirmation: true,
+    confirmationTitle: '确认打开外部视频链接',
+    confirmationMessage: '将通过系统浏览器打开 Agent 提供的视频地址。',
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -254,7 +256,7 @@ export function buildOpenVideoPlayerTool(): AgentTool {
       })
       return {
         status: 'success',
-        message: `已打开视频播放：${title}`,
+        message: `已请求打开外部视频链接：${title}`,
         data: { title, videoUrl },
       }
     },
@@ -264,8 +266,8 @@ export function buildOpenVideoPlayerTool(): AgentTool {
 export function buildOpenImageViewerTool(): AgentTool {
   return {
     name: 'open_image_viewer',
-    title: '打开图片预览',
-    description: '使用指定图片地址打开应用内图片预览',
+    title: '打开外部图片链接',
+    description: '经用户确认后，使用系统浏览器打开指定图片地址',
     inputSchema: objectParams(
       {
         imageUrl: {
@@ -284,9 +286,11 @@ export function buildOpenImageViewerTool(): AgentTool {
       },
       ['imageUrl'],
     ),
-    capability: 'navigate',
+    capability: 'external',
     risk: 'medium',
-    requiresConfirmation: false,
+    requiresConfirmation: true,
+    confirmationTitle: '确认打开外部图片链接',
+    confirmationMessage: '将通过系统浏览器打开 Agent 提供的图片地址。',
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -296,7 +300,7 @@ export function buildOpenImageViewerTool(): AgentTool {
       dispatchAgentNavigation({ type: 'open-image-viewer', imageUrl, title })
       return {
         status: 'success',
-        message: `已打开图片预览：${title}`,
+        message: `已请求打开外部图片链接：${title}`,
         data: { title, imageUrl },
       }
     },

@@ -88,9 +88,9 @@ export function aiChatToolLabelOf(name: string): string {
     case 'open_settings_panel':
       return '打开设置'
     case 'open_video_player':
-      return '打开视频'
+      return '打开视频链接'
     case 'open_image_viewer':
-      return '打开图片'
+      return '打开图片链接'
     default:
       return name
   }

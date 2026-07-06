@@ -60,3 +60,43 @@ Renderer review findings to handle in later batches:
 - Add stale-request protection to non-snapshot pagination.
 - Prevent stale search results from replacing a restored normal entry list.
 - Roll back optimistic settings updates when persistence fails.
+
+## 2026-07-07 - Agent external media link permissions
+
+### Review inputs
+
+- Agent policy review sub-agent confirmed `open_video_player` and `open_image_viewer` were previously classified as `navigate`, so `allowNavigate=true` and `allowExternal=false` still exposed tools that ultimately opened external URLs.
+- Renderer navigation review sub-agent traced the media-open path from Agent tool execution through `agent:navigate`, `useAgentNavigate`, `openExternalUrlSafe`, `APP_OPEN_EXTERNAL`, and `WindowManager.safeOpenExternal`.
+- Existing deferred security finding: align Agent external-opening tools with `allowExternal` policy rather than only `allowNavigate`.
+
+### Fixed in this batch
+
+- `open_video_player` and `open_image_viewer` are now `external` tools and require confirmation before execution.
+- Tool descriptions, success messages, and AI tool labels now describe opening external media links instead of implying an in-app player/viewer for arbitrary media URLs.
+- Renderer Agent media navigation now uses `openExternalUrlSafe()` instead of calling `window.api.app.openExternal()` directly.
+- Video and image viewer "open original" actions now reuse `openExternalUrlSafe()` instead of raw `window.open()`.
+- Inline `VideoPlayer` browser fallbacks now reuse `openExternalUrlSafe()` for unsupported video or click-through cases.
+
+### Impact analysis
+
+- `buildOpenVideoPlayerTool`: LOW risk. Direct upstream caller: `buildAllAgentTools`.
+- `buildOpenImageViewerTool`: LOW risk. Direct upstream caller: `buildAllAgentTools`.
+- `useAgentNavigate`: LOW risk. Direct upstream caller: `AppRuntime`.
+- `VideoPlayerPage`: LOW risk. No upstream callers reported by GitNexus.
+- `ImageViewerPage`: LOW risk. No upstream callers reported by GitNexus.
+- `VideoPlayer` in `components/ui`: ambiguous symbol lookup, but the matching renderer UI player candidate reported maximum LOW risk with four direct callers.
+- `aiChatToolLabelOf`: LOW risk. Direct callers are AI chat trace/status display code; behavior change is limited to two display labels.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported MEDIUM risk across 9 files and 16 symbols. Affected flows were `ImageViewerPage → NormalizeImageMetadata` and `SendMessage → AiChatToolLabelOf`, matching this batch's media external-link and tool-label changes.
+
+### Verification
+
+- `pnpm test -- src/main/agent/tools/schema-boundaries.test.ts src/renderer/src/hooks/useAgentNavigate.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 143 passed test files, 809 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+
+### Deferred findings
+
+- Remaining direct `window.open` and raw `window.api.app.openExternal` callers in entry/article/settings surfaces should be unified behind `openExternalUrlSafe()` in a later batch.
+- Remote login window hardening, private-network fetch policy, and privileged IPC resource limits remain open from the security review.
