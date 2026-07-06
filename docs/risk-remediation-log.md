@@ -1402,3 +1402,46 @@ Renderer review findings to handle in later batches:
 - DNS-resolved private webview hostnames can still pass the synchronous attachment check; a full fix likely needs request-level DNS-aware navigation cancellation in the webview session.
 - `VIDEO_OPEN_IN_APP` still needs DNS-aware private/internal host validation and redirect guarding.
 - `reading-activity:sync` still needs to move from raw `ipcMain.handle` to `registerChannel` and tighten payload validation.
+
+## 2026-07-07 - In-app video private-network navigation hardening
+
+### Review inputs
+
+- Video boundary review confirmed that `VIDEO_OPEN_IN_APP` only used `classifyExternalUrl()` through `validateVideoWindowUrl()`, blocking malformed, unsupported, credentialed, and suspicious URLs but not resolving hostnames.
+- A renderer-controlled video open could therefore load `localhost`, a public-looking hostname resolving to loopback/private/link-local addresses, or follow redirects into private/internal hosts inside the sandboxed child `BrowserWindow`.
+- Review recommended keeping the fix scoped to `src/main/handlers/video-handlers.ts` and reusing `classifyNetworkFetchUrl()` without changing that CRITICAL shared network policy.
+
+### Fixed in this batch
+
+- Made `validateVideoWindowUrl()` DNS-aware by calling `classifyNetworkFetchUrl()` after the existing external URL checks.
+- The initial `VIDEO_OPEN_IN_APP` load now rejects loopback and private-network resolutions before creating a child video window.
+- Later child-window `will-navigate` and `will-redirect` events now fail closed, validate asynchronously, require same-origin navigation, and only then call `loadURL()` for the approved URL.
+- Popup denial and sandboxed child-window preferences remain unchanged.
+- Added regression coverage for loopback rejection, private-DNS initial rejection, allowed public loads, same-origin navigation revalidation, private-DNS navigation blocking, redirect blocking, popup denial, and lower-level network policy coverage.
+
+### Impact analysis
+
+- `validateVideoWindowUrl`: LOW risk. Direct caller is `registerVideoHandlers`.
+- `registerVideoHandlers`: LOW risk. GitNexus reported no upstream callers in the stale index, though the source registers it through app IPC setup.
+- `classifyNetworkFetchUrl`: CRITICAL risk across feed, discovery, download, video, external-open, and window flows. This batch reuses it without changing its semantics.
+
+### Verification
+
+- `pnpm test -- src/main/handlers/video-handlers.test.ts src/main/services/system/network-url-policy.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 163 passed test files, 946 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/handlers/video-handlers.ts src/main/handlers/video-handlers.test.ts src/main/services/system/network-url-policy.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 3 files, 2 symbols, 0 affected processes, LOW risk.
+  - Changed symbols are `validateVideoWindowUrl` and `registerVideoHandlers`.
+
+### Deferred findings
+
+- Video navigation still has the normal DNS/time-of-check-to-time-of-use limits of URL validation followed by Chromium navigation; deeper request interception or address pinning would be a separate larger browser-session policy batch.
+- `reading-activity:sync` still needs to move from raw `ipcMain.handle` to `registerChannel` and tighten payload validation.

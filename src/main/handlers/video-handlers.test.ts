@@ -9,9 +9,14 @@ import {
 } from '../services/account/account-auth'
 
 const registerChannelMock = vi.hoisted(() => vi.fn())
+const lookupMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => ({
   BrowserWindow: vi.fn(),
+}))
+
+vi.mock('dns/promises', () => ({
+  lookup: lookupMock,
 }))
 
 vi.mock('../ipc/register-channel', () => ({
@@ -81,10 +86,25 @@ function getWillNavigateHandler(
   ) => void
 }
 
+function getWillRedirectHandler(
+  windowMock: ReturnType<typeof mockVideoWindow>,
+) {
+  const call = windowMock.on.mock.calls.find(
+    ([event]) => event === 'will-redirect',
+  )
+  expect(call).toBeTruthy()
+  return call?.[1] as (
+    event: { preventDefault: () => void },
+    url: string,
+  ) => void
+}
+
 describe('registerVideoHandlers YouTube account compatibility', () => {
   beforeEach(() => {
     registerChannelMock.mockReset()
     vi.mocked(BrowserWindow).mockReset()
+    lookupMock.mockReset()
+    lookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
     vi.mocked(getAccountState).mockReset()
     vi.mocked(linkAccount).mockReset()
     vi.mocked(unlinkAccount).mockReset()
@@ -129,6 +149,27 @@ describe('registerVideoHandlers YouTube account compatibility', () => {
       success: false,
       error: 'suspicious_url',
     })
+    await expect(handler(null, 'http://localhost:631/')).resolves.toEqual({
+      success: false,
+      error: 'loopback',
+    })
+
+    expect(BrowserWindow).not.toHaveBeenCalled()
+  })
+
+  it('rejects in-app video URLs that resolve to private addresses before creating a window', async () => {
+    lookupMock.mockResolvedValue([{ address: '10.0.0.5', family: 4 }])
+    registerVideoHandlers()
+
+    await expect(
+      getRegisteredHandler(IPC.VIDEO_OPEN_IN_APP)(
+        null,
+        'https://private.example/watch',
+      ),
+    ).resolves.toEqual({
+      success: false,
+      error: 'private-network',
+    })
 
     expect(BrowserWindow).not.toHaveBeenCalled()
   })
@@ -156,7 +197,7 @@ describe('registerVideoHandlers YouTube account compatibility', () => {
     expect(windowMock.loadURL).toHaveBeenCalledWith('https://example.com/watch')
   })
 
-  it('denies popups and blocks unsafe or cross-origin video navigation', async () => {
+  it('denies popups and reloads only validated same-origin video navigation', async () => {
     const windowMock = mockVideoWindow()
     registerVideoHandlers()
 
@@ -172,7 +213,12 @@ describe('registerVideoHandlers YouTube account compatibility', () => {
     const willNavigate = getWillNavigateHandler(windowMock)
     const sameOriginEvent = { preventDefault: vi.fn() }
     willNavigate(sameOriginEvent, 'https://example.com/next')
-    expect(sameOriginEvent.preventDefault).not.toHaveBeenCalled()
+    expect(sameOriginEvent.preventDefault).toHaveBeenCalled()
+    await vi.waitFor(() => {
+      expect(windowMock.loadURL).toHaveBeenCalledWith(
+        'https://example.com/next',
+      )
+    })
 
     const crossOriginEvent = { preventDefault: vi.fn() }
     willNavigate(crossOriginEvent, 'https://evil.example/')
@@ -181,5 +227,55 @@ describe('registerVideoHandlers YouTube account compatibility', () => {
     const unsafeEvent = { preventDefault: vi.fn() }
     willNavigate(unsafeEvent, 'javascript:alert(1)')
     expect(unsafeEvent.preventDefault).toHaveBeenCalled()
+  })
+
+  it('blocks later same-origin navigation when DNS resolves private', async () => {
+    const windowMock = mockVideoWindow()
+    lookupMock
+      .mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }])
+      .mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }])
+    registerVideoHandlers()
+
+    await getRegisteredHandler(IPC.VIDEO_OPEN_IN_APP)(
+      null,
+      'https://example.com/watch',
+    )
+
+    const willNavigate = getWillNavigateHandler(windowMock)
+    const event = { preventDefault: vi.fn() }
+    willNavigate(event, 'https://example.com/next')
+
+    expect(event.preventDefault).toHaveBeenCalled()
+    await vi.waitFor(() => {
+      expect(lookupMock).toHaveBeenCalledTimes(2)
+    })
+    expect(windowMock.loadURL).not.toHaveBeenCalledWith(
+      'https://example.com/next',
+    )
+  })
+
+  it('blocks redirects when DNS resolves private', async () => {
+    const windowMock = mockVideoWindow()
+    lookupMock
+      .mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }])
+      .mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }])
+    registerVideoHandlers()
+
+    await getRegisteredHandler(IPC.VIDEO_OPEN_IN_APP)(
+      null,
+      'https://example.com/watch',
+    )
+
+    const willRedirect = getWillRedirectHandler(windowMock)
+    const event = { preventDefault: vi.fn() }
+    willRedirect(event, 'https://example.com/internal-redirect')
+
+    expect(event.preventDefault).toHaveBeenCalled()
+    await vi.waitFor(() => {
+      expect(lookupMock).toHaveBeenCalledTimes(2)
+    })
+    expect(windowMock.loadURL).not.toHaveBeenCalledWith(
+      'https://example.com/internal-redirect',
+    )
   })
 })
