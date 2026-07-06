@@ -42,4 +42,18 @@ describe('registerChannel', () => {
       error: { code: 'validation_error' },
     })
   })
+
+  it('blocks invalid high-privilege app payloads before invoking handlers', async () => {
+    const handlerMock = vi.fn()
+    registerChannel(IPC.APP_SAVE_TEXT_FILE, handlerMock)
+
+    const [, handler] = handleMock.mock.calls[0]
+    const result = await handler({}, { content: 'x', defaultFileName: '   ' })
+
+    expect(handlerMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'validation_error' },
+    })
+  })
 })

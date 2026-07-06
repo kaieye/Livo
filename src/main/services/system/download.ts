@@ -1,5 +1,6 @@
 import { app, dialog, session } from 'electron'
-import { mkdir, writeFile } from 'fs/promises'
+import { createWriteStream } from 'fs'
+import { mkdir, rm, writeFile } from 'fs/promises'
 import { basename, dirname, extname, join } from 'path'
 import type {
   DownloadUrlOptions,
@@ -8,6 +9,11 @@ import type {
   SaveTextFileResult,
 } from '../../../shared/types/index'
 import { assertNetworkFetchUrl } from './network-url-policy'
+
+const MAX_TEXT_FILE_BYTES = 10 * 1024 * 1024
+const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
+const DOWNLOAD_TIMEOUT_MS = 60_000
+const MAX_SUGGESTED_FILE_NAME_LENGTH = 180
 
 export function sanitizeSuggestedFileName(fileName: string): string {
   const normalized = Array.from((fileName || '').trim())
@@ -20,12 +26,25 @@ export function sanitizeSuggestedFileName(fileName: string): string {
     })
     .join('')
   const collapsed = normalized.replace(/\s+/g, ' ').replace(/-+/g, '-').trim()
-  return collapsed || 'livo-export.txt'
+  const fallback = collapsed || 'livo-export.txt'
+  if (fallback.length <= MAX_SUGGESTED_FILE_NAME_LENGTH) return fallback
+
+  const extension = extname(fallback)
+  const stem = extension ? fallback.slice(0, -extension.length) : fallback
+  const maxStemLength = Math.max(
+    1,
+    MAX_SUGGESTED_FILE_NAME_LENGTH - extension.length,
+  )
+  return `${stem.slice(0, maxStemLength)}${extension}`
 }
 
 export async function saveTextFile(
   options: SaveTextFileOptions,
 ): Promise<SaveTextFileResult> {
+  if (Buffer.byteLength(options.content || '', 'utf-8') > MAX_TEXT_FILE_BYTES) {
+    return { success: false, error: 'content_too_large' }
+  }
+
   const defaultDir = app.getPath('downloads')
   const safeName = sanitizeSuggestedFileName(options.defaultFileName)
   const result = await dialog.showSaveDialog({
@@ -98,13 +117,23 @@ async function downloadUrlToFileWithRedirectDepth(
 
   try {
     const safeUrl = await assertNetworkFetchUrl(targetUrl)
-    const response = await session.defaultSession.fetch(safeUrl, {
-      headers: {
-        Accept: '*/*',
-        'User-Agent': `Livo/${app.getVersion()}`,
-      },
-      redirect: 'manual',
-    })
+    const abortController = new AbortController()
+    const timeout = setTimeout(() => {
+      abortController.abort()
+    }, DOWNLOAD_TIMEOUT_MS)
+    let response: Response
+    try {
+      response = await session.defaultSession.fetch(safeUrl, {
+        headers: {
+          Accept: '*/*',
+          'User-Agent': `Livo/${app.getVersion()}`,
+        },
+        redirect: 'manual',
+        signal: abortController.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
 
     if (
       response.status >= 300 &&
@@ -124,6 +153,14 @@ async function downloadUrlToFileWithRedirectDepth(
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}` }
+    }
+
+    const contentLength = Number.parseInt(
+      response.headers.get('content-length') || '',
+      10,
+    )
+    if (Number.isFinite(contentLength) && contentLength > MAX_DOWNLOAD_BYTES) {
+      return { success: false, error: 'download_too_large' }
     }
 
     const contentType = response.headers.get('content-type') || ''
@@ -148,8 +185,7 @@ async function downloadUrlToFileWithRedirectDepth(
     }
 
     await mkdir(dirname(saveResult.filePath), { recursive: true })
-    const data = Buffer.from(await response.arrayBuffer())
-    await writeFile(saveResult.filePath, data)
+    await writeResponseToFileWithLimit(response, saveResult.filePath)
     return {
       success: true,
       filePath: saveResult.filePath,
@@ -159,5 +195,54 @@ async function downloadUrlToFileWithRedirectDepth(
       success: false,
       error: error instanceof Error ? error.message : String(error),
     }
+  }
+}
+
+async function writeResponseToFileWithLimit(
+  response: Response,
+  filePath: string,
+): Promise<void> {
+  const body = response.body
+  if (!body) {
+    const data = Buffer.from(await response.arrayBuffer())
+    if (data.byteLength > MAX_DOWNLOAD_BYTES) {
+      throw new Error('download_too_large')
+    }
+    await writeFile(filePath, data)
+    return
+  }
+
+  const writer = createWriteStream(filePath)
+  const reader = body.getReader()
+  let writtenBytes = 0
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      writtenBytes += value.byteLength
+      if (writtenBytes > MAX_DOWNLOAD_BYTES) {
+        throw new Error('download_too_large')
+      }
+      await new Promise<void>((resolve, reject) => {
+        writer.write(Buffer.from(value), (error) => {
+          if (error) reject(error)
+          else resolve()
+        })
+      })
+    }
+    await new Promise<void>((resolve, reject) => {
+      writer.once('error', reject)
+      writer.end(() => {
+        writer.off('error', reject)
+        resolve()
+      })
+    })
+  } catch (error) {
+    writer.destroy()
+    await rm(filePath, { force: true }).catch(() => {})
+    throw error
+  } finally {
+    reader.releaseLock()
   }
 }

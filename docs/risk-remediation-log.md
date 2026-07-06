@@ -100,3 +100,51 @@ Renderer review findings to handle in later batches:
 
 - Remaining direct `window.open` and raw `window.api.app.openExternal` callers in entry/article/settings surfaces should be unified behind `openExternalUrlSafe()` in a later batch.
 - Remote login window hardening, private-network fetch policy, and privileged IPC resource limits remain open from the security review.
+
+## 2026-07-07 - App IPC resource limits
+
+### Review inputs
+
+- High-privilege app IPC review sub-agent inspected app, download, log, and context-menu handlers and flagged shallow validation on privileged renderer-controlled payloads.
+- OPML import review sub-agent inspected desktop OPML import and found separate size, extension, synchronous read, and feed-count limit issues. Those findings are deferred to keep this batch scoped to app IPC handlers.
+- Existing deferred security finding: add stricter validation and resource limits for privileged IPC such as save, download, report error, read logs, and OPML import.
+
+### Fixed in this batch
+
+- `APP_REPORT_ERROR`, `APP_SAVE_TEXT_FILE`, `APP_DOWNLOAD_URL`, `APP_READ_RECENT_LOGS`, `APP_OPEN_EXTERNAL`, and `MENU_SHOW_CONTEXT` now enforce deeper shared IPC validation before handlers run.
+- Renderer error reports are routed through `reportRendererError()` and truncated before writing to the main-process log.
+- Recent log reads now clamp requested line counts and tail-read at most 2 MiB instead of reading an unbounded log file into memory.
+- Text-file export rejects content over 10 MiB before showing a save dialog.
+- URL downloads now enforce a 60 second fetch timeout, reject oversized `Content-Length` values before prompting, stream responses with a 100 MiB byte limit, and delete partial files when the streaming limit is exceeded.
+- Suggested download/export file names are capped to a bounded length while preserving extensions.
+- Native context-menu item payloads now have bounded item counts, id/label lengths, and boolean field validation.
+
+### Impact analysis
+
+- `registerAppHandlers`: LOW risk. Direct upstream caller: `AppManager.onReady`; affected startup app-handler registration flows only.
+- `saveTextFile`: LOW risk for the main `src/main/services/system/download.ts` symbol. Direct caller: `registerAppHandlers`.
+- `downloadUrlToFile`: LOW risk. Direct caller: `registerAppHandlers`.
+- `readRecentLogs`: LOW risk for the main `src/main/services/system/logger.ts` symbol. Direct caller: `registerAppHandlers`.
+- `reportRendererError`: LOW risk. No upstream callers reported before this batch.
+- `validateIpcArgs`: LOW risk. No upstream callers reported by symbol-level impact before this batch.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported CRITICAL risk across 11 files, 37 symbols, and 18 execution flows. The high effective scope is expected because shared IPC validation and logger helpers participate in many handler registration and logging flows. The changed behavior is intentionally limited to rejecting malformed or oversized privileged app IPC payloads and bounding log/download resource use.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/shared/ipc-contracts.ts src/shared/ipc-contracts.test.ts src/main/ipc/register-channel.test.ts src/main/handlers/app-handlers.ts src/main/services/system/download.ts src/main/services/system/download.test.ts src/main/services/system/logger.ts src/main/services/system/logger.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/shared/ipc-contracts.test.ts src/main/ipc/register-channel.test.ts src/main/services/system/download.test.ts src/main/services/system/logger.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 144 passed test files, 817 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- Harden desktop OPML import: restrict selectable file types, avoid synchronous unbounded reads, add file-size limits, and bound imported feed/token counts.
+- Harden remote login windows with provider origin allowlists, stricter popup handling, navigation guards, and permission denial defaults.
+- Revisit private-network and localhost fetch allowances for readability and feed parsing to reduce SSRF-style exposure.
+- Remaining direct `window.open` and raw `window.api.app.openExternal` callers in entry/article/settings surfaces should be unified behind `openExternalUrlSafe()` in a later batch.

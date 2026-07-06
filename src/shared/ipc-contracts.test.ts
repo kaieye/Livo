@@ -170,6 +170,101 @@ describe('ipc-contracts', () => {
     )
   })
 
+  it('validates high-privilege app IPC payloads deeply', () => {
+    expect(
+      validateIpcArgs(IPC.APP_REPORT_ERROR, [
+        {
+          source: 'renderer',
+          message: 'boom',
+          stack: 'stack',
+          componentStack: 'component',
+        },
+      ]),
+    ).toEqual([
+      {
+        source: 'renderer',
+        message: 'boom',
+        stack: 'stack',
+        componentStack: 'component',
+      },
+    ])
+    expect(validateIpcArgs(IPC.APP_READ_RECENT_LOGS, [2000])).toEqual([2000])
+    expect(
+      validateIpcArgs(IPC.APP_SAVE_TEXT_FILE, [
+        {
+          content: 'hello',
+          defaultFileName: 'note.txt',
+          title: 'Save note',
+          filters: [{ name: 'Text', extensions: ['txt', 'md'] }],
+        },
+      ]),
+    ).toEqual([
+      {
+        content: 'hello',
+        defaultFileName: 'note.txt',
+        title: 'Save note',
+        filters: [{ name: 'Text', extensions: ['txt', 'md'] }],
+      },
+    ])
+    expect(
+      validateIpcArgs(IPC.APP_DOWNLOAD_URL, [
+        {
+          url: 'https://example.com/file.zip',
+          suggestedFileName: 'file.zip',
+          filters: [{ name: 'Archives', extensions: ['zip'] }],
+        },
+      ]),
+    ).toEqual([
+      {
+        url: 'https://example.com/file.zip',
+        suggestedFileName: 'file.zip',
+        filters: [{ name: 'Archives', extensions: ['zip'] }],
+      },
+    ])
+    expect(
+      validateIpcArgs(IPC.MENU_SHOW_CONTEXT, [
+        [{ id: 'copy', label: 'Copy', disabled: false }],
+      ]),
+    ).toEqual([[{ id: 'copy', label: 'Copy', disabled: false }]])
+
+    expect(() =>
+      validateIpcArgs(IPC.APP_REPORT_ERROR, [{ source: '', message: 'boom' }]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.APP_REPORT_ERROR, [
+        { source: 'renderer', message: 'x'.repeat(16 * 1024 + 1) },
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() => validateIpcArgs(IPC.APP_READ_RECENT_LOGS, [0])).toThrow(
+      IpcValidationError,
+    )
+    expect(() => validateIpcArgs(IPC.APP_READ_RECENT_LOGS, [2001])).toThrow(
+      IpcValidationError,
+    )
+    expect(() =>
+      validateIpcArgs(IPC.APP_SAVE_TEXT_FILE, [
+        { content: 'x', defaultFileName: '   ' },
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.APP_SAVE_TEXT_FILE, [
+        {
+          content: 'x',
+          defaultFileName: 'note.txt',
+          filters: [{ name: 'Bad', extensions: ['../sh'] }],
+        },
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() => validateIpcArgs(IPC.APP_DOWNLOAD_URL, [{ url: '' }])).toThrow(
+      IpcValidationError,
+    )
+    expect(() =>
+      validateIpcArgs(IPC.MENU_SHOW_CONTEXT, [
+        [{ id: 'copy', label: 'x'.repeat(513) }],
+      ]),
+    ).toThrow(IpcValidationError)
+  })
+
   it('unwraps successful IPC envelopes for existing API callers', () => {
     const data = { success: true, value: 1 }
 

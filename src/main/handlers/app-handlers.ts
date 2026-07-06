@@ -3,7 +3,11 @@ import { IPC, type NativeContextMenuItem } from '../../shared/types'
 import type { FeedWithCount } from '../../shared/types'
 import { getAppIconPath } from '../app-icon'
 import { registerChannel } from '../ipc/register-channel'
-import { logError, logInfo, readRecentLogs } from '../services/system/logger'
+import {
+  logInfo,
+  readRecentLogs,
+  reportRendererError,
+} from '../services/system/logger'
 import {
   clearApplicationCache,
   getAppCacheDirectoryPath,
@@ -42,7 +46,7 @@ export function registerAppHandlers(windowManager: WindowManager): void {
         componentStack?: string
       },
     ) => {
-      logError('[app-report-error]', payload)
+      reportRendererError(payload)
       return { success: true }
     },
   )

@@ -14,6 +14,16 @@ import type {
 import type { ActionRule } from './actions'
 import type { AISemanticFilterInput, AIDigestPreset } from './types'
 
+const IPC_TEXT_CONTENT_MAX_LENGTH = 10 * 1024 * 1024
+const IPC_TEXT_FIELD_MAX_LENGTH = 512
+const IPC_ERROR_MESSAGE_MAX_LENGTH = 16 * 1024
+const IPC_ERROR_STACK_MAX_LENGTH = 64 * 1024
+const IPC_LOG_MAX_LINES = 2000
+const IPC_FILTERS_MAX_COUNT = 8
+const IPC_FILTER_NAME_MAX_LENGTH = 80
+const IPC_FILTER_EXTENSION_MAX_LENGTH = 16
+const IPC_CONTEXT_MENU_ITEMS_MAX_COUNT = 80
+
 export const IPC = {
   FEED_ADD: 'feed:add',
   FEED_REMOVE: 'feed:remove',
@@ -608,6 +618,182 @@ function assertMaxStringLength(
       [field]: `max_length_${maxLength}`,
     })
   }
+}
+
+function assertStringLengthRange(
+  value: string,
+  field: string,
+  options: { min?: number; max: number },
+): void {
+  if (options.min !== undefined && value.trim().length < options.min) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      [field]: `min_length_${options.min}`,
+    })
+  }
+  assertMaxStringLength(value, field, options.max)
+}
+
+function assertIntegerRange(
+  value: number,
+  field: string,
+  options: { min: number; max: number },
+): void {
+  if (!Number.isInteger(value) || value < options.min || value > options.max) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      [field]: `range_${options.min}_${options.max}`,
+    })
+  }
+}
+
+function assertDialogFilters(value: unknown, field: string): void {
+  if (value === undefined) return
+  if (!Array.isArray(value) || value.length > IPC_FILTERS_MAX_COUNT) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      [field]: 'invalid_filters',
+    })
+  }
+
+  for (const [index, filter] of value.entries()) {
+    const prefix = `${field}.${index}`
+    assertObject(filter, prefix)
+    assertString(filter.name, `${prefix}.name`)
+    assertStringLengthRange(filter.name, `${prefix}.name`, {
+      min: 1,
+      max: IPC_FILTER_NAME_MAX_LENGTH,
+    })
+    if (!Array.isArray(filter.extensions) || filter.extensions.length === 0) {
+      throw new IpcValidationError('Invalid IPC argument', {
+        [`${prefix}.extensions`]: 'expected_non_empty_array',
+      })
+    }
+    if (filter.extensions.length > IPC_FILTERS_MAX_COUNT) {
+      throw new IpcValidationError('Invalid IPC argument', {
+        [`${prefix}.extensions`]: 'too_many_extensions',
+      })
+    }
+    for (const [extensionIndex, extension] of filter.extensions.entries()) {
+      const extensionField = `${prefix}.extensions.${extensionIndex}`
+      assertString(extension, extensionField)
+      assertStringLengthRange(extension, extensionField, {
+        min: 1,
+        max: IPC_FILTER_EXTENSION_MAX_LENGTH,
+      })
+      if (!/^(\*|[a-zA-Z0-9][a-zA-Z0-9_-]*)$/.test(extension)) {
+        throw new IpcValidationError('Invalid IPC argument', {
+          [extensionField]: 'invalid_extension',
+        })
+      }
+    }
+  }
+}
+
+function assertAppReportErrorPayload(value: unknown): void {
+  assertObject(value, 'payload')
+  assertString(value.source, 'payload.source')
+  assertString(value.message, 'payload.message')
+  assertStringLengthRange(value.source, 'payload.source', {
+    min: 1,
+    max: IPC_TEXT_FIELD_MAX_LENGTH,
+  })
+  assertStringLengthRange(value.message, 'payload.message', {
+    min: 1,
+    max: IPC_ERROR_MESSAGE_MAX_LENGTH,
+  })
+  if (value.stack !== undefined) {
+    assertString(value.stack, 'payload.stack')
+    assertMaxStringLength(
+      value.stack,
+      'payload.stack',
+      IPC_ERROR_STACK_MAX_LENGTH,
+    )
+  }
+  if (value.componentStack !== undefined) {
+    assertString(value.componentStack, 'payload.componentStack')
+    assertMaxStringLength(
+      value.componentStack,
+      'payload.componentStack',
+      IPC_ERROR_STACK_MAX_LENGTH,
+    )
+  }
+}
+
+function assertSaveTextFileOptions(value: unknown): void {
+  assertObject(value, 'options')
+  assertString(value.content, 'options.content')
+  assertString(value.defaultFileName, 'options.defaultFileName')
+  assertStringLengthRange(value.content, 'options.content', {
+    max: IPC_TEXT_CONTENT_MAX_LENGTH,
+  })
+  assertStringLengthRange(value.defaultFileName, 'options.defaultFileName', {
+    min: 1,
+    max: IPC_TEXT_FIELD_MAX_LENGTH,
+  })
+  if (value.title !== undefined) {
+    assertString(value.title, 'options.title')
+    assertMaxStringLength(
+      value.title,
+      'options.title',
+      IPC_TEXT_FIELD_MAX_LENGTH,
+    )
+  }
+  assertDialogFilters(value.filters, 'options.filters')
+}
+
+function assertNativeContextMenuItems(value: unknown): void {
+  if (
+    !Array.isArray(value) ||
+    value.length > IPC_CONTEXT_MENU_ITEMS_MAX_COUNT
+  ) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      items: 'invalid_items',
+    })
+  }
+
+  for (const [index, item] of value.entries()) {
+    const prefix = `items.${index}`
+    assertObject(item, prefix)
+    assertString(item.id, `${prefix}.id`)
+    assertStringLengthRange(item.id, `${prefix}.id`, {
+      min: 1,
+      max: IPC_TEXT_FIELD_MAX_LENGTH,
+    })
+    if (item.label !== undefined) {
+      assertString(item.label, `${prefix}.label`)
+      assertMaxStringLength(
+        item.label,
+        `${prefix}.label`,
+        IPC_TEXT_FIELD_MAX_LENGTH,
+      )
+    }
+    assertOptionalBoolean(item.separator, `${prefix}.separator`)
+    assertOptionalBoolean(item.disabled, `${prefix}.disabled`)
+  }
+}
+
+function assertDownloadUrlOptions(value: unknown): void {
+  assertObject(value, 'options')
+  assertString(value.url, 'options.url')
+  assertStringLengthRange(value.url, 'options.url', {
+    min: 1,
+    max: IPC_TEXT_FIELD_MAX_LENGTH * 4,
+  })
+  if (value.suggestedFileName !== undefined) {
+    assertString(value.suggestedFileName, 'options.suggestedFileName')
+    assertMaxStringLength(
+      value.suggestedFileName,
+      'options.suggestedFileName',
+      IPC_TEXT_FIELD_MAX_LENGTH,
+    )
+  }
+  if (value.title !== undefined) {
+    assertString(value.title, 'options.title')
+    assertMaxStringLength(
+      value.title,
+      'options.title',
+      IPC_TEXT_FIELD_MAX_LENGTH,
+    )
+  }
+  assertDialogFilters(value.filters, 'options.filters')
 }
 
 function assertTaskRunListOptions(value: unknown): void {
@@ -1268,13 +1454,37 @@ export const IPC_CONTRACTS = {
   [IPC.VIDEO_YT_LOGOUT]: noArgs(IPC.VIDEO_YT_LOGOUT),
   [IPC.APP_GET_VERSION]: noArgs(IPC.APP_GET_VERSION),
   [IPC.APP_GET_ICON]: noArgs(IPC.APP_GET_ICON),
-  [IPC.APP_OPEN_EXTERNAL]: oneString(IPC.APP_OPEN_EXTERNAL, 'url'),
-  [IPC.APP_REPORT_ERROR]: oneObject(IPC.APP_REPORT_ERROR, 'payload'),
+  [IPC.APP_OPEN_EXTERNAL]: {
+    channel: IPC.APP_OPEN_EXTERNAL,
+    validateArgs: (args) => {
+      assertArity(IPC.APP_OPEN_EXTERNAL, args, 1)
+      assertString(args[0], 'url')
+      assertStringLengthRange(args[0], 'url', {
+        min: 1,
+        max: IPC_TEXT_FIELD_MAX_LENGTH * 4,
+      })
+      return args as IpcArgs<typeof IPC.APP_OPEN_EXTERNAL>
+    },
+  },
+  [IPC.APP_REPORT_ERROR]: {
+    channel: IPC.APP_REPORT_ERROR,
+    validateArgs: (args) => {
+      assertArity(IPC.APP_REPORT_ERROR, args, 1)
+      assertAppReportErrorPayload(args[0])
+      return args as IpcArgs<typeof IPC.APP_REPORT_ERROR>
+    },
+  },
   [IPC.APP_READ_RECENT_LOGS]: {
     channel: IPC.APP_READ_RECENT_LOGS,
     validateArgs: (args) => {
       assertArity(IPC.APP_READ_RECENT_LOGS, args, 0, 1)
       assertOptionalNumber(args[0], 'maxLines')
+      if (typeof args[0] === 'number') {
+        assertIntegerRange(args[0], 'maxLines', {
+          min: 1,
+          max: IPC_LOG_MAX_LINES,
+        })
+      }
       return args as IpcArgs<typeof IPC.APP_READ_RECENT_LOGS>
     },
   },
@@ -1284,8 +1494,22 @@ export const IPC_CONTRACTS = {
   [IPC.APP_CLEAR_CACHE]: noArgs(IPC.APP_CLEAR_CACHE),
   [IPC.APP_CHECK_FOR_UPDATES]: noArgs(IPC.APP_CHECK_FOR_UPDATES),
   [IPC.APP_INSTALL_UPDATE]: noArgs(IPC.APP_INSTALL_UPDATE),
-  [IPC.APP_SAVE_TEXT_FILE]: oneObject(IPC.APP_SAVE_TEXT_FILE, 'options'),
-  [IPC.APP_DOWNLOAD_URL]: oneObject(IPC.APP_DOWNLOAD_URL, 'options'),
+  [IPC.APP_SAVE_TEXT_FILE]: {
+    channel: IPC.APP_SAVE_TEXT_FILE,
+    validateArgs: (args) => {
+      assertArity(IPC.APP_SAVE_TEXT_FILE, args, 1)
+      assertSaveTextFileOptions(args[0])
+      return args as IpcArgs<typeof IPC.APP_SAVE_TEXT_FILE>
+    },
+  },
+  [IPC.APP_DOWNLOAD_URL]: {
+    channel: IPC.APP_DOWNLOAD_URL,
+    validateArgs: (args) => {
+      assertArity(IPC.APP_DOWNLOAD_URL, args, 1)
+      assertDownloadUrlOptions(args[0])
+      return args as IpcArgs<typeof IPC.APP_DOWNLOAD_URL>
+    },
+  },
   [IPC.APP_RENDERER_READY]: noArgs(IPC.APP_RENDERER_READY),
   [IPC.APP_READY_TO_SHOW_MAIN_WINDOW]: noArgs(
     IPC.APP_READY_TO_SHOW_MAIN_WINDOW,
@@ -1295,11 +1519,7 @@ export const IPC_CONTRACTS = {
     channel: IPC.MENU_SHOW_CONTEXT,
     validateArgs: (args) => {
       assertArity(IPC.MENU_SHOW_CONTEXT, args, 1)
-      if (!Array.isArray(args[0])) {
-        throw new IpcValidationError('Invalid IPC argument', {
-          items: 'expected_array',
-        })
-      }
+      assertNativeContextMenuItems(args[0])
       return args as IpcArgs<typeof IPC.MENU_SHOW_CONTEXT>
     },
   },
