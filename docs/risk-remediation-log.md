@@ -1219,3 +1219,46 @@ Renderer review findings to handle in later batches:
 - `safeOpenExternal()` now performs DNS resolution before opening HTTP(S) URLs. That closes the private/loopback bypass at the main boundary but can make external opening fail closed when DNS resolution fails.
 - Renderer-specific untrusted external-open policies remain a follow-up, including media/video fallback paths that can open raw source URLs.
 - Plaintext token/settings secret storage and renderer broadcast exposure remain deferred high-risk findings.
+
+## 2026-07-07 - Auth bearer token renderer and persistence hardening
+
+### Review inputs
+
+- Auth/session review confirmed that backend bearer tokens were persisted by `electron-store` as plaintext session data and returned to renderer code from login/current-user IPC responses.
+- Settings-secret and WebSocket identity reviews returned separate valid findings; they are intentionally deferred so this batch only changes auth bearer storage and renderer exposure.
+
+### Fixed in this batch
+
+- `SessionStore` now persists session metadata without a plaintext token and stores the bearer as `safeStorage`-encrypted base64 when OS encryption is available.
+- Legacy plaintext `session.token` data is migrated on read: the token is loaded into main-process memory and the persisted session is rewritten without plaintext token material.
+- If `safeStorage` encryption is unavailable, newly saved tokens remain memory-only for the current runtime instead of being written back as plaintext.
+- OAuth login and current-user IPC responses no longer include `token`; renderer auth state now tracks the authenticated user only.
+- Login pages, login modal, settings login card, and hydration state no longer require or clear a renderer-side bearer token.
+- Added regression coverage for encrypted persistence, legacy plaintext migration, memory-only fallback, and auth IPC token redaction.
+
+### Impact analysis
+
+- `SessionStore`: MEDIUM risk. GitNexus reported 10 direct importers and 24 impacted nodes.
+- `SessionStore.saveSession`: LOW risk. Direct callers include `getValidatedSession`, `saveLoginSession`, and `refreshStoredUser`; affected processes include `registerIpcHandlers` and `onReady`.
+- `SessionStore.getSession`: CRITICAL risk. Direct callers include auth/session validation plus feed sync, RAG, reading activity, notification, and app handler paths; affected processes include `registerFeedSyncHandlers`, `onReady`, `registerFeedHandlers`, `registerAppHandlers`, and agent feed tool execution.
+- `runOAuthLogin`: HIGH risk. Direct caller is `registerAuthHandlers`; affected processes include `registerIpcHandlers` and `onReady`.
+- `registerAuthHandlers`: LOW risk. Direct caller is `AppManager.registerIpcHandlers`; affected processes include `registerIpcHandlers` and `onReady`.
+- `useAuthStore`: HIGH risk. Direct callers include auth guard/login UI, settings, notification provider, and discover UI; affected process includes `UserSettings`.
+- Pre-commit `detect_changes --scope staged` reported MEDIUM risk across 10 files, 24 symbols, and 3 affected processes: `RegisterFeedSyncHandlers -> GetSession`, `RegisterIpcHandlers -> GetSession`, and `RegisterFeedSyncHandlers -> ClearSession`.
+
+### Verification
+
+- `pnpm test -- src/main/services/auth/session-store.test.ts src/main/handlers/auth-handlers.test.ts src/main/services/auth/session-validation.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 160 passed test files, 927 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/auth/session-store.ts src/main/services/auth/session-store.test.ts src/main/handlers/auth-handlers.ts src/main/handlers/auth-handlers.test.ts src/renderer/src/store/auth-store.ts src/renderer/src/pages/AuthLoginPage.tsx src/renderer/src/components/auth/LoginModal.tsx src/renderer/src/components/settings/UserSettings.tsx src/renderer/src/initialize/hydrate.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+
+### Deferred findings
+
+- Existing users on platforms without available `safeStorage` encryption will need to log in again after app restart because tokens are intentionally not persisted plaintext.
+- Settings secrets are still persisted/broadcast/cached in plaintext and need a separate redaction/secret-store batch.
+- WebSocket connect still accepts renderer-supplied `userId`; fix by deriving socket identity from main-process session state in a separate batch.

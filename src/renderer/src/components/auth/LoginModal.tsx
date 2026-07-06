@@ -32,8 +32,8 @@ export function LoginModal() {
     try {
       const result = await window.api.auth.loginGoogle()
 
-      if (result.success && result.user && result.token) {
-        useAuthStore.getState().setUser(result.user, result.token)
+      if (result.success && result.user) {
+        useAuthStore.getState().setUser(result.user)
         setProgress(null)
       } else {
         setError(result.error || 'Login failed')
@@ -54,8 +54,8 @@ export function LoginModal() {
     try {
       const result = await window.api.auth.loginWechat()
 
-      if (result.success && result.user && result.token) {
-        useAuthStore.getState().setUser(result.user, result.token)
+      if (result.success && result.user) {
+        useAuthStore.getState().setUser(result.user)
         setProgress(null)
       } else {
         setError(result.error || 'Login failed')

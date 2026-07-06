@@ -20,13 +20,12 @@ export interface AuthUser {
 
 interface AuthState {
   user: AuthUser | null
-  token: string | null
   isAuthenticated: boolean
   /** 应用启动后是否已完成一次本地 Session 检查（避免登录弹窗闪烁） */
   isSessionChecked: boolean
   isLoading: boolean
   error: string | null
-  setUser: (user: AuthUser | null, token?: string | null) => void
+  setUser: (user: AuthUser | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   bindGoogle: () => Promise<void>
@@ -52,17 +51,15 @@ async function bindProvider(provider: BindProvider): Promise<AuthUser> {
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  token: null,
   isAuthenticated: false,
   isSessionChecked: false,
   isLoading: false,
   error: null,
 
-  setUser: (user, token = null) => {
+  setUser: (user) => {
     const wasAuthenticated = useAuthStore.getState().isAuthenticated
     set({
       user,
-      token: token ?? null,
       isAuthenticated: !!user,
       error: null,
     })
@@ -126,7 +123,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       await window.api.auth.logout()
       set({
         user: null,
-        token: null,
         isAuthenticated: false,
         isLoading: false,
       })
@@ -150,7 +146,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       } else {
         set({
           user: null,
-          token: null,
           isAuthenticated: false,
           isSessionChecked: true,
         })
@@ -159,7 +154,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       console.error('Failed to check session:', error)
       set({
         user: null,
-        token: null,
         isAuthenticated: false,
         isSessionChecked: true,
       })

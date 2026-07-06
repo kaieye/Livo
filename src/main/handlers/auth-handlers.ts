@@ -191,7 +191,7 @@ async function runOAuthLogin(
   provider: 'google' | 'wechat',
   getUrl: () => Promise<{ url: string; loginId: string }>,
   title: string,
-): Promise<{ success: true; token: string; user: CurrentUser }> {
+): Promise<{ success: true; user: CurrentUser }> {
   const { url, loginId } = await getUrl()
   const authWindow = createAuthPopup(url, title, provider)
   const controller = new AbortController()
@@ -217,7 +217,7 @@ async function runOAuthLogin(
 
     saveLoginSession(token, user)
     triggerFeedSyncAfterLogin()
-    return { success: true, token, user }
+    return { success: true, user }
   } catch (error) {
     if (!authWindow.isDestroyed()) {
       authWindow.close()
@@ -318,11 +318,11 @@ export function registerAuthHandlers(): void {
     try {
       const session = await getValidatedSession()
       if (!session) {
-        return { success: true, user: null, token: null }
+        return { success: true, user: null }
       }
 
       triggerFeedSyncAfterLogin()
-      return { success: true, user: session.user, token: session.token }
+      return { success: true, user: session.user }
     } catch (error) {
       return toHandlerError(error)
     }

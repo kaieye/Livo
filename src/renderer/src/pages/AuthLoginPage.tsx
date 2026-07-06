@@ -27,8 +27,8 @@ export default function AuthLoginPage() {
     try {
       const result = await window.api.auth.loginGoogle()
 
-      if (result.success && result.user && result.token) {
-        setUser(result.user, result.token)
+      if (result.success && result.user) {
+        setUser(result.user)
         setProgress(null)
       } else {
         setError(result.error || 'Google login failed')
@@ -51,8 +51,8 @@ export default function AuthLoginPage() {
     try {
       const result = await window.api.auth.loginWechat()
 
-      if (result.success && result.user && result.token) {
-        setUser(result.user, result.token)
+      if (result.success && result.user) {
+        setUser(result.user)
         setProgress(null)
       } else {
         setError(result.error || 'Wechat login failed')

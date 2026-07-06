@@ -138,7 +138,6 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
   } else {
     useAuthStore.setState({
       user: null,
-      token: null,
       isAuthenticated: false,
       isSessionChecked: true,
       isLoading: false,

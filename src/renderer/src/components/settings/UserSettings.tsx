@@ -555,8 +555,8 @@ function LoginProviderCard({
           ? await window.api.auth.loginGoogle()
           : await window.api.auth.loginWechat()
 
-      if (result.success && result.user && result.token) {
-        useAuthStore.getState().setUser(result.user, result.token)
+      if (result.success && result.user) {
+        useAuthStore.getState().setUser(result.user)
         setFeedback('登录成功')
       } else {
         setFeedback('登录失败')
