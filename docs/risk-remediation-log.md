@@ -1107,6 +1107,10 @@ Renderer review findings to handle in later batches:
   - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
 - `pnpm format:check`
   - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 3 files, 5 symbols, 1 affected process, MEDIUM risk.
+  - Changed symbols reported: `makeSnapshot`, `sanitizeEntryForSnapshotCache`, `sanitizeSnapshotForPersistence`, `sanitizePersistedSnapshotCache`, and `PersistedSnapshotCacheEntry`.
+  - Affected execution flow is the expected `HydrateSnapshotCache -> SanitizeSnapshotForPersistence` cache hydration path.
 
 ### Deferred findings
 
@@ -1719,4 +1723,45 @@ Renderer review findings to handle in later batches:
 
 - `FEVER_ACCOUNTS_UPDATE` still accepts API key updates by design; a future UI-specific update DTO could narrow renderer write access if account editing grows.
 - Reader snapshot cached HTML/text fields can still contain embedded secret-bearing URLs; cache-only embedded URL redaction remains the next candidate batch.
+- AI IPC accepts large prompt/message payloads; AI-specific IPC payload limits should be added separately.
+
+## 2026-07-07 - Redact embedded URLs in reader snapshot cache
+
+### Review inputs
+
+- Reader snapshot localStorage cache already sanitized structured feed, entry, media, avatar, and image URL fields.
+- `ReaderSnapshotEntry.content`, `summary`, `readabilityContent`, `readabilityExcerpt`, and `aiSummary` can also persist HTML or text containing secret-bearing URLs.
+- Runtime snapshot generation, detail loading, readability fetching, and rendering should keep their existing data semantics; only the localStorage cache copy should be redacted.
+
+### Fixed in this batch
+
+- Added a cache-local embedded URL sanitizer for `http` and `https` URL tokens in snapshot entry HTML/text fields.
+- Reused `sanitizePersistedUrl()` for the actual URL policy without changing the shared sanitizer.
+- Preserved HTML `&amp;` query separators when redacting URLs inside HTML attributes.
+- Applied embedded redaction only inside `sanitizeEntryForSnapshotCache()`, which is used by snapshot cache writes and legacy cache read-time migration.
+- Added regression coverage for `href`, `src`, `poster`, `srcset`, plain-text summaries, readability excerpts, AI summaries, legacy hydration rewriting, and non-mutation of the runtime snapshot object.
+
+### Impact analysis
+
+- `sanitizeEntryForSnapshotCache`: LOW risk. GitNexus reported no upstream impacted symbols or affected processes.
+- `sanitizeSnapshotForPersistence`: HIGH risk. Direct callers are `sanitizePersistedSnapshotCache` and `writeDefaultHomeSnapshotCache`; affected startup/cache process is `hydrateSnapshotCache`.
+- `writeDefaultHomeSnapshotCache`: LOW risk. Direct callers are `applyInitialSnapshot` and `loadSnapshot`; no affected processes reported.
+
+### Verification
+
+- `pnpm test -- src/renderer/src/lib/reader-snapshot-cache.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 166 passed test files, 970 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/lib/reader-snapshot-cache.ts src/renderer/src/lib/reader-snapshot-cache.test.ts src/shared/persisted-url-policy.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- The cache sanitizer intentionally only recognizes `http` and `https` URL tokens; broader protocol handling should stay with rendering/network policy.
+- Hydrated startup cache may briefly show redacted embedded links/images until fresh IPC data replaces it.
 - AI IPC accepts large prompt/message payloads; AI-specific IPC payload limits should be added separately.

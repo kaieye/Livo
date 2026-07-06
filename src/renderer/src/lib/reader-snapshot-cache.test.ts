@@ -48,6 +48,16 @@ function makeSnapshot(): ReaderSnapshot {
         feedId: 'feed-1',
         title: 'Entry',
         url: 'https://example.com/post?access_token=raw-access&ok=1',
+        content:
+          '<p><a href="https://user:pass@example.com/article?token=raw-content&ok=1">Read</a><img src="https://cdn.example.com/image.png?X-Amz-Signature=raw-content-sig&width=320"><video poster="https://cdn.example.com/poster.jpg?signature=raw-poster&size=large"></video><img srcset="https://cdn.example.com/small.jpg?token=raw-small&width=320 320w, https://cdn.example.com/large.jpg?sig=raw-large&width=640 640w"></p>',
+        summary:
+          'Read https://user:pass@example.com/summary?access_token=raw-summary&ok=1.',
+        readabilityContent:
+          '<p>Full text <a href="https://example.com/full?api_key=raw-full&amp;view=1&amp;page=2">link</a></p>',
+        readabilityExcerpt:
+          'Excerpt https://example.com/excerpt?refresh_token=raw-excerpt&keep=1,',
+        aiSummary:
+          'AI link https://example.com/ai?client_secret=raw-ai&keep=1)',
         authorAvatar:
           'https://cdn.example.com/avatar.jpg?token=raw-avatar&size=1',
         imageUrl: 'https://cdn.example.com/cover.jpg?sig=raw-sig&width=640',
@@ -143,6 +153,33 @@ describe('reader snapshot cache persistence', () => {
     expect(cached?.feeds[0].url).toBe('https://example.com/rss.xml?ok=1')
     expect(cached?.feeds[0].siteUrl).toBe('https://example.com/site?view=1')
     expect(cached?.entries[0].url).toBe('https://example.com/post?ok=1')
+    expect(cached?.entries[0].content).toContain(
+      'href="https://example.com/article?ok=1"',
+    )
+    expect(cached?.entries[0].content).toContain(
+      'src="https://cdn.example.com/image.png?width=320"',
+    )
+    expect(cached?.entries[0].content).toContain(
+      'poster="https://cdn.example.com/poster.jpg?size=large"',
+    )
+    expect(cached?.entries[0].content).toContain(
+      'https://cdn.example.com/small.jpg?width=320 320w',
+    )
+    expect(cached?.entries[0].content).toContain(
+      'https://cdn.example.com/large.jpg?width=640 640w',
+    )
+    expect(cached?.entries[0].summary).toBe(
+      'Read https://example.com/summary?ok=1.',
+    )
+    expect(cached?.entries[0].readabilityContent).toBe(
+      '<p>Full text <a href="https://example.com/full?view=1&amp;page=2">link</a></p>',
+    )
+    expect(cached?.entries[0].readabilityExcerpt).toBe(
+      'Excerpt https://example.com/excerpt?keep=1,',
+    )
+    expect(cached?.entries[0].aiSummary).toBe(
+      'AI link https://example.com/ai?keep=1)',
+    )
     expect(cached?.entries[0].authorAvatar).toBe(
       'https://cdn.example.com/avatar.jpg?size=1',
     )
@@ -161,5 +198,16 @@ describe('reader snapshot cache persistence', () => {
     expect(cached?.feeds[0].url).toBe('https://example.com/rss.xml?ok=1')
     expect(storage.getItem(STORAGE_KEY)).not.toContain('raw-')
     expect(storage.getItem(STORAGE_KEY)).not.toContain('user:pass')
+  })
+
+  it('does not mutate the runtime snapshot when writing sanitized cache data', async () => {
+    const { writeDefaultHomeSnapshotCache } = await loadCacheModule()
+    const snapshot = makeSnapshot()
+
+    writeDefaultHomeSnapshotCache(defaultSnapshotRequest(), snapshot)
+
+    expect(snapshot.entries[0].content).toContain('raw-content')
+    expect(snapshot.entries[0].summary).toContain('user:pass')
+    expect(snapshot.entries[0].aiSummary).toContain('raw-ai')
   })
 })
