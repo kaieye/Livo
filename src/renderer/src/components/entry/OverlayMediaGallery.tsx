@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next'
 
 import { VideoPlayer } from '../ui/VideoPlayer'
 import { CachedImage } from '../ui/CachedImage'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 
-type OverlayPhoto = {
+export type OverlayPhoto = {
   url?: string
   previewUrl?: string
 }
@@ -13,6 +14,12 @@ type OverlayPhoto = {
 type OverlayVideo = {
   url: string
   previewUrl?: string
+}
+
+export function resolveOverlaySaveImageUrl(
+  photo: OverlayPhoto | undefined,
+): string {
+  return getSafeImageSrc(photo?.url) || getSafeImageSrc(photo?.previewUrl) || ''
 }
 
 export const OverlayMediaGallery = memo(function OverlayMediaGallery({
@@ -183,7 +190,7 @@ export const OverlayMediaGallery = memo(function OverlayMediaGallery({
           </button>
           {(() => {
             const previewPhoto = displayPhotos[previewIdx ?? 0]
-            const saveUrl = previewPhoto?.url || previewPhoto?.previewUrl
+            const saveUrl = resolveOverlaySaveImageUrl(previewPhoto)
             if (!saveUrl) return null
             return (
               <button

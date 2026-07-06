@@ -1097,3 +1097,41 @@ Renderer review findings to handle in later batches:
 
 - Image viewer and overlay gallery save/open affordances should derive from the same sanitized selected image URLs as rendering.
 - Download fetch policy still has a DNS rebinding gap between preflight DNS resolution and Electron session fetch connection time.
+
+## 2026-07-07 - Image viewer save/open affordance hardening
+
+### Review inputs
+
+- Context-menu/download review found that `ImageViewerPage` and `OverlayMediaGallery` rendered images through sanitized primitives but still used raw selected image URLs for save/open affordances.
+- This batch focuses on renderer affordance consistency; the main download DNS rebinding gap remains a separate network-layer follow-up.
+
+### Fixed in this batch
+
+- `ImageViewerPage` now resolves the active image source through `getSafeImageSrc()` before rendering, saving, or using it as the image fallback external URL.
+- `ImageViewerPage` still prefers the article URL for external open, but blocks unsafe image URLs when no article URL is available.
+- `OverlayMediaGallery` now resolves the lightbox save URL through `getSafeImageSrc()` and hides the save button when neither full-size nor preview URL is safe.
+- Added pure regression coverage for unsafe primary fallback to safe previews, unsafe image external fallback blocking, article URL preference, overlay save URL preference, and unsafe overlay save blocking.
+
+### Impact analysis
+
+- `ImageViewerPage`: LOW risk. GitNexus reported no upstream callers or affected processes.
+- `OverlayMediaGallery`: HIGH risk. Direct callers are `SocialDetailView` and `SocialOverlayView`; affected processes include `ArticleDetailPage`, `SocialOverlayView`, and `DiscoverPreviewPage`.
+- Pre-commit `detect_changes --scope staged` reported MEDIUM risk across 5 files, 4 symbols, and 3 affected `ImageViewerPage` URL-policy flows: `ParseUrl`, `HasCredentials`, and `IsSuspiciousHttpUrl`.
+
+### Verification
+
+- `pnpm test -- src/renderer/src/pages/ImageViewerPage.test.ts src/renderer/src/components/entry/OverlayMediaGallery.test.ts src/renderer/src/lib/safe-image-source.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 158 passed test files, 913 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/pages/ImageViewerPage.tsx src/renderer/src/pages/ImageViewerPage.test.ts src/renderer/src/components/entry/OverlayMediaGallery.tsx src/renderer/src/components/entry/OverlayMediaGallery.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed after formatting `ImageViewerPage.tsx`.
+
+### Deferred findings
+
+- Download fetch policy still has a DNS rebinding gap between preflight DNS resolution and Electron session fetch connection time.
+- External-open policy still treats private IP HTTP(S) article links as suspicious rather than blocked; avoid broad changes without a dedicated impact review.

@@ -14,6 +14,7 @@ import {
 import { CachedImage } from '../components/ui/CachedImage'
 import { useDeepLinkEntry } from '../hooks/useDeepLinkEntry'
 import { resolveEntryImages, type EntryImage } from '../lib/entry-image-source'
+import { getSafeImageSrc } from '../lib/safe-image-source'
 import { openExternalUrlSafe } from '../services/external-url'
 
 // Page shell for `/image/:entryId/:imageIndex?`. Mirrors VideoPlayerPage (1.4):
@@ -22,6 +23,19 @@ import { openExternalUrlSafe } from '../services/external-url'
 // header buttons, keyboard arrows, and edge clicks. Pan/zoom is intentionally
 // deferred (carry-over for P3) — basic letterboxed display is the MVP for
 // parity with the Harmony ImageViewer page.
+export function resolveViewerImageSource(
+  image: EntryImage | undefined,
+): string {
+  return getSafeImageSrc(image?.url) || getSafeImageSrc(image?.previewUrl) || ''
+}
+
+export function resolveViewerExternalUrl(
+  entryUrl: string | undefined,
+  image: EntryImage | undefined,
+): string {
+  return (entryUrl || '').trim() || resolveViewerImageSource(image)
+}
+
 export default function ImageViewerPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -160,8 +174,8 @@ export default function ImageViewerPage() {
 
   const currentImage = images[safeIndex]
   // Prefer the high-res `url`; previewUrl only matters when the primary fails.
-  const currentSrc = currentImage?.url || currentImage?.previewUrl || ''
-  const externalUrl = activeEntry?.url || currentImage?.url || ''
+  const currentSrc = resolveViewerImageSource(currentImage)
+  const externalUrl = resolveViewerExternalUrl(activeEntry?.url, currentImage)
   const total = images.length
   const hasPrev = safeIndex > 0
   const hasNext = safeIndex < total - 1
@@ -192,9 +206,7 @@ export default function ImageViewerPage() {
         {currentSrc && (
           <button
             type="button"
-            onClick={() =>
-              void handleSave(currentImage?.url || currentSrc, headerTitle)
-            }
+            onClick={() => void handleSave(currentSrc, headerTitle)}
             disabled={isSaving}
             aria-label={t('imageViewer.save')}
             title={t('imageViewer.save')}
