@@ -500,6 +500,9 @@ export type IpcArgsByChannel = {
   [IPC.ADMIN_GET_ANALYTICS_SUMMARY]: []
   [IPC.ADMIN_GET_ANALYTICS_USER_GROWTH]: [days?: number]
   [IPC.ADMIN_GET_ANALYTICS_ACTIVE_USERS]: [days?: number]
+  [IPC.WS_CONNECT]: []
+  [IPC.WS_DISCONNECT]: []
+  [IPC.WS_STATUS]: []
 }
 
 export type IpcArgs<C extends IpcChannel> = C extends keyof IpcArgsByChannel
@@ -1722,18 +1725,7 @@ export const IPC_CONTRACTS = {
   [IPC.UPDATER_CHECK]: noArgs(IPC.UPDATER_CHECK),
   [IPC.UPDATER_DOWNLOAD]: noArgs(IPC.UPDATER_DOWNLOAD),
   [IPC.UPDATER_INSTALL]: noArgs(IPC.UPDATER_INSTALL),
-  [IPC.WS_CONNECT]: {
-    channel: IPC.WS_CONNECT,
-    validateArgs: (args) => {
-      assertArity(IPC.WS_CONNECT, args, 0, 1)
-      if (args[0] !== undefined && typeof args[0] !== 'string') {
-        throw new IpcValidationError('Invalid IPC argument', {
-          userId: 'expected_string',
-        })
-      }
-      return args as IpcArgs<typeof IPC.WS_CONNECT>
-    },
-  },
+  [IPC.WS_CONNECT]: noArgs(IPC.WS_CONNECT),
   [IPC.WS_DISCONNECT]: noArgs(IPC.WS_DISCONNECT),
   [IPC.WS_STATUS]: noArgs(IPC.WS_STATUS),
 } satisfies { [C in IpcChannel]: IpcContract<C> }

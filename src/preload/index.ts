@@ -614,7 +614,7 @@ const api = {
   },
 
   websocket: {
-    connect: (userId?: string) => invokeIpc(IPC.WS_CONNECT, userId),
+    connect: () => invokeIpc(IPC.WS_CONNECT),
     disconnect: () => invokeIpc(IPC.WS_DISCONNECT),
     status: () => invokeIpc(IPC.WS_STATUS),
   },

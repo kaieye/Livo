@@ -1,10 +1,17 @@
 import { IPC } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
+import { getValidatedSession } from '../services/auth/session-validation'
 import type { WebSocketService } from '../services/websocket'
 
 export function registerWebSocketHandlers(ws: WebSocketService): void {
-  registerChannel(IPC.WS_CONNECT, (_event, userId) => {
-    ws.connect(userId as string | undefined)
+  registerChannel(IPC.WS_CONNECT, async () => {
+    const session = await getValidatedSession()
+    if (!session) {
+      ws.disconnect()
+      return { success: false, error: 'Authentication required' }
+    }
+
+    ws.connect(session.user.id)
     return { success: true }
   })
 

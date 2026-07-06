@@ -13,7 +13,7 @@ export function NotificationProvider() {
       return
     }
 
-    void window.api.websocket.connect(user.id).catch(() => {})
+    void window.api.websocket.connect().catch(() => {})
     useNotificationStore.getState().startPolling()
 
     const offNotification = window.api.on('ws:notification', (payload) => {

@@ -78,6 +78,7 @@ describe('ipc-contracts', () => {
     expect(validateIpcArgs(IPC.AUTH_CHECK_SESSION, [])).toEqual([])
     expect(validateIpcArgs(IPC.AUTH_BIND_GOOGLE, [])).toEqual([])
     expect(validateIpcArgs(IPC.AUTH_BIND_WECHAT, [])).toEqual([])
+    expect(validateIpcArgs(IPC.WS_CONNECT, [])).toEqual([])
     expect(validateIpcArgs(IPC.APP_READY_TO_SHOW_MAIN_WINDOW, [])).toEqual([])
 
     expect(() =>
@@ -90,6 +91,9 @@ describe('ipc-contracts', () => {
       validateIpcArgs(IPC.TASK_RUN_LIST, [{ taskName: 42 }]),
     ).toThrow(IpcValidationError)
     expect(() => validateIpcArgs(IPC.ACCOUNT_STATUS, ['unknown'])).toThrow(
+      IpcValidationError,
+    )
+    expect(() => validateIpcArgs(IPC.WS_CONNECT, ['user-2'])).toThrow(
       IpcValidationError,
     )
   })

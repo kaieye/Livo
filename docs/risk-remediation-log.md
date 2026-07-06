@@ -1262,3 +1262,44 @@ Renderer review findings to handle in later batches:
 - Existing users on platforms without available `safeStorage` encryption will need to log in again after app restart because tokens are intentionally not persisted plaintext.
 - Settings secrets are still persisted/broadcast/cached in plaintext and need a separate redaction/secret-store batch.
 - WebSocket connect still accepts renderer-supplied `userId`; fix by deriving socket identity from main-process session state in a separate batch.
+
+## 2026-07-07 - WebSocket session-derived identity binding
+
+### Review inputs
+
+- WebSocket review confirmed that renderer code could call `window.api.websocket.connect('victim-user-id')`, and the main handler forwarded that value directly into the Socket.IO `query.userId`.
+- The risk is scoped to realtime notification identity spoofing; REST notification polling remains separately protected by main-process session state.
+
+### Fixed in this batch
+
+- `WS_CONNECT` now takes no renderer arguments at the IPC contract and preload boundary.
+- `registerWebSocketHandlers()` derives the socket user id from `getValidatedSession()` in the main process.
+- When no validated session exists, the handler disconnects any existing socket and returns `{ success: false, error: 'Authentication required' }`.
+- `NotificationProvider` now calls `window.api.websocket.connect()` without passing `user.id`.
+- Added regression coverage for no-arg IPC validation, rejection of renderer-supplied `WS_CONNECT` args, session-derived socket identity, and no-session disconnect behavior.
+
+### Impact analysis
+
+- `registerWebSocketHandlers`: LOW risk. Direct caller is `AppManager.onReady`; affected process is `onReady`.
+- `WebSocketService.connect`: LOW risk. Direct caller is `registerWebSocketHandlers`; affected process is `onReady`.
+- `NotificationProvider`: LOW risk. Direct caller is `GlobalOverlays`; no GitNexus execution processes reported.
+- `IPC_CONTRACTS`: LOW risk. The change narrows `WS_CONNECT` to the existing no-arg contract style.
+- Pre-commit `detect_changes --scope staged` reported LOW risk across 7 files, 5 symbols, and 0 affected processes.
+
+### Verification
+
+- `pnpm test -- src/main/handlers/websocket-handlers.test.ts src/shared/ipc-contracts.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 161 passed test files, 929 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/handlers/websocket-handlers.ts src/main/handlers/websocket-handlers.test.ts src/main/services/websocket.ts src/renderer/src/providers/NotificationProvider.tsx src/preload/index.ts src/shared/ipc-contracts.ts src/shared/ipc-contracts.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Backend Socket.IO authentication should still verify the query user id against an authenticated principal or replace the query identity with token-authenticated handshake data.
+- Settings secrets are still persisted/broadcast/cached in plaintext and remain the next high-risk remediation target.
