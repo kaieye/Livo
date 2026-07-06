@@ -75,6 +75,10 @@ import {
 } from '../shared/discover-helpers'
 import { FeedViewType as FVT } from '../shared/types'
 import { mergeSettings, normalizeSettings } from '../shared/settings'
+import {
+  preserveRedactedSettingsSecrets,
+  redactSettingsSecrets,
+} from '../shared/settings-secrets'
 import { resolveOpenAIChatCompletionsUrl } from '../shared/ai-endpoint'
 import { resolveProfileUrlToCandidates } from '../shared/profile-resolver'
 import {
@@ -907,6 +911,24 @@ async function buildDiscoverFeedPreview(
 // ====== OpenAI Client for Browser ======
 
 const WEB_DIGEST_RUNS_KEY = 'livo-ai-digest-runs'
+let runtimeSettings: AppSettings | null = null
+
+async function getRuntimeSettings(): Promise<AppSettings> {
+  if (!runtimeSettings) {
+    runtimeSettings = normalizeSettings(await getSettings())
+  }
+  return runtimeSettings
+}
+
+async function updateRuntimeSettings(
+  updates: Partial<AppSettings>,
+): Promise<AppSettings> {
+  const current = await getRuntimeSettings()
+  const preserved = preserveRedactedSettingsSecrets(current, updates)
+  runtimeSettings = mergeSettings(current, preserved)
+  await saveSettings(runtimeSettings)
+  return runtimeSettings
+}
 
 function getWebDigestPresetLabel(preset: AIDigestPreset): string {
   return preset === 'week' ? '本周趋势' : '今日简报'
@@ -1023,7 +1045,7 @@ async function callAI(
   messages: Array<{ role: string; content: string }>,
   options: { temperature?: number; max_tokens?: number; stream?: false },
 ): Promise<{ content: string }> {
-  const settings = await getSettings()
+  const settings = await getRuntimeSettings()
   const ai = settings.ai
   if (!ai.apiKey) throw new Error('请先在设置中配置 AI API Key')
 
@@ -1056,7 +1078,7 @@ async function callAIStream(
   onError: (error: string) => void,
   options: { temperature?: number; max_tokens?: number } = {},
 ): Promise<void> {
-  const settings = await getSettings()
+  const settings = await getRuntimeSettings()
   const ai = settings.ai
   if (!ai.apiKey) {
     const message = '请先在设置中配置 AI API Key'
@@ -1840,7 +1862,7 @@ export function createWebAPI(): ElectronAPI {
         language?: string,
         requestId?: string,
       ) => {
-        const settings = await getSettings()
+        const settings = await getRuntimeSettings()
         if (!settings.ai.apiKey)
           return { success: false, error: '请先在设置中配置 AI API Key' }
         try {
@@ -1960,7 +1982,7 @@ export function createWebAPI(): ElectronAPI {
         targetLanguage: string,
         requestId?: string,
       ) => {
-        const settings = await getSettings()
+        const settings = await getRuntimeSettings()
         if (!settings.ai.apiKey)
           return { success: false, error: '请先在设置中配置 AI API Key' }
         try {
@@ -2212,7 +2234,7 @@ export function createWebAPI(): ElectronAPI {
       judgeFilter: async (
         input: AISemanticFilterInput,
       ): Promise<AISemanticFilterResult> => {
-        const settings = await getSettings()
+        const settings = await getRuntimeSettings()
         if (!settings.ai.apiKey) {
           return { success: false, error: '请先在设置中配置 AI API Key' }
         }
@@ -2347,13 +2369,11 @@ export function createWebAPI(): ElectronAPI {
 
     settings: {
       get: async (): Promise<AppSettings> => {
-        return normalizeSettings(await getSettings())
+        return redactSettingsSecrets(await getRuntimeSettings())
       },
       set: async (updates: Partial<AppSettings>) => {
-        const current = await getSettings()
-        const merged = mergeSettings(current, updates)
-        await saveSettings(merged)
-        return { success: true, settings: merged }
+        const merged = await updateRuntimeSettings(updates)
+        return { success: true, settings: redactSettingsSecrets(merged) }
       },
       onChanged: () => (() => {}) as any,
     },

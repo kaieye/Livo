@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Entry, Feed } from '../shared/types'
+import type { AppSettings, Entry, Feed } from '../shared/types'
 import { FeedViewType } from '../shared/types'
+import { cloneDefaultSettings } from '../shared/settings'
 
 type FakeRequest<T> = {
   result?: T
@@ -32,6 +33,7 @@ function stubIndexedDBStorage(
   options: {
     feeds?: Feed[]
     entries?: Entry[]
+    settings?: AppSettings
   } = {},
 ) {
   const feeds = new Map((options.feeds ?? []).map((feed) => [feed.id, feed]))
@@ -42,6 +44,7 @@ function stubIndexedDBStorage(
   const putFeeds: Feed[] = []
   const addedEntries: Entry[] = []
   const putEntries: Entry[] = []
+  const putSettings: AppSettings[] = []
 
   const feedStore = {
     getAll: vi.fn(() => successRequest(Array.from(feeds.values()))),
@@ -101,6 +104,19 @@ function stubIndexedDBStorage(
       }),
     })),
   }
+  const settingsStore = {
+    get: vi.fn((key: string) =>
+      successRequest(
+        key === 'app-settings' && options.settings
+          ? { key: 'app-settings', value: options.settings }
+          : undefined,
+      ),
+    ),
+    put: vi.fn((record: { key: string; value: AppSettings }) => {
+      putSettings.push(record.value)
+      return successRequest(undefined)
+    }),
+  }
 
   const fakeDatabase = {
     objectStoreNames: { contains: vi.fn(() => true) },
@@ -108,6 +124,7 @@ function stubIndexedDBStorage(
       objectStore: vi.fn((name: string) => {
         if (name === 'feeds') return feedStore
         if (name === 'entries') return entryStore
+        if (name === 'settings') return settingsStore
         throw new Error(`Unexpected store ${name}`)
       }),
     })),
@@ -124,6 +141,8 @@ function stubIndexedDBStorage(
     open,
     putEntries,
     putFeeds,
+    putSettings,
+    settingsStore,
   }
 }
 
@@ -311,6 +330,68 @@ describe('web storage entry persistence', () => {
     expect(storage.putEntries[0]).toMatchObject({
       id: 'entry-1',
       imageUrl: 'https://cdn.example.com/img.jpg?width=640',
+    })
+  })
+})
+
+describe('web storage settings persistence', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('strips settings secrets before writing IndexedDB settings', async () => {
+    vi.resetModules()
+    const storage = stubIndexedDBStorage()
+    const { initWebDB, saveSettings } = await import('./storage')
+    await initWebDB()
+    const settings = cloneDefaultSettings()
+    settings.general.proxyUrl = 'http://user:pass@127.0.0.1:7890'
+    settings.ai.apiKey = 'sk-live'
+    settings.ai.apiKeys = { openai: 'sk-openai' }
+    settings.aggregator.apiKey = 'aggregator-secret'
+    settings.aggregator.deviceId = 'device-secret'
+
+    await saveSettings(settings)
+
+    const persisted = JSON.stringify(storage.putSettings[0])
+    expect(persisted).not.toContain('sk-live')
+    expect(persisted).not.toContain('sk-openai')
+    expect(persisted).not.toContain('aggregator-secret')
+    expect(persisted).not.toContain('device-secret')
+    expect(persisted).not.toContain('user:pass')
+    expect(storage.putSettings[0]).toMatchObject({
+      general: { proxyUrl: '' },
+      ai: { apiKey: '', apiKeys: { openai: '' } },
+      aggregator: { apiKey: '', deviceId: '' },
+    })
+  })
+
+  it('strips and rewrites legacy plaintext settings when reading', async () => {
+    vi.resetModules()
+    const settings = cloneDefaultSettings()
+    settings.ai.apiKey = 'sk-legacy'
+    settings.ai.apiKeys = { openai: 'sk-legacy-openai' }
+    settings.aggregator.apiKey = 'aggregator-secret'
+    settings.aggregator.deviceId = 'device-secret'
+    settings.general.proxyUrl = 'http://user:pass@127.0.0.1:7890'
+    const storage = stubIndexedDBStorage({ settings })
+    const { initWebDB, getSettings } = await import('./storage')
+    await initWebDB()
+
+    const loaded = await getSettings()
+
+    expect(JSON.stringify(loaded)).not.toContain('sk-legacy')
+    expect(JSON.stringify(loaded)).not.toContain('aggregator-secret')
+    expect(JSON.stringify(loaded)).not.toContain('user:pass')
+    expect(loaded).toMatchObject({
+      general: { proxyUrl: '' },
+      ai: { apiKey: '', apiKeys: { openai: '' } },
+      aggregator: { apiKey: '', deviceId: '' },
+    })
+    expect(storage.putSettings[0]).toMatchObject({
+      general: { proxyUrl: '' },
+      ai: { apiKey: '', apiKeys: { openai: '' } },
+      aggregator: { apiKey: '', deviceId: '' },
     })
   })
 })

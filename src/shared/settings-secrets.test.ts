@@ -5,6 +5,7 @@ import {
   REDACTED_SECRET_VALUE,
   preserveRedactedSettingsSecrets,
   redactSettingsSecrets,
+  stripSettingsSecretsForPersistence,
 } from './settings-secrets'
 
 describe('settings secret redaction', () => {
@@ -74,5 +75,38 @@ describe('settings secret redaction', () => {
     })
     expect(patch.aggregator?.apiKey).toBe('aggregator-secret')
     expect(patch.aggregator?.deviceId).toBe('device-secret')
+  })
+
+  it('strips durable settings secrets while preserving non-secret settings', () => {
+    const settings = cloneDefaultSettings()
+    settings.general.proxyUrl = 'http://user:pass@127.0.0.1:7890'
+    settings.ai.apiKey = 'sk-active'
+    settings.ai.apiKeys = {
+      openai: 'sk-openai',
+      deepseek: 'sk-deepseek',
+    }
+    settings.aggregator.apiKey = 'aggregator-secret'
+    settings.aggregator.deviceId = 'device-secret'
+
+    const stripped = stripSettingsSecretsForPersistence(settings)
+
+    expect(stripped.general.proxyUrl).toBe('')
+    expect(stripped.ai.apiKey).toBe('')
+    expect(stripped.ai.apiKeys).toEqual({ openai: '', deepseek: '' })
+    expect(stripped.aggregator.apiKey).toBe('')
+    expect(stripped.aggregator.deviceId).toBe('')
+    expect(JSON.stringify(stripped)).not.toContain('sk-active')
+    expect(JSON.stringify(stripped)).not.toContain('aggregator-secret')
+    expect(JSON.stringify(stripped)).not.toContain('device-secret')
+    expect(JSON.stringify(stripped)).not.toContain('user:pass')
+  })
+
+  it('keeps non-credentialed proxy URLs when stripping persistent secrets', () => {
+    const settings = cloneDefaultSettings()
+    settings.general.proxyUrl = 'http://127.0.0.1:7890'
+
+    expect(stripSettingsSecretsForPersistence(settings).general.proxyUrl).toBe(
+      'http://127.0.0.1:7890',
+    )
   })
 })

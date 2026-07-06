@@ -7,6 +7,7 @@ import type { Feed, Entry } from '../shared/types'
 import { FeedViewType, type AppSettings } from '../shared/types'
 import { cloneDefaultSettings, normalizeSettings } from '../shared/settings'
 import { sanitizePersistedUrl } from '../shared/persisted-url-policy'
+import { stripSettingsSecretsForPersistence } from '../shared/settings-secrets'
 
 const DB_NAME = 'livo-web'
 const DB_VERSION = 1
@@ -381,12 +382,21 @@ export async function getUnreadCount(feedId: string): Promise<number> {
 
 export async function getSettings(): Promise<AppSettings> {
   return new Promise((resolve, reject) => {
-    const tx = getDB().transaction('settings', 'readonly')
+    const tx = getDB().transaction('settings', 'readwrite')
     const store = tx.objectStore('settings')
     const request = store.get('app-settings')
     request.onsuccess = () => {
       if (request.result) {
-        resolve(normalizeSettings(request.result.value))
+        const normalized = normalizeSettings(request.result.value)
+        const stripped = stripSettingsSecretsForPersistence(normalized)
+        if (JSON.stringify(stripped) !== JSON.stringify(normalized)) {
+          try {
+            store.put({ key: 'app-settings', value: stripped })
+          } catch {
+            /* best-effort legacy secret cleanup */
+          }
+        }
+        resolve(stripped)
       } else {
         resolve(cloneDefaultSettings())
       }
@@ -399,7 +409,10 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = getDB().transaction('settings', 'readwrite')
     const store = tx.objectStore('settings')
-    const request = store.put({ key: 'app-settings', value: settings })
+    const request = store.put({
+      key: 'app-settings',
+      value: stripSettingsSecretsForPersistence(settings),
+    })
     request.onsuccess = () => resolve()
     request.onerror = () => reject(request.error)
   })

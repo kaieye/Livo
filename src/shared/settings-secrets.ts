@@ -47,6 +47,26 @@ export function redactSettingsSecrets(settings: AppSettings): AppSettings {
   return redacted
 }
 
+export function stripSettingsSecretsForPersistence(
+  settings: AppSettings,
+): AppSettings {
+  const stripped = cloneSettings(settings)
+
+  if (hasUrlCredentials(stripped.general.proxyUrl)) {
+    stripped.general.proxyUrl = ''
+  }
+  stripped.ai.apiKey = ''
+  if (stripped.ai.apiKeys) {
+    stripped.ai.apiKeys = Object.fromEntries(
+      Object.keys(stripped.ai.apiKeys).map((provider) => [provider, '']),
+    )
+  }
+  stripped.aggregator.apiKey = ''
+  stripped.aggregator.deviceId = ''
+
+  return stripped
+}
+
 export function preserveRedactedSettingsSecrets(
   current: AppSettings,
   patch: Partial<AppSettings>,

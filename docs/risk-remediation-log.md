@@ -2115,3 +2115,52 @@ Renderer review findings to handle in later batches:
 ### Deferred findings
 
 - Web settings secret persistence, web digest-run text redaction, public-only discovery/feed fetch policy, and update installer verification remain separate findings.
+
+## 2026-07-07 - Keep web settings secrets session-only
+
+### Review inputs
+
+- Persistence review found Web `saveSettings()` wrote the full `AppSettings` object to IndexedDB, including AI API keys, provider key maps, aggregator credentials, device IDs, and credentialed proxy URLs.
+- Web `settings.set()` returned the raw merged settings object and AI calls read directly from persisted settings.
+- Renderer localStorage settings cache already redacts secrets; desktop settings storage encrypts/preserves secrets separately.
+- Durable Web secrets are not safe with plain IndexedDB/localStorage; this batch makes Web secrets session-only instead of hidden durable browser storage.
+
+### Fixed in this batch
+
+- Added `stripSettingsSecretsForPersistence()` to blank durable AI/aggregator secrets and credentialed proxy URLs while preserving non-secret proxy URLs.
+- Web settings storage now strips secrets before IndexedDB writes.
+- Web settings reads now strip legacy plaintext settings and best-effort rewrite the stripped row back to IndexedDB.
+- Web API now keeps runtime settings in memory for the current page session, so newly entered keys can be used by AI calls until reload.
+- Web `settings.get()` and `settings.set()` now return redacted settings to the renderer.
+- Web `settings.set()` preserves redacted sentinel values against current runtime settings before merging updates.
+- Added shared settings-secret tests, Web storage persistence/migration tests, and Web API contract coverage proving same-session AI uses the memory key while fresh page state does not persist it.
+
+### Impact analysis
+
+- `saveSettings`: LOW risk. GitNexus reported one direct caller: Web `settings.set`.
+- `getSettings`: MEDIUM risk. GitNexus reported direct callers in Web settings get/set and Web AI flows (`callAI`, `callAIStream`, `summarize`, `translate`, `judgeFilter`) with no affected process flows.
+- `createWebAPI`: LOW risk. GitNexus reported the Web API contract test as the direct upstream consumer.
+- `callAI`: MEDIUM risk. GitNexus reported direct Web AI callers including summarize, translate, chat, semantic filter, digest generation, and entry summary.
+- `callAIStream`: LOW risk. GitNexus reported direct Web streaming callers for summarize, translate, and chat stream.
+- `redactSettingsSecrets`: HIGH risk. This batch does not change its behavior; it reuses it for Web API responses.
+- `preserveRedactedSettingsSecrets`: LOW risk. This batch reuses it to preserve same-session Web runtime secrets when renderer submits redacted sentinels.
+
+### Verification
+
+- `pnpm test -- src/shared/settings-secrets.test.ts src/web/storage.test.ts src/web/web-api-contract.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 169 passed test files, 993 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/shared/settings-secrets.ts src/shared/settings-secrets.test.ts src/web/storage.ts src/web/storage.test.ts src/web/web-api.ts src/web/web-api-contract.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed after formatting `src/web/web-api-contract.test.ts` and the uncommitted GitNexus metadata churn in `AGENTS.md`/`CLAUDE.md`.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 7 files, 19 symbols, 0 affected processes, LOW risk.
+  - Changed symbols include `getSettings`, `saveSettings`, `callAI`, `callAIStream`, `createWebAPI`, and `preserveRedactedSettingsSecrets`.
+
+### Deferred findings
+
+- Web digest-run text redaction, public-only discovery/feed fetch policy, update installer verification, and dormant React Query persister cleanup remain separate findings.

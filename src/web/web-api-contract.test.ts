@@ -6,9 +6,66 @@ import {
   getFeedImageFromParsed,
   getSiteAvatarFromHtml,
 } from './web-api'
+import { cloneDefaultSettings } from '../shared/settings'
+import { REDACTED_SECRET_VALUE } from '../shared/settings-secrets'
+import type { AppSettings } from '../shared/types'
 
 type ApiShape = {
   [key: string]: true | 'string' | ApiShape
+}
+
+type FakeRequest<T> = {
+  result?: T
+  error: Error | null
+  onsuccess: ((event: { target: FakeRequest<T> }) => void) | null
+  onerror: (() => void) | null
+  onupgradeneeded?: ((event: { target: FakeRequest<T> }) => void) | null
+}
+
+function successRequest<T>(value: T): FakeRequest<T> {
+  const request: FakeRequest<T> = {
+    error: null,
+    onsuccess: null,
+    onerror: null,
+    onupgradeneeded: null,
+  }
+  queueMicrotask(() => {
+    request.result = value
+    request.onsuccess?.({ target: request })
+  })
+  return request
+}
+
+function stubSettingsIndexedDB(initialSettings?: AppSettings) {
+  let settings = initialSettings
+  const putSettings: AppSettings[] = []
+  const settingsStore = {
+    get: vi.fn((key: string) =>
+      successRequest(
+        key === 'app-settings' && settings
+          ? { key: 'app-settings', value: settings }
+          : undefined,
+      ),
+    ),
+    put: vi.fn((record: { key: string; value: AppSettings }) => {
+      settings = record.value
+      putSettings.push(record.value)
+      return successRequest(undefined)
+    }),
+  }
+  const fakeDatabase = {
+    objectStoreNames: { contains: vi.fn(() => true) },
+    transaction: vi.fn(() => ({
+      objectStore: vi.fn((name: string) => {
+        if (name === 'settings') return settingsStore
+        throw new Error(`Unexpected store ${name}`)
+      }),
+    })),
+  }
+  vi.stubGlobal('indexedDB', {
+    open: vi.fn(() => successRequest(fakeDatabase)),
+  })
+  return { putSettings, settingsStore }
 }
 
 const ELECTRON_API_SHAPE = {
@@ -338,5 +395,89 @@ describe('getSiteAvatarFromHtml', () => {
         'https://www.ruanyifeng.com/blog/',
       ),
     ).toBe('https://www.ruanyifeng.com/blog/images/person2_s.jpg')
+  })
+})
+
+describe('web settings secret persistence', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps web secrets session-only while returning redacted settings', async () => {
+    vi.resetModules()
+    const initial = cloneDefaultSettings()
+    initial.ai.model = 'gpt-test'
+    initial.ai.baseUrl = 'https://api.example.com/v1'
+    const storage = stubSettingsIndexedDB(initial)
+    vi.stubGlobal('window', { location: { origin: 'https://web.example' } })
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'pong' } }],
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const [{ initWebDB }, { createWebAPI }] = await Promise.all([
+      import('./storage'),
+      import('./web-api'),
+    ])
+    await initWebDB()
+    const api = createWebAPI()
+
+    const result = await api.settings.set({
+      ai: {
+        apiKey: 'sk-web',
+        apiKeys: { openai: 'sk-web' },
+      },
+      aggregator: {
+        apiKey: 'aggregator-secret',
+        deviceId: 'device-secret',
+      },
+      general: {
+        proxyUrl: 'http://user:pass@127.0.0.1:7890',
+      },
+    } as unknown as Partial<AppSettings>)
+
+    expect(result.settings.ai.apiKey).toBe(REDACTED_SECRET_VALUE)
+    expect(result.settings.ai.apiKeys?.openai).toBe(REDACTED_SECRET_VALUE)
+    expect(result.settings.aggregator.apiKey).toBe(REDACTED_SECRET_VALUE)
+    expect(result.settings.aggregator.deviceId).toBe(REDACTED_SECRET_VALUE)
+    expect(result.settings.general.proxyUrl).toBe(REDACTED_SECRET_VALUE)
+    expect(JSON.stringify(storage.putSettings.at(-1))).not.toContain('sk-web')
+    expect(JSON.stringify(storage.putSettings.at(-1))).not.toContain(
+      'aggregator-secret',
+    )
+    expect(JSON.stringify(storage.putSettings.at(-1))).not.toContain(
+      'user:pass',
+    )
+
+    await expect(
+      api.ai.chat([{ role: 'user', content: 'ping' }]),
+    ).resolves.toMatchObject({
+      success: true,
+      message: 'pong',
+    })
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'https://api.example.com/v1/chat/completions',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer sk-web' }),
+      }),
+    )
+
+    vi.resetModules()
+    fetchMock.mockClear()
+    const [{ initWebDB: initFreshWebDB }, { createWebAPI: createFreshWebAPI }] =
+      await Promise.all([import('./storage'), import('./web-api')])
+    await initFreshWebDB()
+    const freshApi = createFreshWebAPI()
+
+    await expect(
+      freshApi.ai.chat([{ role: 'user', content: 'ping' }]),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('AI API Key'),
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
