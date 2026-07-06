@@ -7,11 +7,49 @@ import { toHandlerError } from '../ipc/handler-error'
 import { IPC } from '../../shared/ipc-contracts'
 import { feedSyncService } from '../services/feed/feed-sync-service'
 import { logError } from '../services/system/logger'
+import { getBackendBaseUrl } from '../services/backend/backend-config'
+import { isLoginWindowUrlAllowed } from '../services/auth/login-window-policy'
+
+const AUTH_POPUP_ALLOWED_HOST_SUFFIXES: Record<'google' | 'wechat', string[]> =
+  {
+    google: ['accounts.google.com', 'google.com'],
+    wechat: ['open.weixin.qq.com', 'weixin.qq.com', 'qq.com'],
+  }
+
+function originOf(rawUrl: string): string | null {
+  try {
+    return new URL(rawUrl).origin
+  } catch {
+    return null
+  }
+}
+
+export function isAuthPopupUrlAllowed(
+  provider: 'google' | 'wechat',
+  rawUrl: string,
+): boolean {
+  const origins = [originOf(getBackendBaseUrl())].filter(
+    (origin): origin is string => Boolean(origin),
+  )
+
+  return isLoginWindowUrlAllowed(rawUrl, {
+    allowedOrigins: origins,
+    allowedHostSuffixes: AUTH_POPUP_ALLOWED_HOST_SUFFIXES[provider],
+  })
+}
 
 /**
  * 创建一个用于 OAuth 登录/绑定的弹窗
  */
-function createAuthPopup(url: string, title: string): BrowserWindow {
+function createAuthPopup(
+  url: string,
+  title: string,
+  provider: 'google' | 'wechat',
+): BrowserWindow {
+  if (!isAuthPopupUrlAllowed(provider, url)) {
+    throw new Error('Blocked unsafe authentication URL')
+  }
+
   const win = new BrowserWindow({
     width: 500,
     height: 650,
@@ -23,6 +61,21 @@ function createAuthPopup(url: string, title: string): BrowserWindow {
       contextIsolation: true,
       sandbox: true,
     },
+  })
+
+  win.webContents.setWindowOpenHandler(({ url: nextUrl }) => {
+    if (isAuthPopupUrlAllowed(provider, nextUrl)) {
+      void win.loadURL(nextUrl).catch((err) => {
+        logError('[auth] failed to load auth popup url', err)
+      })
+    }
+    return { action: 'deny' }
+  })
+
+  win.webContents.on('will-navigate', (event, nextUrl) => {
+    if (!isAuthPopupUrlAllowed(provider, nextUrl)) {
+      event.preventDefault()
+    }
   })
 
   win.loadURL(url).catch((err) => {
@@ -140,7 +193,7 @@ async function runOAuthLogin(
   title: string,
 ): Promise<{ success: true; token: string; user: CurrentUser }> {
   const { url, loginId } = await getUrl()
-  const authWindow = createAuthPopup(url, title)
+  const authWindow = createAuthPopup(url, title, provider)
   const controller = new AbortController()
 
   // 用户手动关闭弹窗时立即取消轮询，不再等待服务端超时
@@ -189,6 +242,7 @@ async function bindProvider(
   const authWindow = createAuthPopup(
     url,
     provider === 'google' ? 'Google 账号绑定' : '微信账号绑定',
+    provider,
   )
   const controller = new AbortController()
 

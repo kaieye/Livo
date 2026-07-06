@@ -1,12 +1,29 @@
 import { session } from 'electron'
 
+const LOGIN_PARTITIONS_WITH_PERMISSION_POLICY = ['persist:wechat-mp']
+
+function registerPermissionDenyPolicy(targetSession: Electron.Session): void {
+  targetSession.setPermissionRequestHandler(
+    (_webContents, _permission, callback) => {
+      callback(false)
+    },
+  )
+  targetSession.setPermissionCheckHandler(() => false)
+}
+
 /**
  * Register Chromium session-level network policies:
  * - Referer spoofing for platforms that hotlink-protect media (Twitter/X, Instagram, Bilibili)
  * - User-Agent stripping for YouTube (removes Electron/Livo signatures)
  * - Cache-Control hardening for media resources (images → 7d, other media → 1d)
+ * - Permission denial for default and login sessions
  */
 export function registerSessionPolicies(): void {
+  registerPermissionDenyPolicy(session.defaultSession)
+  for (const partition of LOGIN_PARTITIONS_WITH_PERMISSION_POLICY) {
+    registerPermissionDenyPolicy(session.fromPartition(partition))
+  }
+
   session.defaultSession.webRequest.onBeforeSendHeaders(
     {
       urls: [

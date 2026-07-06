@@ -193,3 +193,54 @@ Renderer review findings to handle in later batches:
 - Remote login window hardening remains open: provider origin allowlists, stricter popup handling, navigation guards, and permission denial defaults.
 - The general feed/readability private-network policy still allows loopback/private fetches in non-OPML paths and should be reviewed separately because manual local feeds may be an intentional use case.
 - Remaining direct `window.open` and raw `window.api.app.openExternal` callers in entry/article/settings surfaces should be unified behind `openExternalUrlSafe()` in a later batch.
+
+## 2026-07-07 - Login window navigation hardening
+
+### Review inputs
+
+- Account login window review sub-agent inspected cookie-account linking, legacy YouTube login IPC, backend OAuth popups, WeChat MP login, session permissions, and token storage.
+- Renderer external-link review sub-agent inspected remaining raw `window.open`, raw `window.api.app.openExternal`, and `_blank` anchor paths. Those findings are deferred to keep this batch scoped to login windows.
+- Network policy review sub-agent inspected private-network fetch and DNS/redirect risks outside OPML. Those findings are deferred to a separate network-policy batch.
+
+### Fixed in this batch
+
+- Added a shared login-window URL policy that accepts only HTTPS URLs without credentials and only provider allowlisted origins or host suffixes.
+- Cookie-account login windows now use provider-specific navigation allowlists for YouTube/Google, X/Twitter, Instagram, and Bilibili.
+- Cookie-account popup attempts are no longer allowed as new windows; allowed provider URLs are loaded in the same login window and all other popup URLs are denied.
+- Backend OAuth popups now validate the initial backend-supplied URL against the configured backend origin or expected provider OAuth hosts before loading.
+- Backend OAuth popups now deny unknown popup URLs and block main-frame navigation outside the backend/provider allowlist.
+- WeChat MP login windows now deny unknown popup URLs and block main-frame navigation outside WeChat/QQ allowlisted login origins.
+- Default Electron session and the WeChat MP persistent login partition now install deny-by-default permission request/check handlers.
+- Legacy `VIDEO_YT_LOGIN`, `VIDEO_YT_STATUS`, and `VIDEO_YT_LOGOUT` IPC handlers now route through the hardened account-linking service's YouTube provider instead of creating a second unsandboxed Google login window.
+- Added focused tests for URL policy rules, account login provider allowlists, backend OAuth allowlists, WeChat MP navigation rules, session permission denial, and legacy YouTube IPC routing.
+
+### Impact analysis
+
+- `linkAccount`: HIGH risk before the fix. Direct callers include `registerAccountHandlers` and the account Agent tool; affected processes include `registerAccountHandlers`, `registerIpcHandlers`, and `onReady`.
+- `isCookieProviderLoginUrlAllowed`: HIGH risk after introduction because it sits directly in `linkAccount`; affected processes include account handler registration and startup IPC registration flows.
+- `createAuthPopup`: LOW risk. Direct callers are `runOAuthLogin` and `bindProvider`; affected processes include `registerIpcHandlers` and `onReady`.
+- `registerWechatMpHandlers`: LOW risk. Direct upstream caller: `AppManager.registerIpcHandlers`; affected processes include `registerIpcHandlers` and `onReady`.
+- `registerSessionPolicies`: LOW risk. After GitNexus refresh, no upstream callers were reported by symbol-level impact, but source inspection confirms it is invoked from `AppManager.onReady`.
+- `registerVideoHandlers`: LOW risk. After GitNexus refresh, no upstream callers were reported by symbol-level impact, but source inspection confirms it is invoked from `AppManager.registerIpcHandlers`.
+- GitNexus index was refreshed before final impact analysis. The refresh updated AGENTS/CLAUDE index counts to 7,882 nodes, 20,966 edges, 656 clusters, and 300 flows.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported MEDIUM risk across 15 files, 32 symbols, and 2 affected execution flows. The affected flows were `RegisterAccountHandlers → GetGoogleOAuthClientId` and `RegisterAccountHandlers → Base64Url`, matching the intentional YouTube/account login hardening path.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/auth/login-window-policy.ts src/main/services/auth/login-window-policy.test.ts src/main/handlers/auth-handlers.ts src/main/handlers/auth-handlers.test.ts src/main/services/account/account-auth.ts src/main/services/account/account-auth.test.ts src/main/handlers/wechat-mp-handlers.ts src/main/handlers/wechat-mp-handlers.test.ts src/main/services/system/session-policies.ts src/main/services/system/session-policies.test.ts src/main/handlers/video-handlers.ts src/main/handlers/video-handlers.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/main/services/auth/login-window-policy.test.ts src/main/handlers/auth-handlers.test.ts src/main/services/account/account-auth.test.ts src/main/handlers/wechat-mp-handlers.test.ts src/main/services/system/session-policies.test.ts src/main/handlers/video-handlers.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 830 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- App auth bearer tokens are still stored through the existing `session-store` path and should be moved to `safeStorage` or OS keychain-backed storage in a separate migration batch.
+- `VIDEO_OPEN_IN_APP` still creates a general video BrowserWindow and should get its own URL/navigation/popup hardening batch.
+- Remaining renderer/web raw external-open paths should be unified behind `openExternalUrlSafe()`, especially `EntryContent`, `ArticleDetailPage`, discovery/settings anchors, and web API stubs.
+- General feed/readability/discovery/video fetch paths still need a broader private-network, redirect, and DNS-rebinding policy pass outside the already-hardened OPML path.

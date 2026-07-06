@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron'
 import { registerChannel } from '../ipc/register-channel'
 import { IPC } from '../../shared/ipc-contracts'
 import { getBackendBaseUrl } from '../services/backend/backend-config'
+import { isLoginWindowUrlAllowed } from '../services/auth/login-window-policy'
 
 const WX_MP_ORIGIN = 'https://mp.weixin.qq.com'
 const WX_MP_LOGIN_URL = `${WX_MP_ORIGIN}/`
@@ -11,6 +12,13 @@ const AUTHENTICATED_PATHS = new Set([
   '/cgi-bin/appmsg',
   '/cgi-bin/appmsgpublish',
 ])
+
+export function isWechatMpLoginNavigationAllowed(url: string): boolean {
+  return isLoginWindowUrlAllowed(url, {
+    allowedOrigins: [WX_MP_ORIGIN],
+    allowedHostSuffixes: ['qq.com', 'weixin.qq.com'],
+  })
+}
 
 export function extractTokenFromUrl(url: string): string | null {
   try {
@@ -115,6 +123,19 @@ export function registerWechatMpHandlers(): void {
       win.webContents.setUserAgent(
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       )
+
+      win.webContents.setWindowOpenHandler(({ url }) => {
+        if (isWechatMpLoginNavigationAllowed(url)) {
+          void win.loadURL(url).catch(() => {})
+        }
+        return { action: 'deny' }
+      })
+
+      win.webContents.on('will-navigate', (event, url) => {
+        if (!isWechatMpLoginNavigationAllowed(url)) {
+          event.preventDefault()
+        }
+      })
 
       let resolved = false
       const finish = async (

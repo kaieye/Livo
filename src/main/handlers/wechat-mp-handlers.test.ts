@@ -11,6 +11,7 @@ import {
   extractTokenFromCookies,
   extractTokenFromUrl,
   getWechatMpCookieLookupUrls,
+  isWechatMpLoginNavigationAllowed,
   isWechatMpAuthenticatedUrl,
 } from './wechat-mp-handlers'
 
@@ -59,6 +60,23 @@ describe('wechat mp login helpers', () => {
     expect(
       isWechatMpAuthenticatedUrl(
         'https://example.com/cgi-bin/home?token=wx-token',
+      ),
+    ).toBe(false)
+  })
+
+  it('allows only WeChat login navigation origins', () => {
+    expect(
+      isWechatMpLoginNavigationAllowed('https://mp.weixin.qq.com/cgi-bin/home'),
+    ).toBe(true)
+    expect(
+      isWechatMpLoginNavigationAllowed('https://open.weixin.qq.com/connect/qr'),
+    ).toBe(true)
+    expect(
+      isWechatMpLoginNavigationAllowed('https://example.com/cgi-bin/home'),
+    ).toBe(false)
+    expect(
+      isWechatMpLoginNavigationAllowed(
+        'https://mp.weixin.qq.com.evil.example/cgi-bin/home',
       ),
     ).toBe(false)
   })

@@ -11,6 +11,7 @@ import {
   linkGoogleOAuthAccount,
   unlinkGoogleOAuthAccount,
 } from './google-oauth'
+import { isLoginWindowUrlAllowed } from '../auth/login-window-policy'
 
 const MOBILE_UA =
   'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36'
@@ -49,8 +50,8 @@ interface ProviderConfig {
   cookieDomainKeywords: string[]
   authCookieNames: string[]
   userAgent: 'mobile' | 'desktop'
-  allowSafePopups?: boolean
   timeoutMs?: number
+  allowedHostSuffixes: string[]
 }
 
 type CookieAccountProvider = Exclude<
@@ -89,8 +90,8 @@ const PROVIDER_CONFIGS: Record<CookieAccountProvider, ProviderConfig> = {
       '__Secure-3PSIDCC',
     ],
     userAgent: 'mobile',
-    allowSafePopups: false,
     timeoutMs: 240000,
+    allowedHostSuffixes: ['accounts.google.com', 'google.com', 'youtube.com'],
   },
   x: {
     loginUrl: 'https://x.com/i/flow/login',
@@ -99,8 +100,8 @@ const PROVIDER_CONFIGS: Record<CookieAccountProvider, ProviderConfig> = {
     cookieDomainKeywords: ['x.com', 'twitter.com'],
     authCookieNames: ['auth_token', 'twid', 'ct0'],
     userAgent: 'desktop',
-    allowSafePopups: true,
     timeoutMs: 240000,
+    allowedHostSuffixes: ['x.com', 'twitter.com'],
   },
   instagram: {
     loginUrl: 'https://www.instagram.com/accounts/login/',
@@ -109,6 +110,7 @@ const PROVIDER_CONFIGS: Record<CookieAccountProvider, ProviderConfig> = {
     cookieDomainKeywords: ['instagram.com'],
     authCookieNames: ['sessionid', 'ds_user_id'],
     userAgent: 'mobile',
+    allowedHostSuffixes: ['instagram.com'],
   },
   bilibili: {
     loginUrl: 'https://passport.bilibili.com/login',
@@ -118,11 +120,17 @@ const PROVIDER_CONFIGS: Record<CookieAccountProvider, ProviderConfig> = {
     authCookieNames: ['SESSDATA', 'DedeUserID', 'bili_jct'],
     userAgent: 'desktop',
     timeoutMs: 240000,
+    allowedHostSuffixes: ['passport.bilibili.com', 'bilibili.com'],
   },
 }
 
-function isSafeHttpUrl(url: string): boolean {
-  return /^https?:\/\//i.test(url)
+export function isCookieProviderLoginUrlAllowed(
+  provider: CookieAccountProvider,
+  url: string,
+): boolean {
+  return isLoginWindowUrlAllowed(url, {
+    allowedHostSuffixes: PROVIDER_CONFIGS[provider].allowedHostSuffixes,
+  })
 }
 
 const runtimeAccountNames = new Map<AccountProvider, string>()
@@ -479,17 +487,14 @@ export async function linkAccount(
     }
 
     loginWin.webContents.setWindowOpenHandler(({ url }) => {
-      if (isSafeHttpUrl(url)) {
-        if (config.allowSafePopups) {
-          return { action: 'allow' }
-        }
+      if (isCookieProviderLoginUrlAllowed(provider, url)) {
         void loginWin.loadURL(url).catch(() => {})
       }
       return { action: 'deny' }
     })
 
     loginWin.webContents.on('will-navigate', (event, url) => {
-      if (!isSafeHttpUrl(url)) {
+      if (!isCookieProviderLoginUrlAllowed(provider, url)) {
         event.preventDefault()
       }
     })
