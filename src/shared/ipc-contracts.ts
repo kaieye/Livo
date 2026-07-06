@@ -28,6 +28,13 @@ const IPC_IMPORTED_REFRESH_ID_MAX_LENGTH = 128
 const IPC_READING_ACTIVITY_DAYS_MAX_COUNT = 400
 const IPC_READING_ACTIVITY_DEVICE_ID_MAX_LENGTH = 128
 const IPC_READING_ACTIVITY_COUNT_MAX = 1_000_000
+const IPC_AI_DIRECT_CONTENT_MAX_LENGTH = 200_000
+const IPC_AI_LANGUAGE_MAX_LENGTH = 120
+const IPC_AI_REQUEST_ID_MAX_LENGTH = 120
+const IPC_AI_CHAT_MAX_MESSAGES = 64
+const IPC_AI_CHAT_ROLE_MAX_LENGTH = 40
+const IPC_AI_CHAT_MESSAGE_CONTENT_MAX_LENGTH = 20_000
+const IPC_AI_CHAT_TOTAL_CONTENT_MAX_LENGTH = 120_000
 
 export const IPC = {
   FEED_ADD: 'feed:add',
@@ -949,6 +956,53 @@ function assertMessages(value: unknown): void {
   }
 }
 
+function assertOptionalBoundedString(
+  value: unknown,
+  field: string,
+  maxLength: number,
+): void {
+  assertOptionalString(value, field)
+  if (typeof value === 'string') {
+    assertMaxStringLength(value, field, maxLength)
+  }
+}
+
+function assertAIDirectContent(value: unknown, field: string): void {
+  assertString(value, field)
+  assertMaxStringLength(value, field, IPC_AI_DIRECT_CONTENT_MAX_LENGTH)
+}
+
+function assertBoundedAIMessages(value: unknown): void {
+  assertMessages(value)
+  const messages = value as Array<{ role: string; content: string }>
+  if (messages.length > IPC_AI_CHAT_MAX_MESSAGES) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      messages: `max_items_${IPC_AI_CHAT_MAX_MESSAGES}`,
+    })
+  }
+
+  let totalContentLength = 0
+  for (const [index, message] of messages.entries()) {
+    assertMaxStringLength(
+      message.role,
+      `messages.${index}.role`,
+      IPC_AI_CHAT_ROLE_MAX_LENGTH,
+    )
+    assertMaxStringLength(
+      message.content,
+      `messages.${index}.content`,
+      IPC_AI_CHAT_MESSAGE_CONTENT_MAX_LENGTH,
+    )
+    totalContentLength += message.content.length
+  }
+
+  if (totalContentLength > IPC_AI_CHAT_TOTAL_CONTENT_MAX_LENGTH) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      messages: `max_total_content_length_${IPC_AI_CHAT_TOTAL_CONTENT_MAX_LENGTH}`,
+    })
+  }
+}
+
 const AGENT_REQUEST_ID_MAX_LENGTH = 120
 const AGENT_PROMPT_MAX_LENGTH = 20_000
 const AGENT_HISTORY_MAX_ITEMS = 40
@@ -1244,9 +1298,17 @@ export const IPC_CONTRACTS = {
     channel: IPC.AI_SUMMARIZE,
     validateArgs: (args) => {
       assertArity(IPC.AI_SUMMARIZE, args, 1, 3)
-      assertString(args[0], 'content')
-      assertOptionalString(args[1], 'language')
-      assertOptionalString(args[2], 'requestId')
+      assertAIDirectContent(args[0], 'content')
+      assertOptionalBoundedString(
+        args[1],
+        'language',
+        IPC_AI_LANGUAGE_MAX_LENGTH,
+      )
+      assertOptionalBoundedString(
+        args[2],
+        'requestId',
+        IPC_AI_REQUEST_ID_MAX_LENGTH,
+      )
       return args as IpcArgs<typeof IPC.AI_SUMMARIZE>
     },
   },
@@ -1268,9 +1330,18 @@ export const IPC_CONTRACTS = {
     channel: IPC.AI_TRANSLATE,
     validateArgs: (args) => {
       assertArity(IPC.AI_TRANSLATE, args, 2, 3)
-      assertString(args[0], 'content')
+      assertAIDirectContent(args[0], 'content')
       assertString(args[1], 'targetLanguage')
-      assertOptionalString(args[2], 'requestId')
+      assertMaxStringLength(
+        args[1],
+        'targetLanguage',
+        IPC_AI_LANGUAGE_MAX_LENGTH,
+      )
+      assertOptionalBoundedString(
+        args[2],
+        'requestId',
+        IPC_AI_REQUEST_ID_MAX_LENGTH,
+      )
       return args as IpcArgs<typeof IPC.AI_TRANSLATE>
     },
   },
@@ -1299,7 +1370,7 @@ export const IPC_CONTRACTS = {
     channel: IPC.AI_CHAT,
     validateArgs: (args) => {
       assertArity(IPC.AI_CHAT, args, 1)
-      assertMessages(args[0])
+      assertBoundedAIMessages(args[0])
       return args as IpcArgs<typeof IPC.AI_CHAT>
     },
   },
@@ -1307,8 +1378,9 @@ export const IPC_CONTRACTS = {
     channel: IPC.AI_CHAT_STREAM,
     validateArgs: (args) => {
       assertArity(IPC.AI_CHAT_STREAM, args, 2)
-      assertMessages(args[0])
+      assertBoundedAIMessages(args[0])
       assertString(args[1], 'requestId')
+      assertMaxStringLength(args[1], 'requestId', IPC_AI_REQUEST_ID_MAX_LENGTH)
       return args as IpcArgs<typeof IPC.AI_CHAT_STREAM>
     },
   },

@@ -157,6 +157,84 @@ describe('ipc-contracts', () => {
     }
   })
 
+  it('rejects oversized AI IPC payloads', () => {
+    expect(
+      validateIpcArgs(IPC.AI_SUMMARIZE, [
+        'x'.repeat(200_000),
+        'zh-CN',
+        'request-1',
+      ]),
+    ).toEqual(['x'.repeat(200_000), 'zh-CN', 'request-1'])
+    expect(
+      validateIpcArgs(IPC.AI_TRANSLATE, ['article', 'en-US', 'request-1']),
+    ).toEqual(['article', 'en-US', 'request-1'])
+    expect(
+      validateIpcArgs(IPC.AI_CHAT, [
+        [
+          { role: 'system', content: 'Be concise.' },
+          { role: 'user', content: 'Summarize this.' },
+        ],
+      ]),
+    ).toEqual([
+      [
+        { role: 'system', content: 'Be concise.' },
+        { role: 'user', content: 'Summarize this.' },
+      ],
+    ])
+
+    expect(() =>
+      validateIpcArgs(IPC.AI_SUMMARIZE, ['x'.repeat(200_001)]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AI_SUMMARIZE, [
+        'article',
+        'x'.repeat(121),
+        'request-1',
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AI_SUMMARIZE, ['article', 'zh-CN', 'x'.repeat(121)]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AI_TRANSLATE, ['x'.repeat(200_001), 'en-US']),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AI_TRANSLATE, ['article', 'x'.repeat(121)]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AI_TRANSLATE, ['article', 'en-US', 'x'.repeat(121)]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AI_CHAT, [
+        Array.from({ length: 65 }, () => ({ role: 'user', content: 'x' })),
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AI_CHAT, [
+        [{ role: 'x'.repeat(41), content: 'hello' }],
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AI_CHAT, [
+        [{ role: 'user', content: 'x'.repeat(20_001) }],
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AI_CHAT, [
+        Array.from({ length: 7 }, () => ({
+          role: 'user',
+          content: 'x'.repeat(20_000),
+        })),
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AI_CHAT_STREAM, [
+        [{ role: 'user', content: 'hello' }],
+        'x'.repeat(121),
+      ]),
+    ).toThrow(IpcValidationError)
+  })
+
   it('validates agent run and resume payloads deeply', () => {
     const runPayload = {
       requestId: 'agent-run-1',

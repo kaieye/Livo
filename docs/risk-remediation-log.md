@@ -1765,3 +1765,48 @@ Renderer review findings to handle in later batches:
 - The cache sanitizer intentionally only recognizes `http` and `https` URL tokens; broader protocol handling should stay with rendering/network policy.
 - Hydrated startup cache may briefly show redacted embedded links/images until fresh IPC data replaces it.
 - AI IPC accepts large prompt/message payloads; AI-specific IPC payload limits should be added separately.
+
+## 2026-07-07 - Bound direct AI IPC payload sizes
+
+### Review inputs
+
+- `AI_SUMMARIZE` and `AI_TRANSLATE` validated only that direct content inputs were strings.
+- `AI_CHAT` and `AI_CHAT_STREAM` used generic message-shape validation without count, per-message, total-content, role, or request-id size limits.
+- Oversized renderer-controlled AI IPC payloads could be accepted before task enqueueing or provider calls, creating avoidable memory, token, and cost pressure.
+- The generic `assertMessages()` helper has broader IPC blast radius, so the batch should add AI-specific limits without changing generic message-shape semantics.
+
+### Fixed in this batch
+
+- Added explicit AI IPC limits for direct summarize/translate content, language/request IDs, chat message count, role length, per-message content length, and total chat content length.
+- Added `assertAIDirectContent()` and `assertBoundedAIMessages()` for AI channels only.
+- `AI_SUMMARIZE`, `AI_TRANSLATE`, `AI_CHAT`, and `AI_CHAT_STREAM` now reject oversized payloads during shared IPC argument validation before main-process handlers run.
+- Added contract tests for valid boundary payloads and oversized direct content, language/request IDs, chat message count, role length, per-message content length, total chat content length, and streaming request IDs.
+
+### Impact analysis
+
+- `IPC_CONTRACTS`: LOW risk. GitNexus reported no upstream impacted symbols or affected processes.
+- `validateIpcArgs`: LOW risk. GitNexus reported no upstream impacted symbols or affected processes.
+- `assertMessages`: HIGH risk. Direct impacted validation path feeds multiple IPC registration flows, so this batch keeps its behavior unchanged and layers a separate AI-specific validator on top.
+
+### Verification
+
+- `pnpm test -- src/shared/ipc-contracts.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 166 passed test files, 971 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/shared/ipc-contracts.ts src/shared/ipc-contracts.test.ts src/main/handlers/ai-handlers.ts src/main/handlers/ai-handlers.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed after formatting `src/shared/ipc-contracts.ts` and `src/shared/ipc-contracts.test.ts`.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 3 files, 4 symbols, 0 affected processes, LOW risk.
+  - Changed symbols reported: `assertAgentChatHistory`, `assertAgentRunPayload`, `IPC`, and `IPC_CONTRACTS`.
+  - The staged scope is the expected shared IPC contract, contract test, and remediation log batch.
+
+### Deferred findings
+
+- `AI_SUMMARIZE_ENTRY`, `AI_TRANSLATE_ENTRY_SEGMENTS`, and digest/filter AI flows use separate entry/task-specific paths and were not changed in this direct renderer-payload batch.
+- The exact AI limits are intentionally generous; they can be tightened later with product telemetry or provider-specific constraints.
+- Web-only feed `upstreamUrl` provenance remains a separate low-risk data-model batch.
