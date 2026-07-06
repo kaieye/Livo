@@ -1,7 +1,10 @@
 /**
  * Social media platform parsing and handle extraction
  */
-import { normalizeSocialHandle } from '../../../../lib/social-url'
+import {
+  canonicalizeSocialUrl,
+  normalizeSocialHandle,
+} from '../../../../lib/social-url'
 
 export type SocialPlatformType =
   | 'x'
@@ -107,4 +110,38 @@ export function extractTwitterDisplayNameFromFeedTitle(
   )
     return ''
   return cleaned.replace(/^@+/, '').trim()
+}
+
+export function resolveSocialAuthorName({
+  entryAuthor,
+  entryUrl,
+  feedTitle,
+  feedUrl,
+  feedSiteUrl,
+}: {
+  entryAuthor?: string
+  entryUrl?: string
+  feedTitle?: string
+  feedUrl?: string
+  feedSiteUrl?: string
+}): string {
+  const canonicalEntryUrl = canonicalizeSocialUrl(entryUrl || '')
+  const canonicalFeedUrl = canonicalizeSocialUrl(feedUrl || feedSiteUrl || '')
+  const fromFeed = parseSocialHandle(canonicalFeedUrl)
+  const parsed =
+    fromFeed.type !== 'other' && fromFeed.handle
+      ? fromFeed
+      : parseSocialHandle(canonicalEntryUrl)
+
+  if (parsed.type === 'x') {
+    const feedDisplayName = extractTwitterDisplayNameFromFeedTitle(
+      feedTitle,
+      parsed.handle,
+    )
+    if (feedDisplayName) return feedDisplayName
+  }
+
+  return (entryAuthor || feedTitle || parsed.handle || '')
+    .replace(/^@+/, '')
+    .trim()
 }

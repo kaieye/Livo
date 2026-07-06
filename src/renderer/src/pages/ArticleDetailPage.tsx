@@ -44,6 +44,7 @@ import { splitHtmlIntoParagraphs } from '../lib/entry-text'
 import { getDateLocale } from '../lib/date-locale'
 import { ROUTES } from '../router/route-paths'
 import { FeedViewType } from '../../../shared/types'
+import { resolveSocialAuthorName } from '../components/entry/entry-list/utils/entry-social'
 
 // 18.3 — Resizable reading panel constants
 const READING_MIN = 360
@@ -244,7 +245,23 @@ export default function ArticleDetailPage() {
 
   // --- Social avatar / author info (for SocialDetailView) ---
   const socialAvatarUrl = activeEntry?.authorAvatar ?? ''
-  const socialAuthorName = activeEntry?.author ?? ''
+  const socialAuthorName = useMemo(
+    () =>
+      resolveSocialAuthorName({
+        entryAuthor: activeEntry?.author,
+        entryUrl: activeEntry?.url,
+        feedTitle: feed?.title,
+        feedUrl: feed?.url,
+        feedSiteUrl: feed?.siteUrl,
+      }),
+    [
+      activeEntry?.author,
+      activeEntry?.url,
+      feed?.siteUrl,
+      feed?.title,
+      feed?.url,
+    ],
+  )
   const [avatarFailed, setAvatarFailed] = useState(false)
   const avatarLetter = socialAuthorName
     ? socialAuthorName.charAt(0).toUpperCase()
@@ -476,6 +493,7 @@ export default function ArticleDetailPage() {
                 avatarImageFailed={avatarFailed}
                 avatarLetter={avatarLetter}
                 authorName={socialAuthorName}
+                media={activeEntry!.media}
                 timeAgo={timeAgo}
                 onAvatarError={() => setAvatarFailed(true)}
                 showTranslation={showTranslation}

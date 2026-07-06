@@ -5,7 +5,7 @@ import { SocialAuthorHeader } from './SocialAuthorHeader'
 import { SocialContentBody } from './SocialContentBody'
 import { SocialSummaryCard } from './SocialSummaryCard'
 import { OverlayMediaGallery } from './OverlayMediaGallery'
-import { useEntryStore } from '../../store/entry-store'
+import type { MediaItem } from '../../../../shared/types'
 
 export interface SocialDetailViewProps {
   /** The entry ID for the social media post to display */
@@ -24,6 +24,8 @@ export interface SocialDetailViewProps {
   avatarLetter: string
   /** Author display name */
   authorName: string
+  /** Entry media to render below the social body */
+  media?: MediaItem[]
   /** Human-readable relative time label */
   timeAgo: string
   /** Callback when avatar image errors */
@@ -67,6 +69,7 @@ export const SocialDetailView = memo(function SocialDetailView({
   avatarImageFailed,
   avatarLetter,
   authorName,
+  media,
   timeAgo,
   onAvatarError,
   showTranslation,
@@ -79,16 +82,15 @@ export const SocialDetailView = memo(function SocialDetailView({
   className = '',
 }: SocialDetailViewProps) {
   const { t } = useTranslation()
-  const selectedEntry = useEntryStore((s) => s.selectedEntry)
 
   // Resolve display photos/videos from entry media (mirror WideViewContent logic)
   const displayPhotos =
-    selectedEntry?.media
+    media
       ?.filter((m) => m.type === 'photo')
       .map((m) => ({ url: m.url, previewUrl: m.previewUrl })) ?? []
 
   const videos =
-    selectedEntry?.media
+    media
       ?.filter((m) => m.type === 'video')
       .map((m) => ({ url: m.url, previewUrl: m.previewUrl })) ?? []
 
@@ -135,6 +137,7 @@ export const SocialDetailView = memo(function SocialDetailView({
           onPhotoError={() => {}}
           onSetPreviewIdx={() => {}}
           onSetLightboxOpen={() => {}}
+          photoFrameHeight="min(52vh, 480px)"
         />
       )}
 

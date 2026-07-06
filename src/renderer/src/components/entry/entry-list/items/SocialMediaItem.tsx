@@ -33,7 +33,7 @@ import { useEntryAI } from '../hooks/useEntryAI'
 import { cleanRelativeTime } from '../utils/entry-text'
 import {
   parseSocialHandle,
-  extractTwitterDisplayNameFromFeedTitle,
+  resolveSocialAuthorName,
 } from '../utils/entry-social'
 import {
   canonicalizeSocialUrl,
@@ -108,17 +108,13 @@ export const SocialMediaItem = memo(function SocialMediaItem({
     return parseSocialHandle(canonicalEntryUrl)
   }, [canonicalFeedUrl, canonicalEntryUrl])
   const authorName = useMemo(() => {
-    if (parsed.type === 'x') {
-      const feedDisplayName = extractTwitterDisplayNameFromFeedTitle(
-        feedTitle,
-        parsed.handle,
-      )
-      if (feedDisplayName) return feedDisplayName
-    }
-    return (entry.author || feedTitle || parsed.handle || '')
-      .replace(/^@+/, '')
-      .trim()
-  }, [entry.author, feedTitle, parsed.type, parsed.handle])
+    return resolveSocialAuthorName({
+      entryAuthor: entry.author,
+      entryUrl: canonicalEntryUrl,
+      feedTitle,
+      feedUrl: canonicalFeedUrl,
+    })
+  }, [canonicalEntryUrl, canonicalFeedUrl, entry.author, feedTitle])
 
   const timeAgo = measureStartupRender(
     'SocialMediaItem.timeAgo',

@@ -26,6 +26,7 @@ export const OverlayMediaGallery = memo(function OverlayMediaGallery({
   onPhotoError,
   onSetPreviewIdx,
   onSetLightboxOpen,
+  photoFrameHeight = '70vh',
 }: {
   displayPhotos: OverlayPhoto[]
   videos: OverlayVideo[]
@@ -40,13 +41,17 @@ export const OverlayMediaGallery = memo(function OverlayMediaGallery({
   ) => void
   onSetPreviewIdx: (index: number) => void
   onSetLightboxOpen: (open: boolean) => void
+  photoFrameHeight?: string
 }) {
   const { t } = useTranslation()
   return (
     <>
       {displayPhotos.length > 0 && (
         <div className="group/carousel relative">
-          <div className="relative overflow-hidden" style={{ height: '70vh' }}>
+          <div
+            className="relative overflow-hidden"
+            style={{ height: photoFrameHeight }}
+          >
             <div
               className="flex h-full transition-transform duration-300 ease-in-out"
               style={{ transform: `translateX(-${(previewIdx ?? 0) * 100}%)` }}

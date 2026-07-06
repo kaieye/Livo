@@ -53,6 +53,7 @@ export const SocialOverlayView = memo(function SocialOverlayView({
   onPhotoError,
   onSetPreviewIdx,
   onSetLightboxOpen,
+  photoFrameHeight,
 }: {
   onClose: () => void
   contentWidthClass: string
@@ -92,14 +93,15 @@ export const SocialOverlayView = memo(function SocialOverlayView({
   ) => void
   onSetPreviewIdx: (index: number) => void
   onSetLightboxOpen: (open: boolean) => void
+  photoFrameHeight?: string
 }) {
   return (
     <div className="absolute inset-0 z-[50] flex flex-col overflow-hidden">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
 
       <ScrollArea
-        rootClassName="relative z-10 flex-1"
-        viewportClassName="h-full overflow-y-auto bg-white dark:bg-surface-dark"
+        rootClassName="relative z-10 min-h-0 flex-1"
+        viewportClassName="h-full min-h-0 overflow-y-auto bg-white dark:bg-surface-dark"
       >
         <SocialOverlayHeader
           contentWidthClass={contentWidthClass}
@@ -158,6 +160,7 @@ export const SocialOverlayView = memo(function SocialOverlayView({
             onPhotoError={onPhotoError}
             onSetPreviewIdx={onSetPreviewIdx}
             onSetLightboxOpen={onSetLightboxOpen}
+            photoFrameHeight={photoFrameHeight}
           />
         </div>
       </ScrollArea>

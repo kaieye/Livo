@@ -109,6 +109,7 @@ import { useAISummary } from '../../hooks/useAISummary'
 import { useAITranslation } from '../../hooks/useAITranslation'
 import { AISummaryPanel } from './AISummaryPanel'
 import { markStartupComponentMounted } from '../../lib/startup-block-diagnostics'
+import { resolveSocialAuthorName } from './entry-list/utils/entry-social'
 
 const SharePoster = lazy(() =>
   import('../ui/SharePoster').then((module) => ({
@@ -849,6 +850,7 @@ export function WideViewContent() {
   useEffect(() => {
     // Switching subscription/feed should always exit full-page inline player.
     setInlineBilibili(null)
+    setSocialEntry(null)
   }, [selectedFeedId])
 
   return (
@@ -1498,6 +1500,17 @@ function SocialOverlay({
       extractPixnoyOriginUrl,
       normalizeImageCacheKey,
     })
+  const authorName = useMemo(
+    () =>
+      resolveSocialAuthorName({
+        entryAuthor: entry.author,
+        entryUrl: entry.url,
+        feedTitle: feed?.title,
+        feedUrl: feed?.url,
+        feedSiteUrl: feed?.siteUrl,
+      }),
+    [entry.author, entry.url, feed?.siteUrl, feed?.title, feed?.url],
+  )
 
   // Full sanitized content - strip media tags to avoid duplication with the media gallery below
   // Content width mapping - matches EntryContent
@@ -1847,7 +1860,7 @@ function SocialOverlay({
         avatarUrl={avatarUrl}
         avatarImageFailed={avatarImageFailed}
         avatarLetter={avatarLetter}
-        authorName={entry.author || feed?.title || ''}
+        authorName={authorName}
         timeAgo={timeAgo}
         onAvatarError={handleAvatarError}
         translatedParagraphs={translatedParagraphs}
@@ -1864,6 +1877,7 @@ function SocialOverlay({
         onPhotoError={handleOverlayPhotoError}
         onSetPreviewIdx={setPreviewIdx}
         onSetLightboxOpen={setLightboxOpen}
+        photoFrameHeight="min(58vh, 560px)"
       />
       {/* AI Summary — rendered within overlay context, shows when summary is available */}
       {(summary || isSummarizing || error) && (
