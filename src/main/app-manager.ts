@@ -20,15 +20,17 @@ import { registerAppHandlers } from './handlers/app-handlers'
 import { registerAuthHandlers } from './handlers/auth-handlers'
 import { registerWechatMpHandlers } from './handlers/wechat-mp-handlers'
 import { registerReadingActivityHandlers } from './handlers/reading-activity-handlers'
-import { startAutoRefresh } from './services/feed/feed-refresh'
+import { startAutoRefresh, stopAutoRefresh } from './services/feed/feed-refresh'
 import { feedSyncService } from './services/feed/feed-sync-service'
-import { sessionStore } from './services/auth/session-store'
 import { logError } from './services/system/logger'
 import {
   startFeverAutoSync,
   stopFeverAutoSync,
 } from './services/fever/fever-sync'
-import { startAggregatorJobs } from './services/feed/aggregator-jobs'
+import {
+  startAggregatorJobs,
+  stopAggregatorJobs,
+} from './services/feed/aggregator-jobs'
 import {
   getAppCacheDirectoryPath,
   getLogDirectory,
@@ -60,6 +62,9 @@ export class AppManager {
   private tray: AppTray | null = null
   private stopCacheMaintenance: (() => void) | null = null
   private startupBackgroundTimer: ReturnType<typeof setTimeout> | null = null
+  private isQuitting = false
+  private databaseReady = false
+  private databaseClosed = false
   private updater: UpdaterService
   private websocket: WebSocketService
 
@@ -143,6 +148,9 @@ export class AppManager {
 
     // 数据库初始化完成后再安排后台任务；此时窗口与骨架屏已开始加载。
     await dbInitPromise
+    this.databaseReady = true
+
+    if (this.isQuitting) return
 
     this.scheduleStartupBackgroundJobs(mainWindow, settings)
   }
@@ -157,24 +165,42 @@ export class AppManager {
   }
 
   handleBeforeQuit(): void {
+    this.isQuitting = true
     this.windowManager.prepareForQuit()
+    this.tray?.destroy()
+    this.tray = null
+    this.websocket.disconnect()
+    this.stopDatabaseBackedBackgroundJobs()
+    this.closeDatabaseOnce()
+  }
+
+  handleWindowAllClosed(): void {
+    if (process.platform === 'darwin') return
+
+    this.isQuitting = true
+    this.stopDatabaseBackedBackgroundJobs()
+    this.closeDatabaseOnce()
+    app.quit()
+  }
+
+  private stopDatabaseBackedBackgroundJobs(): void {
     if (this.startupBackgroundTimer) {
       clearTimeout(this.startupBackgroundTimer)
       this.startupBackgroundTimer = null
     }
-    this.tray?.destroy()
-    this.tray = null
-    this.websocket.disconnect()
     stopFeverAutoSync()
+    stopAutoRefresh()
+    stopAggregatorJobs()
     if (this.stopCacheMaintenance) {
       this.stopCacheMaintenance()
       this.stopCacheMaintenance = null
     }
   }
 
-  handleWindowAllClosed(): void {
+  private closeDatabaseOnce(): void {
+    if (!this.databaseReady || this.databaseClosed) return
     getDb().close()
-    if (process.platform !== 'darwin') app.quit()
+    this.databaseClosed = true
   }
 
   private configurePlatformIntegration(): void {
