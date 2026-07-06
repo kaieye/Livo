@@ -397,7 +397,7 @@ Renderer review findings to handle in later batches:
 ### Impact analysis
 
 - `AIChatMarkdown`: LOW risk. Direct upstream callers are `AIChatMessageList` and `DigestContent`; one affected process, `AIChatPanel`, was reported by initial impact analysis.
-- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 2 files, 3 symbols, and 0 affected execution flows.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 3 files, 3 symbols, and 0 affected execution flows.
 
 ### Verification
 
@@ -534,6 +534,44 @@ Renderer review findings to handle in later batches:
 ### Deferred findings
 
 - `resolveVideoUrl()` should classify selected resolver stream URLs before returning them.
+- Renderer media-source loading still needs a central policy for private/loopback media URLs.
+- Discovery public fetches still need redirect-aware public-only fetch handling.
+- Feed avatar/title enrichment should classify and skip blocked URLs before best-effort fetches.
+
+## 2026-07-07 - Video resolver stream URL classification
+
+### Review inputs
+
+- Network policy review sub-agent found that `resolveVideoUrl()` validated resolver API requests but returned selected Invidious/Piped stream URLs without classifying the final media URL.
+- Local impact analysis reported `resolveVideoUrl` as LOW risk with no upstream callers or affected processes.
+
+### Fixed in this batch
+
+- Selected Invidious stream URLs now pass through `assertNetworkFetchUrl()` before being returned.
+- Selected Piped stream URLs now pass through `assertNetworkFetchUrl()` before being returned.
+- If a resolver instance returns a blocked stream URL, that instance is treated as failed and the resolver tries the next available instance.
+- Added a regression test that skips a loopback/private selected stream and succeeds with the next safe stream.
+
+### Impact analysis
+
+- `resolveVideoUrl`: LOW risk by symbol impact. No upstream callers or affected processes were reported.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 2 files, 3 symbols, and 0 affected execution flows.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/video/video-proxy.ts src/main/services/video/video-proxy.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/main/services/video/video-proxy.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 844 passed tests, 13 skipped tests.
+
+### Deferred findings
+
 - Renderer media-source loading still needs a central policy for private/loopback media URLs.
 - Discovery public fetches still need redirect-aware public-only fetch handling.
 - Feed avatar/title enrichment should classify and skip blocked URLs before best-effort fetches.

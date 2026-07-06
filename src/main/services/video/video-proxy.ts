@@ -118,10 +118,11 @@ async function resolveViaInvidious(
         errors.push(`${instance}: no formatStreams`)
         continue
       }
+      const safeStreamUrl = await assertNetworkFetchUrl(selected.url)
 
       return {
         success: true,
-        url: selected.url,
+        url: safeStreamUrl,
         quality: selected.quality,
         title: data.title,
       }
@@ -154,10 +155,11 @@ async function resolveViaPiped(
         errors.push(`${instance}: no usable streams`)
         continue
       }
+      const safeStreamUrl = await assertNetworkFetchUrl(selected.url)
 
       return {
         success: true,
-        url: selected.url,
+        url: safeStreamUrl,
         quality: selected.quality,
         title: data.title,
       }

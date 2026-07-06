@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   selectBestInvidiousStream,
   selectPipedStream,
@@ -6,9 +6,17 @@ import {
   type PipedVideoResponse,
 } from '@shared/video-url'
 
+const mocks = vi.hoisted(() => ({
+  assertNetworkFetchUrl: vi.fn(async (url: string) => url),
+}))
+
 // `video-proxy` imports `electron` for its default `net`-backed fetcher; the
 // tests always inject a mock fetcher, so a stub module is enough.
 vi.mock('electron', () => ({ net: { request: vi.fn() } }))
+
+vi.mock('../system/network-url-policy', () => ({
+  assertNetworkFetchUrl: mocks.assertNetworkFetchUrl,
+}))
 
 import { resolveVideoUrl, type JsonFetcher } from './video-proxy'
 
@@ -87,6 +95,11 @@ describe('selectPipedStream', () => {
 })
 
 describe('resolveVideoUrl', () => {
+  beforeEach(() => {
+    mocks.assertNetworkFetchUrl.mockReset()
+    mocks.assertNetworkFetchUrl.mockImplementation(async (url: string) => url)
+  })
+
   it('rejects non-YouTube URLs without fetching', async () => {
     const fetcher = vi.fn()
     const result = await resolveVideoUrl('https://example.com/page', fetcher)
@@ -135,6 +148,40 @@ describe('resolveVideoUrl', () => {
     expect(result.success).toBe(true)
     expect(result.url).toBe('https://inv3/s.mp4')
     expect(calls.length).toBe(3)
+  })
+
+  it('skips selected streams blocked by network policy', async () => {
+    mocks.assertNetworkFetchUrl.mockImplementation(async (url: string) => {
+      if (url.includes('127.0.0.1')) throw new Error('blocked')
+      return url
+    })
+    const fetcher: JsonFetcher = vi.fn(async (url: string) => {
+      if (url.includes('/api/v1/videos/')) {
+        return {
+          title: 'Policy',
+          formatStreams: [
+            {
+              url:
+                (fetcher as ReturnType<typeof vi.fn>).mock.calls.length === 1
+                  ? 'https://127.0.0.1/stream.mp4'
+                  : 'https://cdn.example/stream.mp4',
+              container: 'mp4',
+              quality: '720p',
+            },
+          ],
+        } as unknown as never
+      }
+      throw new Error('unexpected fallback')
+    })
+
+    const result = await resolveVideoUrl(YT_URL, fetcher)
+
+    expect(result).toMatchObject({
+      success: true,
+      url: 'https://cdn.example/stream.mp4',
+      quality: '720p',
+    })
+    expect(fetcher).toHaveBeenCalledTimes(2)
   })
 
   it('falls back to Piped when all Invidious instances fail', async () => {
