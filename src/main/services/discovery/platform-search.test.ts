@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  assertPublicDiscoveryUrl: vi.fn(async (url: string) => url),
+}))
 
 // Electron is not available in the Node test environment; the core module only
 // touches `session.defaultSession.fetch` lazily inside the default fetch, which
@@ -8,7 +12,7 @@ vi.mock('electron', () => ({ session: { defaultSession: { fetch: vi.fn() } } }))
 // The SSRF guard reaches into Electron's net stack; stub it to a pass-through so
 // the core can be tested without the real network policy.
 vi.mock('./discover-url-policy', () => ({
-  assertPublicDiscoveryUrl: (url: string) => Promise.resolve(url),
+  assertPublicDiscoveryUrl: mocks.assertPublicDiscoveryUrl,
 }))
 
 import {
@@ -28,11 +32,17 @@ function fakeResponse(
   body: string | object,
   ok = true,
   status = 200,
+  headers: Record<string, string> = {},
 ): DiscoveryFetchResponse {
   const text = typeof body === 'string' ? body : JSON.stringify(body)
   return {
     ok,
     status,
+    headers: {
+      get(name: string) {
+        return headers[name.toLowerCase()] ?? null
+      },
+    },
     text: () => Promise.resolve(text),
     json: () =>
       Promise.resolve(typeof body === 'string' ? JSON.parse(body) : body),
@@ -126,6 +136,13 @@ describe('dedupeScoreAndSort (dedupe + scoring + slice)', () => {
 })
 
 describe('discoveryFetch (injected fetch + shared headers)', () => {
+  beforeEach(() => {
+    mocks.assertPublicDiscoveryUrl.mockReset()
+    mocks.assertPublicDiscoveryUrl.mockImplementation(
+      async (url: string) => url,
+    )
+  })
+
   it('sends the Chrome UA and merges header overrides', async () => {
     const fetchImpl = vi.fn<DiscoveryFetch>(() =>
       Promise.resolve(fakeResponse('ok')),
@@ -137,6 +154,7 @@ describe('discoveryFetch (injected fetch + shared headers)', () => {
     const [, init] = fetchImpl.mock.calls[0]
     expect(init?.headers?.['User-Agent']).toBe(DISCOVERY_CHROME_UA)
     expect(init?.headers?.Accept).toBe('application/json')
+    expect(init?.redirect).toBe('manual')
   })
 
   it('returns undefined instead of throwing on fetch failure', async () => {
@@ -146,6 +164,64 @@ describe('discoveryFetch (injected fetch + shared headers)', () => {
     await expect(
       discoveryFetch('https://example.com', { fetchImpl }),
     ).resolves.toBeUndefined()
+  })
+
+  it('validates each redirect hop before following it', async () => {
+    const fetchImpl = vi.fn<DiscoveryFetch>((url) => {
+      if (url === 'https://example.com/start') {
+        return Promise.resolve(
+          fakeResponse('', false, 302, { location: '/final' }),
+        )
+      }
+      return Promise.resolve(fakeResponse('ok'))
+    })
+
+    const response = await discoveryFetch('https://example.com/start', {
+      fetchImpl,
+    })
+
+    await expect(response?.text()).resolves.toBe('ok')
+    expect(
+      mocks.assertPublicDiscoveryUrl.mock.calls.map(([url]) => url),
+    ).toEqual(['https://example.com/start', 'https://example.com/final'])
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+      'https://example.com/start',
+      'https://example.com/final',
+    ])
+  })
+
+  it('does not fetch a redirect target rejected by policy', async () => {
+    mocks.assertPublicDiscoveryUrl.mockImplementation(async (url: string) => {
+      if (url.includes('127.0.0.1')) throw new Error('blocked')
+      return url
+    })
+    const fetchImpl = vi.fn<DiscoveryFetch>(() =>
+      Promise.resolve(
+        fakeResponse('', false, 302, {
+          location: 'http://127.0.0.1/admin',
+        }),
+      ),
+    )
+
+    await expect(
+      discoveryFetch('https://example.com/start', { fetchImpl }),
+    ).resolves.toBeUndefined()
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('caps redirect depth', async () => {
+    const fetchImpl = vi.fn<DiscoveryFetch>((url) =>
+      Promise.resolve(
+        fakeResponse('', false, 302, {
+          location: `${url.replace(/\/$/, '')}/next`,
+        }),
+      ),
+    )
+
+    await expect(
+      discoveryFetch('https://example.com/start', { fetchImpl }),
+    ).resolves.toBeUndefined()
+    expect(fetchImpl).toHaveBeenCalledTimes(6)
   })
 })
 

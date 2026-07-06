@@ -37,6 +37,9 @@ export const DISCOVERY_HTML_HEADERS: Record<string, string> = {
 export interface DiscoveryFetchResponse {
   ok: boolean
   status: number
+  headers?: {
+    get(name: string): string | null
+  }
   text(): Promise<string>
   json(): Promise<unknown>
 }
@@ -49,7 +52,11 @@ export interface DiscoveryFetchResponse {
  */
 export type DiscoveryFetch = (
   url: string,
-  init?: { headers?: Record<string, string>; signal?: AbortSignal },
+  init?: {
+    headers?: Record<string, string>
+    signal?: AbortSignal
+    redirect?: RequestRedirect
+  },
 ) => Promise<DiscoveryFetchResponse>
 
 /** The default fetch: Electron session fetch, resolved lazily per call. */
@@ -58,6 +65,8 @@ export const defaultDiscoveryFetch: DiscoveryFetch = (url, init) =>
     url,
     init as RequestInit,
   ) as unknown as Promise<DiscoveryFetchResponse>
+
+const MAX_DISCOVERY_REDIRECTS = 5
 
 /**
  * Run an SSRF-guarded fetch with the shared Chrome UA headers. Header overrides
@@ -72,14 +81,24 @@ export async function discoveryFetch(
     headers?: Record<string, string>
     signal?: AbortSignal
   } = {},
+  redirectsRemaining = MAX_DISCOVERY_REDIRECTS,
 ): Promise<DiscoveryFetchResponse | undefined> {
   const fetchImpl = options.fetchImpl || defaultDiscoveryFetch
   try {
     const safeUrl = await assertPublicDiscoveryUrl(url)
-    return await fetchImpl(safeUrl, {
+    const response = await fetchImpl(safeUrl, {
       headers: { ...DISCOVERY_HTML_HEADERS, ...options.headers },
       signal: options.signal,
+      redirect: 'manual',
     })
+    if (response.status >= 300 && response.status < 400) {
+      if (redirectsRemaining <= 0) return undefined
+      const location = response.headers?.get('location')
+      if (!location) return response
+      const redirectUrl = new URL(location, safeUrl).href
+      return discoveryFetch(redirectUrl, options, redirectsRemaining - 1)
+    }
+    return response
   } catch {
     return undefined
   }

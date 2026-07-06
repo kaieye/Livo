@@ -575,3 +575,45 @@ Renderer review findings to handle in later batches:
 - Renderer media-source loading still needs a central policy for private/loopback media URLs.
 - Discovery public fetches still need redirect-aware public-only fetch handling.
 - Feed avatar/title enrichment should classify and skip blocked URLs before best-effort fetches.
+
+## 2026-07-07 - Discovery fetch redirect hardening
+
+### Review inputs
+
+- Network policy review sub-agent found that discovery public fetches validated the initial URL but relied on automatic fetch redirects, so a public discovery endpoint could redirect to a private or loopback target after the policy check.
+- Feed enrichment review sub-agent separately confirmed related private-network gaps in avatar/title fetchers; those broader feed enrichment findings are deferred below.
+- Discovery redirect review sub-agent did not return before the batch was ready and was closed while still running, so no additional findings were incorporated from that review.
+
+### Fixed in this batch
+
+- `discoveryFetch()` now sends `redirect: 'manual'` for discovery probe fetches.
+- Discovery redirects are followed explicitly with a maximum depth of 5.
+- Every redirect hop is resolved against the already-validated response URL and re-enters `assertPublicDiscoveryUrl()` before any fetch is attempted.
+- Redirect targets rejected by the public discovery policy now preserve the existing best-effort probe behavior by returning `undefined` instead of throwing.
+- Added regression coverage for manual redirect mode, per-hop policy validation, blocked redirect targets, and redirect-depth caps.
+
+### Impact analysis
+
+- `discoveryFetch`: HIGH risk. Direct upstream callers are `probeBilibiliUsersByKeyword`, `probeInstagramUsersByKeyword`, `fetchXAvatarByUsername`, `probeXUsersByKeyword`, `fetchYouTubeFollowersByChannelPath`, and `searchYouTubeChannelsByKeyword`. Affected processes include `registerDiscoverHandlers`, `registerIpcHandlers`, `onReady`, and `searchYouTubeChannelsByKeyword`.
+- `assertPublicDiscoveryUrl`: HIGH risk. Direct upstream callers include Bilibili, Instagram, X, YouTube profile, discovery preview, and shared discovery fetch helpers. Affected processes include `registerDiscoverHandlers`, `searchYouTubeChannelsByKeyword`, `registerIpcHandlers`, and `onReady`.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported MEDIUM risk across 3 files, 9 symbols, and 4 affected execution flows. The affected flows were `SearchYouTubeChannelsByKeyword → ParseUrl`, `SearchYouTubeChannelsByKeyword → HasCredentials`, `SearchYouTubeChannelsByKeyword → IsSuspiciousHttpUrl`, and `SearchYouTubeChannelsByKeyword → NormalizeHostnameForNetworkPolicy`; the changed production behavior is limited to manual redirect handling inside `discoveryFetch()`.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/discovery/platform-search.ts src/main/services/discovery/platform-search.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/main/services/discovery/platform-search.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 847 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- Feed avatar/title enrichment should add network-policy wrappers, redirect handling, and image byte limits.
+- Discovery preview/direct URL probes still flow through permissive feed parser behavior until public/private feed policy modes are designed.
+- Feed parser policy modes should preserve local RSSHub, LAN, dev, and intranet compatibility while allowing stricter public discovery paths.
+- Renderer media-source loading still needs a central policy for private/loopback media URLs.
