@@ -1445,3 +1445,46 @@ Renderer review findings to handle in later batches:
 
 - Video navigation still has the normal DNS/time-of-check-to-time-of-use limits of URL validation followed by Chromium navigation; deeper request interception or address pinning would be a separate larger browser-session policy batch.
 - `reading-activity:sync` still needs to move from raw `ipcMain.handle` to `registerChannel` and tighten payload validation.
+
+## 2026-07-07 - Reading activity IPC validation hardening
+
+### Review inputs
+
+- Reading-activity boundary review found that `reading-activity:sync` had a shared IPC contract but bypassed it by registering directly with `ipcMain.handle`.
+- A compromised renderer could submit malformed or oversized reading activity payloads, causing the main process to JSON-stringify and POST them with the logged-in user's bearer token.
+- Review also noted that the existing shared validator was shallow: it accepted arbitrary device ID strings, arbitrary date strings, negative or fractional counts, and unbounded day arrays.
+
+### Fixed in this batch
+
+- Switched `registerReadingActivityHandlers()` from raw `ipcMain.handle` to the standard `registerChannel()` wrapper so `validateIpcArgs()` runs before `syncReadingActivity()`.
+- Tightened the `READING_ACTIVITY_SYNC` contract with a non-empty bounded device ID, conservative device ID character set, maximum 400 day rows, strict calendar-valid `YYYY-MM-DD` day keys, and positive integer counts capped at 1,000,000.
+- Added handler coverage proving the handler is registered through `registerChannel`.
+- Added contract coverage for valid payloads and rejected malformed device IDs, oversized day arrays, invalid dates, negative counts, fractional counts, infinite counts, and excessive counts.
+
+### Impact analysis
+
+- `registerReadingActivityHandlers`: LOW risk. Direct caller is `AppManager.registerIpcHandlers`; affected processes include `registerIpcHandlers` and `onReady`.
+- `syncReadingActivity`: LOW risk. Direct caller remains `registerReadingActivityHandlers`; affected processes include `registerIpcHandlers` and `onReady`.
+- `IPC_CONTRACTS`: LOW risk. The change narrows one existing contract and does not alter unrelated channel schemas.
+
+### Verification
+
+- `pnpm test -- src/main/handlers/reading-activity-handlers.test.ts src/shared/ipc-contracts.test.ts src/main/ipc/register-channel.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 164 passed test files, 948 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/handlers/reading-activity-handlers.ts src/main/handlers/reading-activity-handlers.test.ts src/shared/ipc-contracts.ts src/shared/ipc-contracts.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 5 files, 6 symbols, 0 affected processes, LOW risk.
+  - Changed symbols include `registerReadingActivityHandlers` and `IPC_CONTRACTS`.
+
+### Deferred findings
+
+- `syncReadingActivity()` still uses `sessionStore.getSession()`; switching to stricter local session validity checks can be considered separately if the backend should not be the only expiry authority.
+- Recent log export and diagnostics `recentLogs` remain unredacted.
+- Renderer feed/media caches can still contain tokenized feed or signed media URLs.

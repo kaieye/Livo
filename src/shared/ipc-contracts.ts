@@ -25,6 +25,9 @@ const IPC_FILTER_EXTENSION_MAX_LENGTH = 16
 const IPC_CONTEXT_MENU_ITEMS_MAX_COUNT = 80
 const IPC_IMPORTED_REFRESH_IDS_MAX_COUNT = 100
 const IPC_IMPORTED_REFRESH_ID_MAX_LENGTH = 128
+const IPC_READING_ACTIVITY_DAYS_MAX_COUNT = 400
+const IPC_READING_ACTIVITY_DEVICE_ID_MAX_LENGTH = 128
+const IPC_READING_ACTIVITY_COUNT_MAX = 1_000_000
 
 export const IPC = {
   FEED_ADD: 'feed:add',
@@ -1030,6 +1033,58 @@ function assertAgentTraceListOptions(value: unknown): void {
   }
 }
 
+function assertReadingActivityDeviceId(value: unknown): void {
+  assertString(value, 'deviceId')
+  assertStringLengthRange(value, 'deviceId', {
+    min: 1,
+    max: IPC_READING_ACTIVITY_DEVICE_ID_MAX_LENGTH,
+  })
+  if (!/^[A-Za-z0-9._:-]+$/.test(value)) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      deviceId: 'invalid_format',
+    })
+  }
+}
+
+function assertReadingActivityDayKey(value: unknown, field: string): void {
+  assertString(value, field)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      [field]: 'invalid_date',
+    })
+  }
+  const date = new Date(`${value}T00:00:00.000Z`)
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== value
+  ) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      [field]: 'invalid_date',
+    })
+  }
+}
+
+function assertReadingActivityDays(value: unknown): void {
+  if (
+    !Array.isArray(value) ||
+    value.length > IPC_READING_ACTIVITY_DAYS_MAX_COUNT
+  ) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      days: 'invalid_days',
+    })
+  }
+  for (const [index, day] of value.entries()) {
+    const prefix = `days.${index}`
+    assertObject(day, prefix)
+    assertReadingActivityDayKey(day.day, `${prefix}.day`)
+    assertNumber(day.count, `${prefix}.count`)
+    assertIntegerRange(day.count, `${prefix}.count`, {
+      min: 1,
+      max: IPC_READING_ACTIVITY_COUNT_MAX,
+    })
+  }
+}
+
 function validateEntryListOptions(value: unknown): void {
   assertObject(value, 'options')
   assertOptionalString(value.feedId, 'options.feedId')
@@ -1116,21 +1171,8 @@ export const IPC_CONTRACTS = {
     channel: IPC.READING_ACTIVITY_SYNC,
     validateArgs: (args) => {
       assertArity(IPC.READING_ACTIVITY_SYNC, args, 2)
-      assertString(args[0], 'deviceId')
-      if (!Array.isArray(args[1])) {
-        throw new IpcValidationError('Invalid IPC argument', {
-          days: 'expected_array',
-        })
-      }
-      for (const day of args[1]) {
-        if (!isRecord(day)) {
-          throw new IpcValidationError('Invalid IPC argument', {
-            days: 'expected_object_array',
-          })
-        }
-        assertString(day.day, 'day.day')
-        assertNumber(day.count, 'day.count')
-      }
+      assertReadingActivityDeviceId(args[0])
+      assertReadingActivityDays(args[1])
       return args as IpcArgs<typeof IPC.READING_ACTIVITY_SYNC>
     },
   },

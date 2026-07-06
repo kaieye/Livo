@@ -98,6 +98,65 @@ describe('ipc-contracts', () => {
     )
   })
 
+  it('validates reading activity sync payloads deeply', () => {
+    const validDays = [
+      { day: '2026-07-07', count: 1 },
+      { day: '2026-07-06', count: 42 },
+    ]
+
+    expect(
+      validateIpcArgs(IPC.READING_ACTIVITY_SYNC, [
+        'device_1783420000000_abcd1234',
+        validDays,
+      ]),
+    ).toEqual(['device_1783420000000_abcd1234', validDays])
+    expect(
+      validateIpcArgs(IPC.READING_ACTIVITY_SYNC, ['device-1', []]),
+    ).toEqual(['device-1', []])
+
+    expect(() =>
+      validateIpcArgs(IPC.READING_ACTIVITY_SYNC, ['', validDays]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.READING_ACTIVITY_SYNC, ['bad device', validDays]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.READING_ACTIVITY_SYNC, ['d'.repeat(129), validDays]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.READING_ACTIVITY_SYNC, ['device-1', 'not-days']),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.READING_ACTIVITY_SYNC, [
+        'device-1',
+        Array.from({ length: 401 }, () => ({
+          day: '2026-07-07',
+          count: 1,
+        })),
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.READING_ACTIVITY_SYNC, [
+        'device-1',
+        [{ day: '2026-7-7', count: 1 }],
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.READING_ACTIVITY_SYNC, [
+        'device-1',
+        [{ day: '2026-02-31', count: 1 }],
+      ]),
+    ).toThrow(IpcValidationError)
+    for (const count of [0, -1, 1.5, Number.POSITIVE_INFINITY, 1_000_001]) {
+      expect(() =>
+        validateIpcArgs(IPC.READING_ACTIVITY_SYNC, [
+          'device-1',
+          [{ day: '2026-07-07', count }],
+        ]),
+      ).toThrow(IpcValidationError)
+    }
+  })
+
   it('validates agent run and resume payloads deeply', () => {
     const runPayload = {
       requestId: 'agent-run-1',
