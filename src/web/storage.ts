@@ -6,6 +6,7 @@
 import type { Feed, Entry } from '../shared/types'
 import { FeedViewType, type AppSettings } from '../shared/types'
 import { cloneDefaultSettings, normalizeSettings } from '../shared/settings'
+import { sanitizePersistedUrl } from '../shared/persisted-url-policy'
 
 const DB_NAME = 'livo-web'
 const DB_VERSION = 1
@@ -58,6 +59,34 @@ function getDB(): IDBDatabase {
   return db
 }
 
+function sanitizeOptionalUrl<T extends string | undefined>(value: T): T {
+  return (value ? sanitizePersistedUrl(value) : value) as T
+}
+
+function sanitizeFeedForWebStorage(feed: Feed): Feed {
+  return {
+    ...feed,
+    url: sanitizePersistedUrl(feed.url),
+    siteUrl: sanitizeOptionalUrl(feed.siteUrl),
+    imageUrl: sanitizeOptionalUrl(feed.imageUrl),
+    upstreamUrl: sanitizeOptionalUrl(feed.upstreamUrl),
+  }
+}
+
+function sanitizeEntryForWebStorage(entry: Entry): Entry {
+  return {
+    ...entry,
+    url: sanitizePersistedUrl(entry.url),
+    imageUrl: sanitizeOptionalUrl(entry.imageUrl),
+    authorAvatar: sanitizeOptionalUrl(entry.authorAvatar),
+    media: entry.media?.map((item) => ({
+      ...item,
+      url: sanitizePersistedUrl(item.url),
+      previewUrl: sanitizeOptionalUrl(item.previewUrl),
+    })),
+  }
+}
+
 // ====== Feed Operations ======
 
 export async function getAllFeeds(): Promise<Feed[]> {
@@ -66,7 +95,7 @@ export async function getAllFeeds(): Promise<Feed[]> {
     const store = tx.objectStore('feeds')
     const request = store.getAll()
     request.onsuccess = () => {
-      const feeds = request.result as Feed[]
+      const feeds = (request.result as Feed[]).map(sanitizeFeedForWebStorage)
       // Migrate old feeds without view field
       for (const f of feeds) {
         if ((f as unknown as Record<string, unknown>).view === undefined) {
@@ -89,23 +118,29 @@ export async function getAllFeeds(): Promise<Feed[]> {
 }
 
 export async function getFeedByUrl(url: string): Promise<Feed | undefined> {
+  const sanitizedUrl = sanitizePersistedUrl(url)
   return new Promise((resolve, reject) => {
     const tx = getDB().transaction('feeds', 'readonly')
     const store = tx.objectStore('feeds')
     const index = store.index('url')
-    const request = index.get(url)
-    request.onsuccess = () => resolve(request.result)
+    const request = index.get(sanitizedUrl)
+    request.onsuccess = () =>
+      resolve(
+        request.result
+          ? sanitizeFeedForWebStorage(request.result as Feed)
+          : undefined,
+      )
     request.onerror = () => reject(request.error)
   })
 }
 
 export async function insertFeed(feed: Feed): Promise<void> {
-  const existing = await getFeedByUrl(feed.url)
-  if (existing) return
-  const normalizedFeed: Feed = {
+  const normalizedFeed: Feed = sanitizeFeedForWebStorage({
     ...feed,
     showInAll: feed.showInAll ?? true,
-  }
+  })
+  const existing = await getFeedByUrl(normalizedFeed.url)
+  if (existing) return
 
   return new Promise((resolve, reject) => {
     const tx = getDB().transaction('feeds', 'readwrite')
@@ -129,7 +164,10 @@ export async function updateFeed(
         resolve()
         return
       }
-      const updated = { ...getReq.result, ...updates }
+      const updated = sanitizeFeedForWebStorage({
+        ...(getReq.result as Feed),
+        ...updates,
+      })
       const putReq = store.put(updated)
       putReq.onsuccess = () => resolve()
       putReq.onerror = () => reject(putReq.error)
@@ -187,7 +225,7 @@ export async function getEntries(options: {
     }
 
     request.onsuccess = () => {
-      let entries = request.result as Entry[]
+      let entries = (request.result as Entry[]).map(sanitizeEntryForWebStorage)
 
       if (!options.feedId && options.feedIds && options.feedIds.length > 0) {
         const idSet = new Set(options.feedIds)
@@ -212,18 +250,24 @@ export async function getEntryById(id: string): Promise<Entry | undefined> {
     const tx = getDB().transaction('entries', 'readonly')
     const store = tx.objectStore('entries')
     const request = store.get(id)
-    request.onsuccess = () => resolve(request.result)
+    request.onsuccess = () =>
+      resolve(
+        request.result
+          ? sanitizeEntryForWebStorage(request.result as Entry)
+          : undefined,
+      )
     request.onerror = () => reject(request.error)
   })
 }
 
 export async function insertEntry(entry: Entry): Promise<boolean> {
+  const sanitizedEntry = sanitizeEntryForWebStorage(entry)
   // Check for duplicates by URL
-  if (entry.url) {
+  if (sanitizedEntry.url) {
     const existing = await new Promise<Entry | undefined>((resolve, reject) => {
       const tx = getDB().transaction('entries', 'readonly')
       const index = tx.objectStore('entries').index('url')
-      const req = index.get(entry.url)
+      const req = index.get(sanitizedEntry.url)
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
@@ -233,7 +277,7 @@ export async function insertEntry(entry: Entry): Promise<boolean> {
   return new Promise((resolve, _reject) => {
     const tx = getDB().transaction('entries', 'readwrite')
     const store = tx.objectStore('entries')
-    const request = store.add(entry)
+    const request = store.add(sanitizedEntry)
     request.onsuccess = () => resolve(true)
     request.onerror = () => resolve(false) // Duplicate key, etc.
   })
@@ -252,7 +296,10 @@ export async function updateEntry(
         resolve()
         return
       }
-      const updated = { ...getReq.result, ...updates }
+      const updated = sanitizeEntryForWebStorage({
+        ...(getReq.result as Entry),
+        ...updates,
+      })
       const putReq = store.put(updated)
       putReq.onsuccess = () => resolve()
       putReq.onerror = () => reject(putReq.error)

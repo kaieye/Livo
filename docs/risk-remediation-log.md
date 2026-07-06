@@ -2032,3 +2032,47 @@ Renderer review findings to handle in later batches:
 ### Deferred findings
 
 - Settings schema patch validation, public-only discovery/feed fetch policy, update installer verification, and web IndexedDB URL sanitization remain separate findings.
+
+## 2026-07-07 - Redact web IndexedDB feed and entry URLs
+
+### Review inputs
+
+- Persistence review found web IndexedDB feed and entry rows could durably store credentialed or signed URLs from OPML/RSS/feed content.
+- Existing shared `sanitizePersistedUrl()` already removes URL userinfo, fragments, and common secret/signed query parameters.
+- `sanitizePersistedUrl()` has CRITICAL graph impact, so this batch reuses it unchanged and applies it only at the web storage boundary.
+
+### Fixed in this batch
+
+- Web feed storage now sanitizes `url`, `siteUrl`, `imageUrl`, and `upstreamUrl` before IndexedDB insert/update.
+- Web entry storage now sanitizes `url`, `imageUrl`, `authorAvatar`, and media `url`/`previewUrl` before IndexedDB insert/update.
+- Feed duplicate lookup now uses the sanitized persisted feed URL.
+- Legacy feed and entry rows returned from storage reads are sanitized in memory before reaching callers.
+- Added web storage tests for legacy feed reads, feed writes, entry writes, and entry updates with userinfo, token, refresh token, API key, and signed URL parameters.
+
+### Impact analysis
+
+- `insertFeed`: LOW risk. GitNexus reported direct callers `web-api.add` and `web-api.importOPML`.
+- `updateFeed`: LOW risk. GitNexus reported direct callers `web-api.refresh`, `web-api.refreshAll`, and `web-api.update`; affected processes are the web refresh flows.
+- `insertEntry`: LOW risk. GitNexus reported direct callers `web-api.add`, `web-api.refresh`, `web-api.refreshAll`, and `web-api.importOPML`; affected processes are the web refresh flows.
+- `updateEntry`: LOW risk. GitNexus reported direct callers `web-api.markRead`, `web-api.toggleStar`, `web-api.saveProgress`, and `web-api.summarizeEntry`.
+
+### Verification
+
+- `pnpm test -- src/web/storage.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 169 passed test files, 986 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/web/storage.ts src/web/storage.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed after formatting `src/web/storage.test.ts`.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 3 files, 13 symbols, 0 affected processes, LOW risk.
+  - Changed symbols include `getAllFeeds`, `getFeedByUrl`, `updateFeed`, `getEntries`, `insertEntry`, and `updateEntry`.
+
+### Deferred findings
+
+- This batch does not redact embedded URLs inside entry text/content fields because that can alter article content.
+- Web settings secret persistence, web digest-run text redaction, legacy WeChat token cleanup, public-only discovery/feed fetch policy, and update installer verification remain separate findings.
