@@ -30,6 +30,7 @@ import { useEntryAvatar } from '../hooks/useEntryAvatar'
 import { useEntryExpanded } from '../hooks/useEntryExpanded'
 import { useEntryMediaState } from '../hooks/useEntryMediaState'
 import { useEntryAI } from '../hooks/useEntryAI'
+import { openExternalUrlSafe } from '../../../../services/external-url'
 import { cleanRelativeTime } from '../utils/entry-text'
 import {
   parseSocialHandle,
@@ -107,6 +108,24 @@ export const SocialMediaItem = memo(function SocialMediaItem({
     if (fromFeed.type !== 'other' && fromFeed.handle) return fromFeed
     return parseSocialHandle(canonicalEntryUrl)
   }, [canonicalFeedUrl, canonicalEntryUrl])
+  const profileUrl = useMemo(() => {
+    if (!parsed.handle) return null
+    const normalizedHandle = normalizeSocialHandle(parsed.handle)
+    switch (parsed.type) {
+      case 'x':
+        return `https://x.com/${normalizedHandle}`
+      case 'telegram':
+        return `https://t.me/${parsed.handle}`
+      case 'bluesky':
+        return `https://bsky.app/profile/${parsed.handle}`
+      case 'threads':
+        return `https://www.threads.net/@${normalizedHandle}`
+      case 'truth':
+        return `https://truthsocial.com/@${normalizedHandle}`
+      default:
+        return null
+    }
+  }, [parsed.handle, parsed.type])
   const authorName = useMemo(() => {
     return resolveSocialAuthorName({
       entryAuthor: entry.author,
@@ -379,23 +398,17 @@ export const SocialMediaItem = memo(function SocialMediaItem({
                 normalizeSocialHandle(parsed.handle).toLowerCase() !==
                   normalizeSocialHandle(authorName).toLowerCase() && (
                   <a
-                    href={
-                      parsed.type === 'x'
-                        ? `https://x.com/${normalizeSocialHandle(parsed.handle)}`
-                        : parsed.type === 'telegram'
-                          ? `https://t.me/${parsed.handle}`
-                          : parsed.type === 'bluesky'
-                            ? `https://bsky.app/profile/${parsed.handle}`
-                            : parsed.type === 'threads'
-                              ? `https://www.threads.net/@${normalizeSocialHandle(parsed.handle)}`
-                              : parsed.type === 'truth'
-                                ? `https://truthsocial.com/@${normalizeSocialHandle(parsed.handle)}`
-                                : '#'
-                    }
+                    href={profileUrl || '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-zinc-500 hover:underline"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (profileUrl) {
+                        void openExternalUrlSafe(profileUrl)
+                      }
+                    }}
                   >
                     @{normalizeSocialHandle(parsed.handle)}
                   </a>

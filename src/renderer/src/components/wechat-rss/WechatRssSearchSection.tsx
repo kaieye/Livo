@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Search, Loader2, Plus, Rss, ExternalLink } from 'lucide-react'
 import type { WechatSearchResult } from '../../lib/wechat-rss-api'
+import { openExternalUrlSafe } from '../../services/external-url'
 
 interface Props {
   searchQuery: string
@@ -160,6 +161,10 @@ function ResultRow({
             href={item.rssUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(event) => {
+              event.preventDefault()
+              void openExternalUrlSafe(item.rssUrl)
+            }}
             className="inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2.5 py-1 text-xs text-neutral-500 transition-colors hover:border-neutral-300 hover:text-neutral-700 dark:border-neutral-700 dark:hover:border-neutral-600 dark:hover:text-neutral-300"
           >
             <ExternalLink className="h-3 w-3" />

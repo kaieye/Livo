@@ -8,6 +8,7 @@ import {
   Loader2,
   Sparkles,
 } from 'lucide-react'
+import { openExternalUrlSafe } from '../../services/external-url'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -209,7 +210,11 @@ export function CuratedFeedRow({
           href={feed.siteUrl || feed.url}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void openExternalUrlSafe(feed.siteUrl || feed.url)
+          }}
           className="text-text-tertiary hover:bg-surface-secondary hover:text-text-secondary rounded-lg p-1.5 opacity-0 transition-colors focus:opacity-100 group-hover:opacity-100 dark:hover:bg-white/10"
           title={t('discover.viewSource')}
         >

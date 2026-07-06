@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useFeedStore } from '../../store/feed-store'
 import { useSettingsStore } from '../../store/settings-store'
+import { openExternalUrlSafe } from '../../services/external-url'
 import {
   FeedViewType,
   VIEW_DEFINITIONS,
@@ -326,7 +327,11 @@ export function FeedsSettings() {
                 </button>
                 {feed.siteUrl && (
                   <button
-                    onClick={() => window.open(feed.siteUrl, '_blank')}
+                    onClick={() => {
+                      if (feed.siteUrl) {
+                        void openExternalUrlSafe(feed.siteUrl)
+                      }
+                    }}
                     className="hover:text-text-primary text-text-secondary hover:bg-surface-secondary dark:text-text-dark-secondary dark:hover:bg-surface-dark dark:hover:text-text-dark-primary rounded p-1"
                     title={t('settings.visitWebsite')}
                   >

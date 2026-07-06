@@ -12,6 +12,7 @@ import {
 import type { DiscoverSearchResult } from '../../lib/discover-search'
 import { buildDiscoverInstagramPlaceholderAvatar } from '../../lib/discover-avatar'
 import { inferDiscoverPlatform } from '../../lib/discover-platform-presentation'
+import { openExternalUrlSafe } from '../../services/external-url'
 
 /**
  * Visual representation of a single Discover search result.
@@ -226,9 +227,9 @@ export function DiscoverResultRow({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(event) => {
-            // Stop propagation so the row's onClick doesn't also fire.
-            // The native target="_blank" handles opening the new tab.
+            event.preventDefault()
             event.stopPropagation()
+            void openExternalUrlSafe(result.url)
           }}
           className="text-text-tertiary hover:bg-surface-secondary hover:text-text-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 opacity-0 transition-colors focus:opacity-100 group-hover:opacity-100"
           title={t('discover.viewSource')}

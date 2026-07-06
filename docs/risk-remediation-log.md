@@ -331,3 +331,50 @@ Renderer review findings to handle in later batches:
 
 - Renderer/settings/discovery/profile/social anchors still need the separate safe-opener pass identified by the renderer link review.
 - General feed/readability/discovery/video fetch paths still need a broader private-network, redirect, and DNS-rebinding policy pass outside the already-hardened OPML path.
+
+## 2026-07-07 - Renderer anchor safe-opener sweep
+
+### Review inputs
+
+- Renderer/web external-open review sub-agent inspected remaining direct external-open and `_blank` anchor paths after the article-link hardening batch.
+- Confirmed high-risk bypasses in `FeedsSettings`, discovery result/source links, recommended-feed source links, and `WideViewContent` video modal original links.
+- Confirmed medium-risk bypasses in WeChat RSS result links and social profile links, plus a low-risk static GitHub link in About settings.
+
+### Fixed in this batch
+
+- `FeedsSettings` feed website buttons now route feed metadata URLs through `openExternalUrlSafe()`.
+- Discovery source links in `DiscoverResultRow`, `DiscoverPanel`, and `RecommendedFeedsDrawer` now prevent native `_blank` opening and route the same targets through `openExternalUrlSafe()`.
+- `WideViewContent` video modal original-entry links now route through `openExternalUrlSafe()`.
+- WeChat RSS search result links now route RSS URLs through `openExternalUrlSafe()`.
+- `SocialMediaItem` now computes a single social profile URL and routes profile clicks through `openExternalUrlSafe()` while preserving the rendered `href`.
+- The static About settings GitHub link now routes through `openExternalUrlSafe()` for consistency.
+
+### Impact analysis
+
+- `FeedsSettings`: LOW risk by symbol impact. No upstream callers or affected processes reported.
+- `DiscoverResultRow`: LOW risk. Direct upstream caller: `DiscoverPanel`.
+- `DiscoverPanel`: LOW risk. No upstream callers or affected processes reported.
+- `CuratedFeedRow`: LOW risk. Direct upstream callers: `DiscoverPanel` and `RecommendedFeedsDrawer`.
+- `VideoModal`: LOW risk. Direct upstream caller: `WideViewContent`; affected process: `WideViewContent`.
+- `ResultRow` in `WechatRssSearchSection`: LOW risk. Direct upstream caller: `WechatRssSearchSection`; indirect caller: `WechatRssPage`.
+- `SocialMediaItem`: HIGH risk after UID disambiguation. Direct upstream callers are `TimelineEntryCard` and `SocialLayout`; affected process: `EntryList`.
+- `AboutSettings`: LOW risk. No upstream callers or affected processes reported.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported HIGH risk across 9 files, 14 symbols, and 10 affected execution flows. The high effective scope is expected because `SocialMediaItem` participates in the entry list rendering path; changed behavior is limited to intercepting external-link clicks and routing the same URLs through the shared safe opener.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/components/settings/FeedsSettings.tsx src/renderer/src/components/discover/DiscoverResultRow.tsx src/renderer/src/components/discover/DiscoverPanel.tsx src/renderer/src/components/discover/RecommendedFeedsDrawer.tsx src/renderer/src/components/entry/WideViewContent.tsx src/renderer/src/components/wechat-rss/WechatRssSearchSection.tsx src/renderer/src/components/entry/entry-list/items/SocialMediaItem.tsx src/renderer/src/components/settings/AboutSettings.tsx`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/renderer/src/lib/social-url.test.ts src/renderer/src/lib/discover-search.test.ts src/renderer/src/lib/discover-avatar.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 837 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- `AIChatMarkdown` still has a `_blank` markdown-link path and should be reviewed separately to confirm whether it already routes through the safe opener at click time.
+- General feed/readability/discovery/video fetch paths still need a broader private-network, redirect, and DNS-rebinding policy pass outside the already-hardened OPML path.

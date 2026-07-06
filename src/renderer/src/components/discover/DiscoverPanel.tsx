@@ -25,6 +25,7 @@ import { useAuthStore } from '../../store/auth-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useEntryStore } from '../../store/entry-store'
 import { useStoreShallow } from '../../store/helpers'
+import { openExternalUrlSafe } from '../../services/external-url'
 import { EntryContent } from '../entry/EntryContent'
 import { SocialDetailView } from '../entry/SocialDetailView'
 import { ROUTES } from '../../router/route-paths'
@@ -909,6 +910,13 @@ export function DiscoverPanel() {
                   href={previewTarget.siteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    if (previewTarget.siteUrl) {
+                      void openExternalUrlSafe(previewTarget.siteUrl)
+                    }
+                  }}
                   className="hover:text-text-primary text-text-secondary hover:bg-surface-secondary rounded-md p-1.5 transition-colors"
                   title={t('discoverPreview.openSource')}
                 >

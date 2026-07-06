@@ -1342,7 +1342,11 @@ function VideoModal({
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-accent inline-flex items-center gap-1 hover:underline"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          void openExternalUrlSafe(entry.url)
+                        }}
                       >
                         <ExternalLink size={11} />
                         {t('common.original')}
@@ -1429,7 +1433,11 @@ function VideoModal({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-accent inline-flex items-center gap-1 hover:underline"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      void openExternalUrlSafe(entry.url)
+                    }}
                   >
                     <ExternalLink size={11} />
                     {t('common.original')}

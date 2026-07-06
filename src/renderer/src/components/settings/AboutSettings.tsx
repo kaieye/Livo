@@ -271,6 +271,10 @@ export function AboutSettings() {
           href="https://github.com/kaieye/Livo"
           target="_blank"
           rel="noopener noreferrer"
+          onClick={(event) => {
+            event.preventDefault()
+            void openExternalUrlSafe('https://github.com/kaieye/Livo')
+          }}
           className="text-text-secondary hover:text-accent flex items-center gap-1.5 text-sm transition-colors"
         >
           <Github size={16} />
