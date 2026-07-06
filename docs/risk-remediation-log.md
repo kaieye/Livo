@@ -1357,3 +1357,48 @@ Renderer review findings to handle in later batches:
 - Recent log export and diagnostics `recentLogs` remain unredacted; add log redaction for bearer tokens, API-key query parameters, cookies, authorization headers, and URL userinfo in a dedicated logging batch.
 - Renderer feed/media caches can still contain tokenized feed or signed media URLs; sanitize those caches separately to avoid changing feed refresh/export semantics in this settings batch.
 - Webview private/internal URL loading, video in-app private DNS navigation, and reading-activity IPC validation remain separate renderer-to-main boundary follow-ups.
+
+## 2026-07-07 - Webview literal private URL attachment hardening
+
+### Review inputs
+
+- Renderer-to-main boundary review found that the main window `will-attach-webview` handler only used `classifyExternalUrl(params.src)`, which blocks malformed, unsupported, and credential-bearing URLs but does not block literal localhost, RFC1918, link-local, or metadata IP webview sources.
+- Webview follow-up review confirmed the patch closes the literal private/loopback initial `src` hole while leaving DNS-resolved private hostnames as a residual risk because Electron `will-attach-webview` is synchronous and runs before the child webContents navigation handlers exist.
+- Video in-app private DNS navigation and reading-activity IPC validation were confirmed as separate valid findings and are deferred to their own batches.
+
+### Fixed in this batch
+
+- Added `classifyWebviewAttachmentUrl()` in `WindowManager` to reject unsupported schemes, malformed URLs, credential-bearing URLs, and literal private or loopback webview hosts before attachment.
+- Reused the existing synchronous stored-media URL policy so this batch does not alter the CRITICAL shared DNS/network fetch policy used by feed, discovery, download, and external-open flows.
+- Updated the `will-attach-webview` handler to prevent attachment and log the block reason whenever the classifier rejects the initial `src`.
+- Kept the existing webview privilege stripping for allowed public attachments: no preload, no Node integration, context isolation enabled, sandbox enabled, web security enabled, and insecure content disabled.
+- Added regression coverage for the classifier and the actual Electron event handlers, including blocked localhost/RFC1918/link-local/file/credentialed attachments, allowed public attachment hardening, denied webview popups, and blocked later webview navigations through `safeOpenExternal`.
+
+### Impact analysis
+
+- `WindowManager.bindWindowEvents`: LOW risk. Direct caller is `WindowManager.createMainWindow`; affected processes include `onReady` and `handleActivate`.
+- `WindowManager`: HIGH risk. Direct upstream imports and accesses include app manager, app handlers, menu, and window lifecycle flows; affected processes include `onReady` and `handleActivate`.
+- `classifyNetworkFetchUrl`: CRITICAL risk across feed, discovery, download, video, external-open, and window flows. This batch intentionally did not change its semantics.
+
+### Verification
+
+- `pnpm test -- src/main/window-manager.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 163 passed test files, 943 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/window-manager.ts src/main/window-manager.test.ts src/shared/media-url-policy.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 3 files, 16 symbols, 8 affected execution flows, HIGH risk.
+  - Changed symbols include `WindowManager` and `bindWindowEvents`.
+  - Affected flows include `BindWindowEvents` URL policy paths plus `HandleActivate` and `OnReady` window lifecycle flows.
+
+### Deferred findings
+
+- DNS-resolved private webview hostnames can still pass the synchronous attachment check; a full fix likely needs request-level DNS-aware navigation cancellation in the webview session.
+- `VIDEO_OPEN_IN_APP` still needs DNS-aware private/internal host validation and redirect guarding.
+- `reading-activity:sync` still needs to move from raw `ipcMain.handle` to `registerChannel` and tighten payload validation.

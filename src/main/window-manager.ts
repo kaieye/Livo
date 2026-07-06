@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { DeepLinkAction } from '../shared/deep-link'
+import { isAllowedStoredMediaUrl } from '../shared/media-url-policy'
 import { classifyExternalUrl } from '../shared/url-policy'
 import type { AppCommandPayload } from '../shared/types'
 import { getAppIconPath } from './app-icon'
@@ -15,6 +16,33 @@ import {
 } from './services/system/window-state'
 
 const MAIN_WINDOW_READY_TIMEOUT_MS = 10000
+
+export function classifyWebviewAttachmentUrl(rawUrl: string): {
+  allowed: boolean
+  url: string
+  blockedReason: string | null
+} {
+  const externalPolicy = classifyExternalUrl(rawUrl)
+  if (externalPolicy.blocked) {
+    return {
+      allowed: false,
+      url: externalPolicy.url,
+      blockedReason: externalPolicy.blockedReason,
+    }
+  }
+  if (!isAllowedStoredMediaUrl(externalPolicy.url)) {
+    return {
+      allowed: false,
+      url: externalPolicy.url,
+      blockedReason: 'private-network',
+    }
+  }
+  return {
+    allowed: true,
+    url: externalPolicy.url,
+    blockedReason: null,
+  }
+}
 
 interface WindowManagerOptions {
   isDev: boolean
@@ -326,8 +354,8 @@ export class WindowManager {
     mainWindow.webContents.on(
       'will-attach-webview',
       (event, webPreferences, params) => {
-        const policy = classifyExternalUrl(params.src || '')
-        if (policy.blocked) {
+        const policy = classifyWebviewAttachmentUrl(params.src || '')
+        if (!policy.allowed) {
           event.preventDefault()
           logWarn('[window] blocked webview attachment', {
             url: params.src,
