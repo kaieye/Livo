@@ -7,8 +7,6 @@ interface AIChatMarkdownProps {
   content: string
 }
 
-type LinkClickHandler = React.MouseEventHandler<HTMLAnchorElement>
-
 /**
  * Renders AI assistant markdown content with secure link handling.
  *
@@ -23,32 +21,24 @@ type LinkClickHandler = React.MouseEventHandler<HTMLAnchorElement>
  *   headings, and links to match the chat bubble aesthetic in both light and dark mode.
  */
 export function AIChatMarkdown({ content }: AIChatMarkdownProps) {
-  const handleLinkClick: LinkClickHandler = useCallback(
-    (e: React.MouseEvent<HTMLAnchorElement>) => {
-      const href = e.currentTarget.getAttribute('href')
-      if (!href) {
-        e.preventDefault()
-        return
-      }
+  const openMarkdownLink = useCallback((href: string | undefined) => {
+    if (!href) {
+      return
+    }
 
-      e.preventDefault()
-      void openExternalUrlSafe(href)
-    },
-    [],
-  )
+    void openExternalUrlSafe(href)
+  }, [])
 
   const components: Partial<Components> = {
-    a({ href, children, ...props }) {
+    a({ href, children }) {
       return (
-        <a
-          href={href}
-          onClick={handleLinkClick}
-          rel="noopener noreferrer"
-          target="_blank"
-          {...props}
+        <button
+          type="button"
+          className="text-accent inline cursor-pointer border-0 bg-transparent p-0 text-left underline [font:inherit] hover:opacity-80"
+          onClick={() => openMarkdownLink(href)}
         >
           {children}
-        </a>
+        </button>
       )
     },
     // Ensure code blocks render with proper monospace font

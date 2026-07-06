@@ -378,3 +378,40 @@ Renderer review findings to handle in later batches:
 
 - `AIChatMarkdown` still has a `_blank` markdown-link path and should be reviewed separately to confirm whether it already routes through the safe opener at click time.
 - General feed/readability/discovery/video fetch paths still need a broader private-network, redirect, and DNS-rebinding policy pass outside the already-hardened OPML path.
+
+## 2026-07-07 - AI markdown link hardening
+
+### Review inputs
+
+- AI markdown link review sub-agent confirmed normal left-clicks already called `openExternalUrlSafe()`.
+- The same review found a native-navigation bypass: rendered markdown links still had `href` plus `target="_blank"`, so middle-click or context-menu "open link" could open AI-generated URLs without the safe opener.
+- The review also flagged the `{...props}` spread after controlled link props as a low-risk future robustness issue.
+
+### Fixed in this batch
+
+- AI markdown links now render as link-styled buttons instead of native anchors.
+- AI-generated markdown URLs no longer expose native `href` or `target="_blank"` navigation affordances.
+- Button activation routes the markdown URL through `openExternalUrlSafe()`.
+- The anchor props spread was removed from the custom link renderer, so future markdown props cannot override controlled navigation behavior.
+
+### Impact analysis
+
+- `AIChatMarkdown`: LOW risk. Direct upstream callers are `AIChatMessageList` and `DigestContent`; one affected process, `AIChatPanel`, was reported by initial impact analysis.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 2 files, 3 symbols, and 0 affected execution flows.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/components/ai/AIChatMarkdown.tsx`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/renderer/src/lib/ai-summary-session-model.test.ts src/renderer/src/lib/agent-trace-panel-model.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 837 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- General feed/readability/discovery/video fetch paths still need a broader private-network, redirect, and DNS-rebinding policy pass outside the already-hardened OPML path.
