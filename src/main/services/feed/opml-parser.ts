@@ -10,6 +10,25 @@ export interface OPMLFeed {
   category?: string
 }
 
+export interface ParseOPMLOptions {
+  maxFeeds?: number
+  maxOutlineTags?: number
+  maxCategoryDepth?: number
+  maxAttributeTextLength?: number
+}
+
+const DEFAULT_MAX_FEEDS = 1000
+const DEFAULT_MAX_OUTLINE_TAGS = 10_000
+const DEFAULT_MAX_CATEGORY_DEPTH = 32
+const DEFAULT_MAX_ATTRIBUTE_TEXT_LENGTH = 2048
+
+export class OPMLParseLimitError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'OPMLParseLimitError'
+  }
+}
+
 /**
  * Parse OPML XML string into a list of feeds.
  * Supports arbitrarily nested outline elements (folders as categories).
@@ -17,7 +36,17 @@ export interface OPMLFeed {
  * Uses a tag-by-tag state machine instead of regex to correctly handle
  * nested `<outline>` groups at any depth.
  */
-export function parseOPML(xml: string): OPMLFeed[] {
+export function parseOPML(
+  xml: string,
+  options: ParseOPMLOptions = {},
+): OPMLFeed[] {
+  const limits = {
+    maxFeeds: options.maxFeeds ?? DEFAULT_MAX_FEEDS,
+    maxOutlineTags: options.maxOutlineTags ?? DEFAULT_MAX_OUTLINE_TAGS,
+    maxCategoryDepth: options.maxCategoryDepth ?? DEFAULT_MAX_CATEGORY_DEPTH,
+    maxAttributeTextLength:
+      options.maxAttributeTextLength ?? DEFAULT_MAX_ATTRIBUTE_TEXT_LENGTH,
+  }
   const feeds: OPMLFeed[] = []
 
   // Extract <body> content
@@ -29,41 +58,53 @@ export function parseOPML(xml: string): OPMLFeed[] {
   // Tokenize: find every <outline ...>, <outline ... />, and </outline> tag
   const tagRegex =
     /<outline\s([^>]*?)\/\s*>|<outline\s([^>]*?)>|<\/outline\s*>/gi
-  const tokens: Array<
-    | { type: 'self-close'; attrs: string }
-    | { type: 'open'; attrs: string }
-    | { type: 'close' }
-  > = []
-
-  let m: RegExpExecArray | null
-  while ((m = tagRegex.exec(body)) !== null) {
-    if (m[1] !== undefined) {
-      // Self-closing: <outline ... />
-      tokens.push({ type: 'self-close', attrs: m[1] })
-    } else if (m[2] !== undefined) {
-      // Opening: <outline ...>
-      tokens.push({ type: 'open', attrs: m[2] })
-    } else {
-      // Closing: </outline>
-      tokens.push({ type: 'close' })
-    }
-  }
 
   // Walk tokens with a category stack
   const categoryStack: string[] = []
+  let outlineTagCount = 0
 
-  for (const token of tokens) {
+  let m: RegExpExecArray | null
+  while ((m = tagRegex.exec(body)) !== null) {
+    outlineTagCount += 1
+    if (outlineTagCount > limits.maxOutlineTags) {
+      throw new OPMLParseLimitError(
+        `OPML contains too many outline tags (max ${limits.maxOutlineTags})`,
+      )
+    }
+
+    const token:
+      | { type: 'self-close'; attrs: string }
+      | { type: 'open'; attrs: string }
+      | { type: 'close' } =
+      m[1] !== undefined
+        ? { type: 'self-close', attrs: m[1] }
+        : m[2] !== undefined
+          ? { type: 'open', attrs: m[2] }
+          : { type: 'close' }
+
     if (token.type === 'close') {
       categoryStack.pop()
       continue
     }
 
     const attrs = token.type === 'self-close' ? token.attrs : token.attrs
-    const xmlUrl = getAttr(attrs, 'xmlUrl') || getAttr(attrs, 'xmlurl')
-    const title = getAttr(attrs, 'title') || getAttr(attrs, 'text') || ''
-    const htmlUrl = getAttr(attrs, 'htmlUrl') || getAttr(attrs, 'htmlurl')
+    const xmlUrl =
+      getBoundedAttr(attrs, 'xmlUrl', limits.maxAttributeTextLength) ||
+      getBoundedAttr(attrs, 'xmlurl', limits.maxAttributeTextLength)
+    const title =
+      getBoundedAttr(attrs, 'title', limits.maxAttributeTextLength) ||
+      getBoundedAttr(attrs, 'text', limits.maxAttributeTextLength) ||
+      ''
+    const htmlUrl =
+      getBoundedAttr(attrs, 'htmlUrl', limits.maxAttributeTextLength) ||
+      getBoundedAttr(attrs, 'htmlurl', limits.maxAttributeTextLength)
 
     if (xmlUrl) {
+      if (feeds.length >= limits.maxFeeds) {
+        throw new OPMLParseLimitError(
+          `OPML contains too many feeds (max ${limits.maxFeeds})`,
+        )
+      }
       // This is a feed leaf
       feeds.push({
         title: title || xmlUrl,
@@ -80,6 +121,11 @@ export function parseOPML(xml: string): OPMLFeed[] {
         categoryStack.push(title || '')
       }
     } else if (token.type === 'open') {
+      if (categoryStack.length >= limits.maxCategoryDepth) {
+        throw new OPMLParseLimitError(
+          `OPML category nesting is too deep (max ${limits.maxCategoryDepth})`,
+        )
+      }
       // This is a folder/category
       categoryStack.push(
         title ||
@@ -92,6 +138,20 @@ export function parseOPML(xml: string): OPMLFeed[] {
   }
 
   return feeds
+}
+
+function getBoundedAttr(
+  attrs: string,
+  name: string,
+  maxLength: number,
+): string {
+  const value = getAttr(attrs, name)
+  if (value.length > maxLength) {
+    throw new OPMLParseLimitError(
+      `OPML attribute "${name}" is too large (max ${maxLength})`,
+    )
+  }
+  return value
 }
 
 function getAttr(attrs: string, name: string): string {

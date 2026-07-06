@@ -23,6 +23,8 @@ const IPC_FILTERS_MAX_COUNT = 8
 const IPC_FILTER_NAME_MAX_LENGTH = 80
 const IPC_FILTER_EXTENSION_MAX_LENGTH = 16
 const IPC_CONTEXT_MENU_ITEMS_MAX_COUNT = 80
+const IPC_IMPORTED_REFRESH_IDS_MAX_COUNT = 100
+const IPC_IMPORTED_REFRESH_ID_MAX_LENGTH = 128
 
 export const IPC = {
   FEED_ADD: 'feed:add',
@@ -821,6 +823,27 @@ function assertOptionalStringArray(
   if (value !== undefined) assertStringArray(value, field)
 }
 
+function assertBoundedStringArray(
+  value: unknown,
+  field: string,
+  options: { maxCount: number; maxItemLength: number },
+): asserts value is string[] {
+  if (!Array.isArray(value) || value.length > options.maxCount) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      [field]: `max_items_${options.maxCount}`,
+    })
+  }
+
+  for (const [index, item] of value.entries()) {
+    const itemField = `${field}.${index}`
+    assertString(item, itemField)
+    assertStringLengthRange(item, itemField, {
+      min: 1,
+      max: options.maxItemLength,
+    })
+  }
+}
+
 function assertOptionalBoolean(
   value: unknown,
   field: string,
@@ -1075,7 +1098,10 @@ export const IPC_CONTRACTS = {
     channel: IPC.FEED_REFRESH_IMPORTED,
     validateArgs: (args) => {
       assertArity(IPC.FEED_REFRESH_IMPORTED, args, 1)
-      assertStringArray(args[0], 'feedIds')
+      assertBoundedStringArray(args[0], 'feedIds', {
+        maxCount: IPC_IMPORTED_REFRESH_IDS_MAX_COUNT,
+        maxItemLength: IPC_IMPORTED_REFRESH_ID_MAX_LENGTH,
+      })
       return args as IpcArgs<typeof IPC.FEED_REFRESH_IMPORTED>
     },
   },

@@ -1,0 +1,71 @@
+import { describe, expect, it } from 'vitest'
+import { OPMLParseLimitError, parseOPML } from './opml-parser'
+
+function opmlBody(body: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <body>
+${body}
+  </body>
+</opml>`
+}
+
+describe('parseOPML', () => {
+  it('parses nested feed outlines with categories', () => {
+    const feeds = parseOPML(
+      opmlBody(`
+    <outline text="Tech">
+      <outline text="Example" xmlUrl="https://example.com/feed.xml" htmlUrl="https://example.com" />
+    </outline>`),
+    )
+
+    expect(feeds).toEqual([
+      {
+        title: 'Example',
+        xmlUrl: 'https://example.com/feed.xml',
+        htmlUrl: 'https://example.com',
+        category: 'Tech',
+      },
+    ])
+  })
+
+  it('rejects OPML that exceeds parser resource limits', () => {
+    expect(() =>
+      parseOPML(
+        opmlBody(`
+    <outline text="One" xmlUrl="https://example.com/one.xml" />
+    <outline text="Two" xmlUrl="https://example.com/two.xml" />`),
+        { maxFeeds: 1 },
+      ),
+    ).toThrow(OPMLParseLimitError)
+
+    expect(() =>
+      parseOPML(
+        opmlBody(`
+    <outline text="Folder">
+      <outline text="Nested">
+        <outline text="Too deep" xmlUrl="https://example.com/feed.xml" />
+      </outline>
+    </outline>`),
+        { maxCategoryDepth: 1 },
+      ),
+    ).toThrow(OPMLParseLimitError)
+
+    expect(() =>
+      parseOPML(
+        opmlBody(`
+    <outline text="One" xmlUrl="https://example.com/one.xml" />
+    <outline text="Two" xmlUrl="https://example.com/two.xml" />`),
+        { maxOutlineTags: 1 },
+      ),
+    ).toThrow(OPMLParseLimitError)
+
+    expect(() =>
+      parseOPML(
+        opmlBody(`
+    <outline text="${'x'.repeat(20)}" xmlUrl="https://example.com/feed.xml" />`),
+        { maxAttributeTextLength: 10 },
+      ),
+    ).toThrow(OPMLParseLimitError)
+  })
+})

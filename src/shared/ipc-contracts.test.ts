@@ -226,6 +226,11 @@ describe('ipc-contracts', () => {
         [{ id: 'copy', label: 'Copy', disabled: false }],
       ]),
     ).toEqual([[{ id: 'copy', label: 'Copy', disabled: false }]])
+    expect(
+      validateIpcArgs(IPC.FEED_REFRESH_IMPORTED, [
+        ['feed-1', 'feed-2', 'feed-3'],
+      ]),
+    ).toEqual([['feed-1', 'feed-2', 'feed-3']])
 
     expect(() =>
       validateIpcArgs(IPC.APP_REPORT_ERROR, [{ source: '', message: 'boom' }]),
@@ -262,6 +267,17 @@ describe('ipc-contracts', () => {
       validateIpcArgs(IPC.MENU_SHOW_CONTEXT, [
         [{ id: 'copy', label: 'x'.repeat(513) }],
       ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.FEED_REFRESH_IMPORTED, [
+        Array.from({ length: 101 }, (_, index) => `feed-${index}`),
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.FEED_REFRESH_IMPORTED, [['feed-1', '']]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.FEED_REFRESH_IMPORTED, [['x'.repeat(129)]]),
     ).toThrow(IpcValidationError)
   })
 

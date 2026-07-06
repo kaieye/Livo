@@ -1,7 +1,8 @@
 import { dialog } from 'electron'
 import { getEventBus } from '../services/system/event-bus'
 import { v4 as uuidv4 } from 'uuid'
-import { readFileSync } from 'fs'
+import { readFile, stat } from 'fs/promises'
+import { extname } from 'path'
 import {
   IPC,
   FeedViewType,
@@ -29,6 +30,7 @@ import {
   loadRefreshLogs,
   clearRefreshLogs,
 } from '../services/system/refresh-log-store'
+import { assertNetworkFetchUrl } from '../services/system/network-url-policy'
 import { formatFeedTitle } from '../services/feed/feed-title'
 import { buildEntriesFromParsedItems } from '../services/entry/entry-builder'
 import { detectViewType } from '../services/feed/feed-view'
@@ -42,6 +44,28 @@ import {
 import { exportOPML } from '../operations/data-operations'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
+const OPML_IMPORT_MAX_FILE_BYTES = 5 * 1024 * 1024
+const OPML_IMPORT_MAX_FEEDS = 1000
+const OPML_IMPORT_EXTENSIONS = new Set(['.opml', '.xml'])
+const OPML_REFRESH_MAX_FEED_IDS = 100
+const OPML_IMPORT_MAX_ERROR_COUNT = 50
+
+async function readOpmlImportFile(filePath: string): Promise<string> {
+  const extension = extname(filePath).toLowerCase()
+  if (!OPML_IMPORT_EXTENSIONS.has(extension)) {
+    throw new Error('Only OPML or XML files can be imported')
+  }
+
+  const fileStats = await stat(filePath)
+  if (!fileStats.isFile()) {
+    throw new Error('Selected OPML path is not a file')
+  }
+  if (fileStats.size > OPML_IMPORT_MAX_FILE_BYTES) {
+    throw new Error('OPML file is too large')
+  }
+
+  return readFile(filePath, 'utf-8')
+}
 
 function toRendererFeed(feed: Feed): Feed {
   const folder =
@@ -169,10 +193,7 @@ export function registerFeedHandlers(): void {
   registerChannel(IPC.FEED_IMPORT_OPML, async () => {
     const result = await dialog.showOpenDialog({
       title: 'Import OPML file',
-      filters: [
-        { name: 'OPML Files', extensions: ['opml', 'xml'] },
-        { name: 'All Files', extensions: ['*'] },
-      ],
+      filters: [{ name: 'OPML Files', extensions: ['opml', 'xml'] }],
       properties: ['openFile'],
     })
 
@@ -181,8 +202,8 @@ export function registerFeedHandlers(): void {
     }
 
     try {
-      const content = readFileSync(result.filePaths[0], 'utf-8')
-      const opmlFeeds = parseOPML(content)
+      const content = await readOpmlImportFile(result.filePaths[0])
+      const opmlFeeds = parseOPML(content, { maxFeeds: OPML_IMPORT_MAX_FEEDS })
 
       if (opmlFeeds.length === 0) {
         return { success: false, error: 'No valid feeds found in OPML file' }
@@ -224,6 +245,18 @@ export function registerFeedHandlers(): void {
           skipped++
           completed++
         } else {
+          try {
+            await assertNetworkFetchUrl(normalizedXmlUrl)
+          } catch (error) {
+            skipped++
+            completed++
+            if (errors.length < OPML_IMPORT_MAX_ERROR_COUNT) {
+              errors.push(
+                `${opmlFeed.title || opmlFeed.xmlUrl}: ${String(error).slice(0, 100)}`,
+              )
+            }
+            continue
+          }
           toImport.push({ ...opmlFeed, xmlUrl: storedXmlUrl })
         }
       }
@@ -350,7 +383,10 @@ export function registerFeedHandlers(): void {
   registerChannel(
     IPC.FEED_REFRESH_IMPORTED,
     async (_event, feedIds: string[]) => {
-      const deduped = Array.from(new Set(feedIds.filter(Boolean)))
+      const deduped = Array.from(new Set(feedIds.filter(Boolean))).slice(
+        0,
+        OPML_REFRESH_MAX_FEED_IDS,
+      )
       if (deduped.length === 0) {
         return { success: true, total: 0, refreshed: 0, failed: 0 }
       }
