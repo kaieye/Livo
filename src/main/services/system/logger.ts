@@ -19,6 +19,72 @@ const MAX_RECENT_LOG_BYTES = 2 * 1024 * 1024
 const MAX_RENDERER_ERROR_SOURCE_LENGTH = 512
 const MAX_RENDERER_ERROR_MESSAGE_LENGTH = 16 * 1024
 const MAX_RENDERER_ERROR_STACK_LENGTH = 64 * 1024
+const REDACTED_LOG_SECRET = '[redacted]'
+const URL_SECRET_KEY_PATTERN =
+  /^(?:access[_-]?token|auth[_-]?token|api[_-]?key|apikey|client[_-]?secret|code|cookie|key|password|refresh[_-]?token|secret|session|sessionid|sig|signature|token)$/i
+const LOG_SECRET_FIELD_PATTERN =
+  /authorization|cookie|set-cookie|access[_-]?token|auth[_-]?token|api[_-]?key|apikey|client[_-]?secret|password|passwd|refresh[_-]?token|secret|session|sessionid|token/i
+const LOG_URL_PATTERN = /\b(?:https?|wss?):\/\/[^\s<>"'`]+/gi
+
+function redactUrlSecrets(input: string): string {
+  return input.replace(LOG_URL_PATTERN, (rawUrl) => {
+    let urlText = rawUrl
+    let suffix = ''
+
+    while (/[),.;\]]$/.test(urlText)) {
+      suffix = `${urlText.at(-1) || ''}${suffix}`
+      urlText = urlText.slice(0, -1)
+    }
+
+    try {
+      const url = new URL(urlText)
+      if (url.username) {
+        url.username = REDACTED_LOG_SECRET
+      }
+      if (url.password) {
+        url.password = REDACTED_LOG_SECRET
+      }
+      for (const key of Array.from(url.searchParams.keys())) {
+        if (URL_SECRET_KEY_PATTERN.test(key)) {
+          url.searchParams.set(key, REDACTED_LOG_SECRET)
+        }
+      }
+      return `${url.toString()}${suffix}`
+    } catch {
+      return rawUrl
+    }
+  })
+}
+
+function redactLogSecrets(input: string): string {
+  return redactUrlSecrets(input)
+    .replace(
+      /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi,
+      `Bearer ${REDACTED_LOG_SECRET}`,
+    )
+    .replace(
+      /(\bAuthorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;|}]+/gi,
+      `$1${REDACTED_LOG_SECRET}`,
+    )
+    .replace(
+      /(\b(?:Cookie|Set-Cookie)\s*[:=]\s*)[^\r\n|]+/gi,
+      `$1${REDACTED_LOG_SECRET}`,
+    )
+    .replace(
+      /(["']?\b[\w-]*(?:authorization|cookie|access[_-]?token|auth[_-]?token|api[_-]?key|apikey|client[_-]?secret|password|passwd|refresh[_-]?token|secret|sessionid|token)[\w-]*\b["']?\s*[:=]\s*["'])([^"'\r\n]{0,4096})(["'])/gi,
+      (_match, prefix: string, _value: string, suffix: string) =>
+        LOG_SECRET_FIELD_PATTERN.test(prefix)
+          ? `${prefix}${REDACTED_LOG_SECRET}${suffix}`
+          : _match,
+    )
+    .replace(
+      /(["']?\b[\w-]*(?:authorization|cookie|access[_-]?token|auth[_-]?token|api[_-]?key|apikey|client[_-]?secret|password|passwd|refresh[_-]?token|secret|sessionid|token)[\w-]*\b["']?\s*[:=]\s*)([^\s,;|}&]+)/gi,
+      (_match, prefix: string) =>
+        LOG_SECRET_FIELD_PATTERN.test(prefix)
+          ? `${prefix}${REDACTED_LOG_SECRET}`
+          : _match,
+    )
+}
 
 export function getLogDirectoryPath(): string {
   const logDir = join(app.getPath('userData'), 'logs')
@@ -62,10 +128,11 @@ export function readRecentLogs(maxLines = DEFAULT_RECENT_LOG_LINES): string {
   const lineCount = clampRecentLogLines(maxLines)
   const content = readRecentLogBytes(logFilePath)
   const lines = content.split(/\r?\n/)
-  return lines
+  const recent = lines
     .slice(Math.max(0, lines.length - lineCount))
     .join('\n')
     .trim()
+  return redactLogSecrets(recent)
 }
 
 function truncateForLog(value: string, maxLength: number): string {
@@ -86,7 +153,7 @@ function toMessage(input: unknown): string {
 }
 
 function writeLog(level: LogLevel, message: string): void {
-  const line = `[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}\n`
+  const line = `[${new Date().toISOString()}] [${level.toUpperCase()}] ${redactLogSecrets(message)}\n`
   appendFileSync(getLogFilePath(), line, 'utf-8')
 }
 

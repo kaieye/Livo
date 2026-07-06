@@ -834,6 +834,9 @@ Renderer review findings to handle in later batches:
   - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
 - `pnpm format:check`
   - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 3 files, 16 symbols, 9 affected execution flows, HIGH risk.
+  - Affected flows include app, Fever, discovery, feed, account, readability, and window logging paths through `writeLog`, `logWarn`, `logInfo`, and `toMessage`.
 
 ### Deferred findings
 
@@ -1488,3 +1491,44 @@ Renderer review findings to handle in later batches:
 - `syncReadingActivity()` still uses `sessionStore.getSession()`; switching to stricter local session validity checks can be considered separately if the backend should not be the only expiry authority.
 - Recent log export and diagnostics `recentLogs` remain unredacted.
 - Renderer feed/media caches can still contain tokenized feed or signed media URLs.
+
+## 2026-07-07 - Diagnostics log secret redaction
+
+### Review inputs
+
+- Diagnostics review found that `readRecentLogs()` returned raw `main.log` content through `APP_READ_RECENT_LOGS`.
+- The renderer settings panel then allowed copying/saving those raw logs and included them in diagnostics bundles.
+- IPC failure logging, navigation/open-external logging, and renderer-reported errors can include bearer tokens, cookies, URL userinfo, API keys, signed URL query parameters, or token-looking object fields.
+
+### Fixed in this batch
+
+- Added logger-layer redaction for persisted and exported log text.
+- `writeLog()` now redacts secrets before appending to `main.log`, preventing future persisted logs from accumulating raw tokens.
+- `readRecentLogs()` now redacts legacy raw log content before returning it, covering preview, copy, saved recent logs, and diagnostics export paths that consume recent logs.
+- Redaction covers bearer tokens, authorization/cookie headers, `Set-Cookie`, URL userinfo, secret-looking URL query parameters, and JSON/text key-value fields such as `apiKey`, `access_token`, `refresh_token`, `password`, `secret`, and `sessionid`.
+- Added regression tests for legacy log readback, new log persistence through `logInfo`/`logWarn`/`logWarnQuiet`/`logError`, and renderer error payload export.
+
+### Impact analysis
+
+- `writeLog`: CRITICAL risk. Direct callers are `logInfo`, `logWarn`, `logWarnQuiet`, and `logError`; 76 impacted symbols, 15 affected processes, and 13 modules.
+- `toMessage`: CRITICAL risk. It remains behaviorally unchanged; existing serialization still feeds the redaction boundary.
+- `logInfo`, `logWarn`, `logWarnQuiet`, and `logError`: CRITICAL risk because they are used across startup, IPC handlers, feed/discovery/account/auth flows, and window lifecycle logging.
+- `readRecentLogs`: LOW risk. GitNexus reported no upstream production processes in the current index; this is the export boundary consumed by diagnostics/recent-log UI paths.
+
+### Verification
+
+- `pnpm test -- src/main/services/system/logger.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 164 passed test files, 951 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/system/logger.ts src/main/services/system/logger.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Console output still receives the original developer-facing arguments; this batch focused on persisted/exported diagnostics surfaces.
+- Renderer feed cache, reader snapshot cache, media/image metadata caches, OPML export, and Web IndexedDB/export paths can still persist or export tokenized feed/media URLs. Next batch should introduce a shared persisted URL sanitizer rather than changing `isAllowedStoredMediaUrl`, which is CRITICAL and has broader playback/storage semantics.
