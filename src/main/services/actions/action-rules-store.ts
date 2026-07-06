@@ -1,7 +1,7 @@
 import { app } from 'electron'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
-import type { ActionRule } from '../../../shared/actions'
+import { sanitizeActionRules, type ActionRule } from '../../../shared/actions'
 
 let cachedRules: ActionRule[] | null = null
 
@@ -11,15 +11,7 @@ function getRulesPath(): string {
 }
 
 function sanitizeRules(input: unknown): ActionRule[] {
-  if (!Array.isArray(input)) return []
-  return input.filter(
-    (rule): rule is ActionRule =>
-      !!rule &&
-      typeof rule === 'object' &&
-      typeof (rule as ActionRule).id === 'string' &&
-      Array.isArray((rule as ActionRule).conditions) &&
-      Array.isArray((rule as ActionRule).actions),
-  )
+  return sanitizeActionRules(input)
 }
 
 export function getActionRules(): ActionRule[] {
@@ -44,7 +36,7 @@ export function setActionRules(rules: ActionRule[]): void {
   cachedRules = sanitized
 
   const rulesPath = getRulesPath()
-  const dir = join(rulesPath, '../../index')
+  const dir = dirname(rulesPath)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   writeFileSync(rulesPath, JSON.stringify(sanitized, null, 2))
 }

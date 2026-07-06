@@ -250,6 +250,61 @@ describe('ipc-contracts', () => {
     }
   })
 
+  it('validates action sync rules deeply and returns sanitized rules', () => {
+    const rule = {
+      id: 'rule-1',
+      name: 'Star AI posts',
+      enabled: true,
+      conditions: [
+        { field: 'entry.title', operator: 'matches_regex', value: '^AI' },
+      ],
+      actions: [{ type: 'star' }],
+      createdAt: 1,
+      extra: 'ignored',
+    }
+
+    expect(validateIpcArgs(IPC.ACTIONS_SYNC, [[rule]])).toEqual([
+      [
+        {
+          id: 'rule-1',
+          name: 'Star AI posts',
+          enabled: true,
+          conditions: [
+            { field: 'entry.title', operator: 'matches_regex', value: '^AI' },
+          ],
+          actions: [{ type: 'star' }],
+          createdAt: 1,
+        },
+      ],
+    ])
+
+    for (const invalidRules of [
+      'not-rules',
+      Array.from({ length: 101 }, (_, index) => ({
+        ...rule,
+        id: `rule-${index}`,
+      })),
+      [{ ...rule, id: '' }],
+      [{ ...rule, name: 'x'.repeat(161) }],
+      [{ ...rule, enabled: 'yes' }],
+      [{ ...rule, conditions: [{ field: 'entry.secret', value: 'token' }] }],
+      [
+        {
+          ...rule,
+          conditions: [
+            { field: 'entry.title', operator: 'matches_regex', value: '(a+)+' },
+          ],
+        },
+      ],
+      [{ ...rule, actions: [{ type: 'exec_shell' }] }],
+      [{ ...rule, createdAt: Number.POSITIVE_INFINITY }],
+    ]) {
+      expect(() => validateIpcArgs(IPC.ACTIONS_SYNC, [invalidRules])).toThrow(
+        IpcValidationError,
+      )
+    }
+  })
+
   it('rejects oversized AI IPC payloads', () => {
     expect(
       validateIpcArgs(IPC.AI_SUMMARIZE, [

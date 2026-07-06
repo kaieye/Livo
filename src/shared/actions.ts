@@ -13,6 +13,13 @@ export interface ActionRule {
   createdAt: number
 }
 
+export const ACTION_RULES_MAX_COUNT = 100
+export const ACTION_RULE_CONDITIONS_MAX_COUNT = 12
+export const ACTION_RULE_EFFECTS_MAX_COUNT = 8
+export const ACTION_RULE_ID_MAX_LENGTH = 128
+export const ACTION_RULE_NAME_MAX_LENGTH = 160
+export const ACTION_RULE_CONDITION_VALUE_MAX_LENGTH = 2048
+
 export type ConditionField =
   | 'entry.title'
   | 'entry.content'
@@ -50,6 +57,41 @@ export type ActionEffectType =
 export interface ActionEffect {
   type: ActionEffectType
 }
+
+export const ACTION_CONDITION_FIELDS = [
+  'entry.title',
+  'entry.content',
+  'entry.author',
+  'entry.url',
+  'feed.title',
+  'feed.url',
+  'feed.category',
+  'ai.semantic',
+] as const satisfies readonly ConditionField[]
+
+export const ACTION_CONDITION_OPERATORS = [
+  'contains',
+  'not_contains',
+  'equals',
+  'not_equals',
+  'matches_regex',
+  'starts_with',
+  'ends_with',
+  'semantic_matches',
+] as const satisfies readonly ConditionOperator[]
+
+export const ACTION_EFFECT_TYPES = [
+  'block',
+  'star',
+  'mark_read',
+  'notify',
+  'readability',
+  'summarize',
+] as const satisfies readonly ActionEffectType[]
+
+const actionConditionFieldSet = new Set<string>(ACTION_CONDITION_FIELDS)
+const actionConditionOperatorSet = new Set<string>(ACTION_CONDITION_OPERATORS)
+const actionEffectTypeSet = new Set<string>(ACTION_EFFECT_TYPES)
 
 export const CONDITION_FIELD_LABELS: Record<ConditionField, string> = {
   'entry.title': '文章标题',
@@ -89,6 +131,119 @@ export const ACTION_EFFECT_ICONS: Record<ActionEffectType, string> = {
   notify: 'Bell',
   readability: 'BookType',
   summarize: 'Sparkles',
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isBoundedString(
+  value: unknown,
+  options: { min?: number; max: number },
+): value is string {
+  if (typeof value !== 'string') return false
+  if (options.min !== undefined && value.trim().length < options.min) {
+    return false
+  }
+  return value.length <= options.max
+}
+
+function hasNestedRegexQuantifier(pattern: string): boolean {
+  const withoutEscapes = pattern.replace(/\\./g, '')
+  return /\((?:[^()]|\\.)*(?:[+*]|\{\d+(?:,\d*)?\})(?:[^()]|\\.)*\)\s*(?:[+*?]|\{\d+(?:,\d*)?\})/.test(
+    withoutEscapes,
+  )
+}
+
+export function isSafeActionRegexPattern(pattern: string): boolean {
+  if (pattern.length > ACTION_RULE_CONDITION_VALUE_MAX_LENGTH) return false
+  if (hasNestedRegexQuantifier(pattern)) return false
+  try {
+    new RegExp(pattern, 'i')
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function sanitizeActionRules(input: unknown): ActionRule[] {
+  if (!Array.isArray(input) || input.length > ACTION_RULES_MAX_COUNT) return []
+
+  const rules: ActionRule[] = []
+  for (const rule of input) {
+    if (!isRecord(rule)) continue
+    const createdAt = rule.createdAt
+    if (
+      !isBoundedString(rule.id, {
+        min: 1,
+        max: ACTION_RULE_ID_MAX_LENGTH,
+      }) ||
+      !isBoundedString(rule.name, {
+        min: 1,
+        max: ACTION_RULE_NAME_MAX_LENGTH,
+      }) ||
+      typeof rule.enabled !== 'boolean' ||
+      typeof createdAt !== 'number' ||
+      !Number.isFinite(createdAt) ||
+      !Array.isArray(rule.conditions) ||
+      rule.conditions.length > ACTION_RULE_CONDITIONS_MAX_COUNT ||
+      !Array.isArray(rule.actions) ||
+      rule.actions.length > ACTION_RULE_EFFECTS_MAX_COUNT
+    ) {
+      continue
+    }
+
+    const conditions: ActionCondition[] = []
+    for (const condition of rule.conditions) {
+      if (!isRecord(condition)) continue
+      if (
+        typeof condition.field !== 'string' ||
+        !actionConditionFieldSet.has(condition.field) ||
+        typeof condition.operator !== 'string' ||
+        !actionConditionOperatorSet.has(condition.operator) ||
+        !isBoundedString(condition.value, {
+          max: ACTION_RULE_CONDITION_VALUE_MAX_LENGTH,
+        })
+      ) {
+        continue
+      }
+      if (
+        condition.operator === 'matches_regex' &&
+        !isSafeActionRegexPattern(condition.value)
+      ) {
+        continue
+      }
+      conditions.push({
+        field: condition.field as ConditionField,
+        operator: condition.operator as ConditionOperator,
+        value: condition.value,
+      })
+    }
+    if (conditions.length !== rule.conditions.length) continue
+
+    const actions: ActionEffect[] = []
+    for (const action of rule.actions) {
+      if (
+        !isRecord(action) ||
+        typeof action.type !== 'string' ||
+        !actionEffectTypeSet.has(action.type)
+      ) {
+        continue
+      }
+      actions.push({ type: action.type as ActionEffectType })
+    }
+    if (actions.length !== rule.actions.length) continue
+
+    rules.push({
+      id: rule.id,
+      name: rule.name,
+      enabled: rule.enabled,
+      conditions,
+      actions,
+      createdAt,
+    })
+  }
+  return rules
 }
 
 export function matchCondition(
@@ -144,6 +299,7 @@ export function matchCondition(
     case 'ends_with':
       return fieldLower.endsWith(valLower)
     case 'matches_regex':
+      if (!isSafeActionRegexPattern(value)) return false
       try {
         return new RegExp(value, 'i').test(fieldValue)
       } catch {

@@ -3,7 +3,9 @@ import {
   evaluateActionRules,
   evaluateActionRulesWithMatcher,
   evaluateActionRulesWithMatcherAsync,
+  isSafeActionRegexPattern,
   isSemanticCondition,
+  sanitizeActionRules,
   type ActionRule,
 } from './actions'
 
@@ -97,6 +99,60 @@ describe('evaluateActionRules', () => {
     })
 
     expect(isSemanticCondition(rule.conditions[0])).toBe(true)
+    expect(evaluateActionRules([rule], entry, feed).blocked).toBe(false)
+  })
+})
+
+describe('sanitizeActionRules', () => {
+  it('normalizes valid rules and drops malformed or unsafe rules', () => {
+    const valid = makeRule({
+      id: 'valid',
+      name: 'Valid',
+      conditions: [
+        { field: 'entry.title', operator: 'matches_regex', value: '^AI' },
+      ],
+      actions: [{ type: 'star' }, { type: 'notify' }],
+    })
+
+    expect(
+      sanitizeActionRules([
+        { ...valid, extra: 'ignored' },
+        { ...valid, id: '', name: 'empty-id' },
+        {
+          ...valid,
+          id: 'bad-field',
+          conditions: [
+            { field: 'entry.secret', operator: 'contains', value: 'token' },
+          ],
+        },
+        {
+          ...valid,
+          id: 'bad-regex',
+          conditions: [
+            { field: 'entry.title', operator: 'matches_regex', value: '(a+)+' },
+          ],
+        },
+        {
+          ...valid,
+          id: 'bad-action',
+          actions: [{ type: 'exec_shell' }],
+        },
+      ]),
+    ).toEqual([valid])
+  })
+
+  it('rejects unsafe regex patterns before evaluation', () => {
+    expect(isSafeActionRegexPattern('^AI')).toBe(true)
+    expect(isSafeActionRegexPattern('[')).toBe(false)
+    expect(isSafeActionRegexPattern('(a+)+$')).toBe(false)
+
+    const rule = makeRule({
+      conditions: [
+        { field: 'entry.title', operator: 'matches_regex', value: '(a+)+$' },
+      ],
+      actions: [{ type: 'block' }],
+    })
+
     expect(evaluateActionRules([rule], entry, feed).blocked).toBe(false)
   })
 })

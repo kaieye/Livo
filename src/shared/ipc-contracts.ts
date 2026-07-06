@@ -11,6 +11,7 @@ import type {
   SaveTextFileOptions,
 } from './types'
 import type { ActionRule } from './actions'
+import { ACTION_RULES_MAX_COUNT, sanitizeActionRules } from './actions'
 import type { AISemanticFilterInput, AIDigestPreset } from './types'
 import { FeedViewType } from './types/feed'
 
@@ -1561,7 +1562,18 @@ export const IPC_CONTRACTS = {
           rules: 'expected_array',
         })
       }
-      return args as IpcArgs<typeof IPC.ACTIONS_SYNC>
+      if (args[0].length > ACTION_RULES_MAX_COUNT) {
+        throw new IpcValidationError('Invalid IPC argument', {
+          rules: `max_items_${ACTION_RULES_MAX_COUNT}`,
+        })
+      }
+      const rules = sanitizeActionRules(args[0])
+      if (rules.length !== args[0].length) {
+        throw new IpcValidationError('Invalid IPC argument', {
+          rules: 'invalid_rule_shape',
+        })
+      }
+      return [rules] as IpcArgs<typeof IPC.ACTIONS_SYNC>
     },
   },
   [IPC.READABILITY_FETCH]: {

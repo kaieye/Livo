@@ -1987,3 +1987,48 @@ Renderer review findings to handle in later batches:
 ### Deferred findings
 
 - `actions:sync` deep validation, settings schema patch validation, public-only feed fetch policy, and update installer verification remain separate findings.
+
+## 2026-07-07 - Validate synced action rules deeply
+
+### Review inputs
+
+- Privileged IPC review found `actions:sync` accepted arbitrary arrays with only a shallow array check.
+- The main action-rule store accepted persisted rules when `id`, `conditions`, and `actions` had only minimal shape checks.
+- Rule conditions can compile renderer-controlled regex patterns during entry ingestion, so malformed or risky patterns should be rejected before persistence/evaluation.
+
+### Fixed in this batch
+
+- Added shared action-rule sanitization with bounded rule count, string lengths, condition/action counts, supported condition fields/operators, and supported action types.
+- `actions:sync` IPC validation now rejects malformed rule arrays and returns sanitized rule objects with unknown properties stripped.
+- Main action-rule persistence now reuses the shared sanitizer for both legacy file reads and new writes.
+- `matches_regex` evaluation now rejects invalid and nested-quantifier patterns before constructing the runtime regex.
+- Fixed action-rule persistence directory creation to write under the intended `data/action-rules.json` path.
+- Added shared action-rule sanitizer tests, IPC contract rejection tests, and main action-rule store persistence tests.
+
+### Impact analysis
+
+- `setActionRules`: HIGH risk. GitNexus reported one direct caller (`registerActionHandlers`) and two affected startup/IPC flows through `AppManager`.
+- `sanitizeRules`: HIGH risk. GitNexus reported direct callers `getActionRules` and `setActionRules`, with affected entry-ingestion and startup/IPC registration paths.
+- `registerActionHandlers`: LOW risk. GitNexus reported `AppManager.registerIpcHandlers` as the direct caller and the expected startup IPC flows.
+- `matchCondition`: LOW risk. GitNexus reported two direct callers (`matchAllActionConditions`, `matchAllConditions`) and no affected processes.
+- `IPC_CONTRACTS`: LOW risk. GitNexus reported no upstream impacted symbols or affected processes.
+
+### Verification
+
+- `pnpm test -- src/shared/actions.test.ts src/shared/ipc-contracts.test.ts src/main/services/actions/action-rules-store.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 169 passed test files, 982 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/shared/actions.ts src/shared/actions.test.ts src/shared/ipc-contracts.ts src/shared/ipc-contracts.test.ts src/main/services/actions/action-rules-store.ts src/main/services/actions/action-rules-store.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 7 files, 16 symbols, 0 affected processes, LOW risk.
+  - Changed symbols include `sanitizeRules`, `getActionRules`, `matchCondition`, and action-rule evaluation helpers.
+
+### Deferred findings
+
+- Settings schema patch validation, public-only discovery/feed fetch policy, update installer verification, and web IndexedDB URL sanitization remain separate findings.
