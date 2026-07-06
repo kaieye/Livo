@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getRememberedImageMetadata,
   loadPersistedImageMetadata,
+  probeImageMetadata,
   rememberImageMetadata,
 } from './image-metadata'
 
@@ -54,5 +55,41 @@ describe('image metadata cache', () => {
       width: 1200,
       height: 900,
     })
+  })
+
+  it('does not probe unsafe image metadata URLs', () => {
+    const assigned: string[] = []
+
+    class FakeImage {
+      decoding = ''
+      referrerPolicy = ''
+      naturalWidth = 800
+      naturalHeight = 600
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+
+      set src(value: string) {
+        assigned.push(value)
+        this.onload?.()
+      }
+    }
+
+    vi.stubGlobal('window', {
+      ...window,
+      Image: FakeImage,
+    })
+    const onResolved = vi.fn()
+
+    probeImageMetadata(
+      [
+        'http://127.0.0.1/private.jpg',
+        'https://user:pass@example.com/secret.jpg',
+        'https://cdn.example.com/public.jpg',
+      ],
+      onResolved,
+    )
+
+    expect(assigned).toEqual(['https://cdn.example.com/public.jpg'])
+    expect(onResolved).toHaveBeenCalledTimes(1)
   })
 })

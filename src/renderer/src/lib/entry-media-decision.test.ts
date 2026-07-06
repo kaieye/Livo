@@ -64,6 +64,18 @@ describe('entry-media-decision', () => {
     expect(new Set(candidates).size).toBe(candidates.length)
   })
 
+  it('构建图片 fallback 时丢弃私有网络和凭据 URL', () => {
+    const candidates = buildMediaFallbackCandidates(
+      'http://127.0.0.1/private.jpg',
+      'https://user:pass@example.com/secret.jpg',
+      'https://cdn.example.com/public.jpg',
+    )
+
+    expect(candidates).toContain('https://cdn.example.com/public.jpg')
+    expect(candidates).not.toContain('http://127.0.0.1/private.jpg')
+    expect(candidates).not.toContain('https://user:pass@example.com/secret.jpg')
+  })
+
   it('为网格卡片优先选择 photo preview，并在没有图片时派生 YouTube 缩略图', () => {
     expect(
       resolveGridCardMedia(
@@ -94,6 +106,63 @@ describe('entry-media-decision', () => {
         }),
       ).coverUrl,
     ).toBe('https://img.youtube.com/vi/abc123/hqdefault.jpg')
+  })
+
+  it('为网格卡片跳过旧缓存中的不安全图片 URL', () => {
+    const result = resolveGridCardMedia(
+      entry({
+        imageUrl: 'https://cdn.example.com/fallback.jpg',
+        media: [
+          {
+            type: 'photo',
+            url: 'http://127.0.0.1/private.jpg',
+            previewUrl: 'https://user:pass@example.com/secret.jpg',
+          },
+          {
+            type: 'photo',
+            url: 'https://cdn.example.com/public.jpg',
+          },
+        ],
+      }),
+    )
+
+    expect(result.photoCovers).toEqual(['https://cdn.example.com/public.jpg'])
+    expect(result.coverUrl).toBe('https://cdn.example.com/public.jpg')
+  })
+
+  it('为社交媒体决策过滤不安全图片和预览 URL', () => {
+    const decision = resolveSocialEntryMediaDecision({
+      entry: entry({
+        imageUrl: 'http://127.0.0.1/fallback.jpg',
+        media: [
+          {
+            type: 'photo',
+            url: 'http://127.0.0.1/private.jpg',
+            previewUrl: 'https://user:pass@example.com/secret.jpg',
+          },
+          {
+            type: 'photo',
+            url: 'https://cdn.example.com/public.jpg',
+          },
+          {
+            type: 'video',
+            url: 'https://cdn.example.com/video.mp4',
+            previewUrl: 'http://169.254.169.254/latest/meta-data',
+          },
+        ],
+      }),
+    })
+
+    expect(decision.photos).toEqual([
+      {
+        type: 'photo',
+        url: 'https://cdn.example.com/public.jpg',
+        previewUrl: undefined,
+      },
+    ])
+    expect(decision.visibleVideos[0]?.previewUrl).toBe(
+      'https://cdn.example.com/public.jpg',
+    )
   })
 
   it('为社交视频补齐图片预览，并隐藏 Bilibili 页面视频的图片 gallery', () => {

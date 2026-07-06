@@ -1,3 +1,5 @@
+import { getSafeImageSrc } from './safe-image-source'
+
 export interface ImageMetadata {
   width: number
   height: number
@@ -91,12 +93,14 @@ export function probeImageMetadata(
   onResolved?: () => void,
 ): () => void {
   if (typeof window === 'undefined') return () => {}
-  const queue = urls.filter(
-    (url) =>
-      !!url &&
-      !hasRememberedImageMetadata(url) &&
-      !pendingImageProbeUrls.has(url),
-  )
+  const queue = urls
+    .map((url) => getSafeImageSrc(url))
+    .filter(
+      (url): url is string =>
+        !!url &&
+        !hasRememberedImageMetadata(url) &&
+        !pendingImageProbeUrls.has(url),
+    )
   if (queue.length === 0) return () => {}
 
   let cancelled = false

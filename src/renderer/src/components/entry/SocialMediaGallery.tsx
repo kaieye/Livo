@@ -20,6 +20,7 @@ import {
   rememberMediaSrc,
 } from '../../lib/entry-media-decision'
 import { getPhotoDedupeKey } from '../../lib/social-entry-utils'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 
 interface SocialMediaGalleryPhoto {
   url: string
@@ -92,8 +93,9 @@ export function SocialMediaGallery({
       // 优先使用 previewUrl，它通常是稳定镜像地址，直接 CDN 签名链接更容易过期。
       if (photo.previewUrl) {
         const raw = decodeHtmlEntitiesUrl(photo.previewUrl)
-        if (raw && /^https?:\/\//i.test(raw)) {
-          return getRememberedMediaSrc(raw, raw)
+        const safeRaw = getSafeImageSrc(raw)
+        if (safeRaw) {
+          return getRememberedMediaSrc(safeRaw, safeRaw)
         }
       }
       const seedUrl = decodeMediaUrl(photo.url || '')

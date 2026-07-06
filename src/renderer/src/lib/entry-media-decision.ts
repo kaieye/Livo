@@ -9,6 +9,7 @@ import {
 } from './entry-media-url'
 import { getImageProxyFallbackUrls } from './image-proxy'
 import { normalizeLooseText } from './entry-text'
+import { getSafeImageSrc } from './safe-image-source'
 import {
   cleanSocialPlainText,
   extractImagesFromHtml,
@@ -255,14 +256,15 @@ export function buildMediaFallbackCandidates(
   }
   const unique: string[] = []
   for (const url of candidates) {
-    if (!/^https?:\/\//i.test(url)) continue
-    const normalized = normalizeImageCacheKey(url)
+    const safeUrl = getSafeImageSrc(url)
+    if (!safeUrl) continue
+    const normalized = normalizeImageCacheKey(safeUrl)
     if (
       !normalized ||
       unique.some((existing) => normalizeImageCacheKey(existing) === normalized)
     )
       continue
-    unique.push(url)
+    unique.push(safeUrl)
   }
   return unique
 }
@@ -286,7 +288,7 @@ export function advanceCardImageFallback(
   if (
     rawDecoded &&
     rawDecoded !== normalizedSeed &&
-    /^https?:\/\//i.test(rawDecoded)
+    getSafeImageSrc(rawDecoded)
   ) {
     const rawKey = normalizeImageCacheKey(rawDecoded)
     if (
@@ -299,25 +301,31 @@ export function advanceCardImageFallback(
   if (previewUrl) {
     const decodedPreview = decodeMediaUrl(previewUrl)
     for (const pUrl of [previewUrl, decodedPreview]) {
-      if (pUrl && /^https?:\/\//i.test(pUrl)) {
-        const pKey = normalizeImageCacheKey(pUrl)
+      const safePreviewUrl = getSafeImageSrc(pUrl)
+      if (safePreviewUrl) {
+        const pKey = normalizeImageCacheKey(safePreviewUrl)
         if (
           pKey &&
           !candidates.some((c) => normalizeImageCacheKey(c) === pKey)
         ) {
-          candidates.splice(1, 0, pUrl)
-          const mirrorProxyFallbacks = getImageProxyFallbackUrls(pUrl, {
-            width: 1280,
-            quality: 85,
-            format: 'jpg',
-          })
+          candidates.splice(1, 0, safePreviewUrl)
+          const mirrorProxyFallbacks = getImageProxyFallbackUrls(
+            safePreviewUrl,
+            {
+              width: 1280,
+              quality: 85,
+              format: 'jpg',
+            },
+          )
           for (const mpUrl of mirrorProxyFallbacks) {
-            const mpKey = normalizeImageCacheKey(mpUrl)
+            const safeMpUrl = getSafeImageSrc(mpUrl)
+            if (!safeMpUrl) continue
+            const mpKey = normalizeImageCacheKey(safeMpUrl)
             if (
               mpKey &&
               !candidates.some((c) => normalizeImageCacheKey(c) === mpKey)
             ) {
-              candidates.push(mpUrl)
+              candidates.push(safeMpUrl)
             }
           }
         }
@@ -344,21 +352,26 @@ export function getRememberedMediaSrc(
   ensureMediaSrcCacheLoaded()
   const byUrl = mediaSrcCache.get(`url:${normalizeImageCacheKey(coverUrl)}`)
   if (byUrl) {
-    if (/^https?:\/\/media\.(picnob|pixnoy)\.[^/]+\/get\?/i.test(byUrl)) {
+    const safeRememberedUrl = getSafeImageSrc(byUrl)
+    if (
+      !safeRememberedUrl ||
+      /^https?:\/\/media\.(picnob|pixnoy)\.[^/]+\/get\?/i.test(byUrl)
+    ) {
       mediaSrcCache.delete(`url:${normalizeImageCacheKey(coverUrl)}`)
     } else {
-      return byUrl
+      return safeRememberedUrl
     }
   }
-  return primaryUrl
+  return getSafeImageSrc(primaryUrl) || ''
 }
 
 export function rememberMediaSrc(coverUrl: string, resolvedSrc: string): void {
   const src = (resolvedSrc || '').trim()
-  if (!src) return
+  const safeSrc = getSafeImageSrc(src)
+  if (!safeSrc) return
   ensureMediaSrcCacheLoaded()
   const urlKey = normalizeImageCacheKey(coverUrl)
-  if (urlKey) mediaSrcCache.set(`url:${urlKey}`, src)
+  if (urlKey) mediaSrcCache.set(`url:${urlKey}`, safeSrc)
   persistMediaSrcCache()
 }
 
@@ -476,10 +489,12 @@ export function resolveGridCardMedia(entry: Entry): {
   const push = (value: string) => {
     const candidate = decodeMediaUrl(value || '').trim()
     if (!candidate || !isLikelyImageByUrl(candidate)) return
-    const key = normalizeImageCacheKey(candidate)
+    const safeCandidate = getSafeImageSrc(candidate)
+    if (!safeCandidate) return
+    const key = normalizeImageCacheKey(safeCandidate)
     if (!key) return
     if (unique.some((u) => normalizeImageCacheKey(u) === key)) return
-    unique.push(candidate)
+    unique.push(safeCandidate)
   }
 
   for (const media of entry.media || []) {
@@ -501,7 +516,10 @@ export function resolveGridCardMedia(entry: Entry): {
       entry.imageUrl || '',
     ]
       .map((value) => decodeMediaUrl(value))
-      .find((value) => !!value && isLikelyImageByUrl(value)) || ''
+      .find(
+        (value) =>
+          !!value && isLikelyImageByUrl(value) && !!getSafeImageSrc(value),
+      ) || ''
 
   const ytMatch = (entry.url || '').match(
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]+)/,
@@ -512,7 +530,11 @@ export function resolveGridCardMedia(entry: Entry): {
 
   return {
     photoCovers,
-    coverUrl: fromValidatedPhotos || fromMediaCandidates || youtubeThumbnail,
+    coverUrl:
+      fromValidatedPhotos ||
+      getSafeImageSrc(fromMediaCandidates) ||
+      getSafeImageSrc(youtubeThumbnail) ||
+      '',
     photoCount: (entry.media || []).filter((m) => m.type === 'photo').length,
   }
 }
@@ -563,17 +585,28 @@ function getBestImage(candidate: Entry): string {
   const mediaPhotos = (candidate.media || []).filter((m) => m.type === 'photo')
   for (const photo of mediaPhotos) {
     const preview = decodeMediaUrl(photo.previewUrl || '')
-    if (preview && isLikelyImageByUrl(preview)) return preview
+    if (preview && isLikelyImageByUrl(preview)) {
+      const safePreview = getSafeImageSrc(preview)
+      if (safePreview) return safePreview
+    }
     const primary = decodeMediaUrl(photo.url || '')
-    if (primary && isLikelyImageByUrl(primary)) return primary
+    if (primary && isLikelyImageByUrl(primary)) {
+      const safePrimary = getSafeImageSrc(primary)
+      if (safePrimary) return safePrimary
+    }
   }
   const entryImage = decodeMediaUrl(candidate.imageUrl || '')
-  if (entryImage && isLikelyImageByUrl(entryImage)) return entryImage
+  if (entryImage && isLikelyImageByUrl(entryImage)) {
+    const safeEntryImage = getSafeImageSrc(entryImage)
+    if (safeEntryImage) return safeEntryImage
+  }
   const contentImages = extractImagesFromHtml(
     candidate.content || candidate.summary || '',
   )
-  const firstValid = contentImages.find((u) => isLikelyImageByUrl(u))
-  return firstValid ? decodeMediaUrl(firstValid) : ''
+  const firstValid = contentImages.find(
+    (u) => isLikelyImageByUrl(u) && !!getSafeImageSrc(u),
+  )
+  return firstValid ? getSafeImageSrc(decodeMediaUrl(firstValid)) || '' : ''
 }
 
 export function findRelatedSocialEntryFallback(
@@ -636,14 +669,23 @@ export function resolveSocialEntryMediaDecision(input: {
     if (isDecorativeSocialImageUrl(decoded.url || decoded.previewUrl || ''))
       continue
     if (hasTinyDecorativeDimensions(decoded.width, decoded.height)) continue
-    const key = (decoded.url || '').toLowerCase()
+    const safeUrl = getSafeImageSrc(decoded.url)
+    const safePreviewUrl = getSafeImageSrc(decoded.previewUrl)
+    if (!safeUrl && !safePreviewUrl) continue
+    const key = (safeUrl || safePreviewUrl || '').toLowerCase()
     if (!key || seen.has(key)) continue
     seen.add(key)
-    photos.push(decoded)
+    photos.push({
+      ...decoded,
+      url: safeUrl || safePreviewUrl || '',
+      previewUrl: safePreviewUrl,
+    })
   }
   if (photos.length === 0) {
     const fallback = entry.imageUrl ? decodeMediaUrl(entry.imageUrl) : ''
-    if (fallback && isLikelyImageByUrl(fallback)) photos.push({ url: fallback })
+    const safeFallback = getSafeImageSrc(fallback)
+    if (safeFallback && isLikelyImageByUrl(safeFallback))
+      photos.push({ url: safeFallback })
   }
 
   const videos = (entry.media || [])
@@ -667,12 +709,15 @@ export function resolveSocialEntryMediaDecision(input: {
   const visibleVideos = videos.map((video) => {
     const rawPreview = decodeMediaUrl(video.previewUrl || '')
     const validPreview =
-      rawPreview && isLikelyImageByUrl(rawPreview) ? rawPreview : ''
+      rawPreview && isLikelyImageByUrl(rawPreview)
+        ? getSafeImageSrc(rawPreview) || ''
+        : ''
     if (validPreview) return { ...video, previewUrl: validPreview }
     if (!fallbackPreview) return video
     const fallback = decodeMediaUrl(fallbackPreview)
-    if (!fallback || !isLikelyImageByUrl(fallback)) return video
-    return { ...video, previewUrl: fallback }
+    const safeFallback = getSafeImageSrc(fallback)
+    if (!safeFallback || !isLikelyImageByUrl(safeFallback)) return video
+    return { ...video, previewUrl: safeFallback }
   })
 
   return {

@@ -885,3 +885,53 @@ Renderer review findings to handle in later batches:
 - Bespoke direct image tags in social galleries, Discover preview cards/panels, Sidebar feed icons, settings feed rows, audio mini-bar cover art, and similar surfaces still need a follow-up pass.
 - Context menu image download/open paths should be reviewed separately because they use selected image URLs as IPC/download inputs rather than passive image element sources.
 - Entry merge policy should still be reviewed for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.
+
+## 2026-07-07 - Renderer media decision fallback hardening
+
+### Review inputs
+
+- Renderer image-sink review sub-agent found that several paths still bypassed the newly hardened image primitives by computing direct `src` candidates or assigning fallback/probe URLs imperatively.
+- Key remaining sinks were `SocialMediaGallery.getInitialSrc`, `advanceCardImageFallback`, `resolveGridCardMedia`, and `probeImageMetadata`.
+
+### Fixed in this batch
+
+- `buildMediaFallbackCandidates()` now drops unsafe candidate URLs before fallback lists can reach imperative `img.src` assignment.
+- `advanceCardImageFallback()` now filters raw decoded and preview-derived fallback URLs before retrying them.
+- Remembered social media image sources now ignore unsafe old localStorage values and refuse to persist unsafe newly resolved values.
+- `resolveGridCardMedia()` now excludes unsafe `Entry.media` and `Entry.imageUrl` values before returning grid card `photoCovers` or `coverUrl`.
+- Related social-entry fallback image selection and social media decision photo lists now skip unsafe images from old cached entries.
+- Video preview fallback selection now refuses unsafe image preview URLs.
+- `SocialMediaGallery.getInitialSrc()` now validates preview URLs before using them as initial media sources.
+- `probeImageMetadata()` now filters unsafe URLs before creating `new Image()` probes.
+- Added regression coverage for unsafe fallback candidates, grid media selection, social media decision images/previews, and metadata probes.
+
+### Impact analysis
+
+- `SocialMediaGallery`: LOW risk. Direct upstream caller is `SocialMediaItem`; affected process is `SocialMediaItem`.
+- `advanceCardImageFallback`: LOW risk. Direct callers are `SocialMediaGallery`, `EntryCard`, and `GridCard`; affected process is `SocialMediaItem`.
+- `buildMediaFallbackCandidates`: LOW risk. Direct upstream caller is `advanceCardImageFallback`; no affected execution flows were reported.
+- `getRememberedMediaSrc`: LOW risk. Direct upstream caller is `SocialMediaGallery.getInitialSrc`; affected process is `SocialMediaItem`.
+- `rememberMediaSrc`: LOW risk. Direct upstream caller is `SocialMediaGallery.rememberLoadedSrc`; affected process is `SocialMediaItem`.
+- `resolveGridCardMedia`: LOW risk. Direct upstream caller is `GridCard`; no affected execution flows were reported.
+- `resolveSocialEntryMediaDecision`: LOW risk. Direct upstream caller is `SocialMediaItem`; affected process is `SocialMediaItem`.
+- `probeImageMetadata`: LOW risk. Direct upstream caller is `probeMasonryCardDimensions`; affected process is `WideViewContent`.
+- Pre-commit `detect_changes --scope staged` reported MEDIUM risk across 6 files, 14 symbols, and 5 affected `SocialMediaItem` execution flows.
+
+### Verification
+
+- `pnpm test -- src/renderer/src/lib/entry-media-decision.test.ts src/renderer/src/lib/image-metadata.test.ts src/renderer/src/lib/safe-image-source.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 155 passed test files, 898 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/components/entry/SocialMediaGallery.tsx src/renderer/src/lib/entry-media-decision.ts src/renderer/src/lib/entry-media-decision.test.ts src/renderer/src/lib/image-metadata.ts src/renderer/src/lib/image-metadata.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Bespoke direct image tags in Discover preview rows, Discover panel rows, Sidebar feed icons, QuickSearch, FeedsSettings, EntryArticleHeader, and AudioMiniBar still need a follow-up pass.
+- Context menu image download/open paths should be reviewed separately because they use selected image URLs as IPC/download inputs rather than passive image element sources.
+- Entry merge policy should still be reviewed for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.
