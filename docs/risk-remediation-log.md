@@ -1059,3 +1059,41 @@ Renderer review findings to handle in later batches:
 - External-open policy still treats private IP HTTP(S) links as suspicious rather than blocked; that remains separate from download/fetch hardening.
 - Image viewer and overlay gallery save/open affordances should derive from the same sanitized selected image URLs as rendering.
 - Download fetch policy still has a DNS rebinding gap between preflight DNS resolution and Electron session fetch connection time.
+
+## 2026-07-07 - Entry merge media boundary hardening
+
+### Review inputs
+
+- Entry merge policy review found that `mergeEntryData()` trusted prebuilt incoming `Entry.media` and `Entry.imageUrl` even though normal feed-builder paths already sanitize derived media.
+- GitNexus was refreshed before edits; metadata counts changed from 7,927 symbols / 21,150 relationships to 7,942 symbols / 21,242 relationships.
+
+### Fixed in this batch
+
+- `mergeEntryData()` now sanitizes incoming media items with the shared stored-media URL policy before comparing signatures or replacing existing media.
+- Incoming media items whose primary `url` is unsafe are dropped at the merge boundary.
+- Incoming media `previewUrl` values are trimmed and retained only when safe; unsafe previews are removed before storage.
+- Incoming `imageUrl` values are trimmed and only overwrite existing images when the shared stored-media URL policy allows them.
+- Added regression coverage for unsafe media replacement blocking, unsafe preview stripping, unsafe image URL ignoring, and safe public media/image merging.
+
+### Impact analysis
+
+- `mergeEntryData`: LOW risk. Direct callers are `mergeEntriesForReadDisplay`, `dedupeEntriesForRead`, and `applyMerge`; no affected execution flows were reported.
+- Pre-commit `detect_changes --scope staged` reported LOW risk across 5 files, 6 symbols, and 0 affected processes.
+
+### Verification
+
+- `pnpm test -- src/main/services/entry/entry-merge-policy.test.ts src/shared/media-url-policy.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 156 passed test files, 907 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/entry/entry-merge-policy.ts src/main/services/entry/entry-merge-policy.test.ts src/shared/media-url-policy.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Image viewer and overlay gallery save/open affordances should derive from the same sanitized selected image URLs as rendering.
+- Download fetch policy still has a DNS rebinding gap between preflight DNS resolution and Electron session fetch connection time.

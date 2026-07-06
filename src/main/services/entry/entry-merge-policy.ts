@@ -1,4 +1,5 @@
-import type { Entry } from '../../../shared/types'
+import type { Entry, MediaItem } from '../../../shared/types'
+import { isAllowedStoredMediaUrl } from '../../../shared/media-url-policy'
 
 const SOCIAL_QUOTE_CARD_CLASS = 'social-quote-card'
 
@@ -26,6 +27,27 @@ function shouldUpgradeNitterRetweetPresentation(
   if (!hasSocialQuoteCard(incoming.content)) return false
   if (isLegacyNitterRetweetTitle(existing.title)) return true
   return !!incoming.url && incoming.url === existing.url
+}
+
+function sanitizeIncomingMedia(items: MediaItem[] | undefined): MediaItem[] {
+  const safeItems: MediaItem[] = []
+  for (const item of items || []) {
+    const url = (item.url || '').trim()
+    if (!isAllowedStoredMediaUrl(url)) continue
+
+    const previewUrl = (item.previewUrl || '').trim()
+    const safeItem: MediaItem = {
+      ...item,
+      url,
+    }
+    if (previewUrl && isAllowedStoredMediaUrl(previewUrl)) {
+      safeItem.previewUrl = previewUrl
+    } else {
+      delete safeItem.previewUrl
+    }
+    safeItems.push(safeItem)
+  }
+  return safeItems
 }
 
 export function mergeTextFromEntry(target: Entry, source: Entry): boolean {
@@ -91,15 +113,16 @@ export function mergeEntryData(
     options?.onPublishedAtAdvanced?.()
   }
 
-  if ((incoming.media?.length || 0) > 0) {
+  const incomingMedia = sanitizeIncomingMedia(incoming.media)
+  if (incomingMedia.length > 0) {
     const existingMediaSignature = JSON.stringify(
       (existing.media || []).map((m) => `${m.type || ''}|${m.url || ''}`),
     )
     const incomingMediaSignature = JSON.stringify(
-      (incoming.media || []).map((m) => `${m.type || ''}|${m.url || ''}`),
+      incomingMedia.map((m) => `${m.type || ''}|${m.url || ''}`),
     )
     if (existingMediaSignature !== incomingMediaSignature) {
-      existing.media = incoming.media
+      existing.media = incomingMedia
       changed = true
     }
   }
@@ -180,8 +203,13 @@ export function mergeEntryData(
     existing.author = incoming.author
     changed = true
   }
-  if (incoming.imageUrl && incoming.imageUrl !== existing.imageUrl) {
-    existing.imageUrl = incoming.imageUrl
+  const incomingImageUrl = (incoming.imageUrl || '').trim()
+  if (
+    incomingImageUrl &&
+    isAllowedStoredMediaUrl(incomingImageUrl) &&
+    incomingImageUrl !== existing.imageUrl
+  ) {
+    existing.imageUrl = incomingImageUrl
     changed = true
   }
   if (incoming.url && !existing.url) {

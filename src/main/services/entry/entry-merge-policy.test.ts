@@ -102,4 +102,118 @@ describe('entry merge policy', () => {
     )
     expect(existing.content).not.toContain('stale body')
   })
+
+  it('does not replace existing media with unsafe incoming media', () => {
+    const now = Date.now()
+    const existing = createEntry({
+      publishedAt: now,
+      media: [
+        {
+          type: 'photo',
+          url: 'https://cdn.example.com/existing.jpg',
+        },
+      ],
+    })
+    const incoming = createEntry({
+      id: 'incoming',
+      publishedAt: now,
+      media: [
+        {
+          type: 'photo',
+          url: 'http://127.0.0.1/private.jpg',
+        },
+        {
+          type: 'video',
+          url: 'file:///tmp/private.mp4',
+        },
+      ],
+    })
+
+    const changed = mergeEntryData(existing, incoming)
+
+    expect(changed).toBe(false)
+    expect(existing.media).toEqual([
+      {
+        type: 'photo',
+        url: 'https://cdn.example.com/existing.jpg',
+      },
+    ])
+  })
+
+  it('strips unsafe incoming media previews before storing media', () => {
+    const existing = createEntry({ media: [] })
+    const incoming = createEntry({
+      id: 'incoming',
+      media: [
+        {
+          type: 'photo',
+          url: 'https://cdn.example.com/photo.jpg',
+          previewUrl: 'http://169.254.169.254/latest/meta-data',
+        },
+      ],
+    })
+
+    const changed = mergeEntryData(existing, incoming)
+
+    expect(changed).toBe(true)
+    expect(existing.media).toEqual([
+      {
+        type: 'photo',
+        url: 'https://cdn.example.com/photo.jpg',
+      },
+    ])
+  })
+
+  it('ignores unsafe incoming image URLs', () => {
+    const now = Date.now()
+    const existing = createEntry({
+      publishedAt: now,
+      imageUrl: 'https://cdn.example.com/existing.jpg',
+    })
+    const incoming = createEntry({
+      id: 'incoming',
+      publishedAt: now,
+      imageUrl: 'https://user:pass@example.com/private.jpg',
+    })
+
+    const changed = mergeEntryData(existing, incoming)
+
+    expect(changed).toBe(false)
+    expect(existing.imageUrl).toBe('https://cdn.example.com/existing.jpg')
+  })
+
+  it('merges safe public media and image URLs', () => {
+    const existing = createEntry({
+      imageUrl: 'https://cdn.example.com/old.jpg',
+      media: [
+        {
+          type: 'photo',
+          url: 'https://cdn.example.com/old.jpg',
+        },
+      ],
+    })
+    const incoming = createEntry({
+      id: 'incoming',
+      imageUrl: ' https://cdn.example.com/new.jpg ',
+      media: [
+        {
+          type: 'photo',
+          url: ' https://cdn.example.com/new.jpg ',
+          previewUrl: ' https://cdn.example.com/new-preview.jpg ',
+        },
+      ],
+    })
+
+    const changed = mergeEntryData(existing, incoming)
+
+    expect(changed).toBe(true)
+    expect(existing.imageUrl).toBe('https://cdn.example.com/new.jpg')
+    expect(existing.media).toEqual([
+      {
+        type: 'photo',
+        url: 'https://cdn.example.com/new.jpg',
+        previewUrl: 'https://cdn.example.com/new-preview.jpg',
+      },
+    ])
+  })
 })
