@@ -1,4 +1,10 @@
 import { session } from 'electron'
+import { assertNetworkFetchUrl } from '../system/network-url-policy'
+
+const TITLE_FETCH_TIMEOUT_MS = 8000
+const MAX_TITLE_REDIRECTS = 5
+const MAX_TITLE_TEXT_BYTES = 1024 * 1024
+const MAX_TITLE_JSON_BYTES = 512 * 1024
 
 interface BilibiliCardResponse {
   code?: number
@@ -6,6 +12,88 @@ interface BilibiliCardResponse {
     card?: {
       name?: string
     }
+  }
+}
+
+async function fetchTitleResource(
+  url: string,
+  headers: Record<string, string>,
+  redirectsRemaining = MAX_TITLE_REDIRECTS,
+): Promise<Response | undefined> {
+  try {
+    const safeUrl = await assertNetworkFetchUrl(url)
+    const response = await session.defaultSession.fetch(safeUrl, {
+      method: 'GET',
+      headers,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(TITLE_FETCH_TIMEOUT_MS),
+    })
+
+    if (response.status >= 300 && response.status < 400) {
+      if (redirectsRemaining <= 0) return undefined
+      const location = response.headers.get('location')
+      if (!location) return response
+      const redirectUrl = new URL(location, safeUrl).href
+      return fetchTitleResource(redirectUrl, headers, redirectsRemaining - 1)
+    }
+
+    return response
+  } catch {
+    return undefined
+  }
+}
+
+async function readResponseText(
+  response: Response,
+  maxBytes: number,
+): Promise<string | undefined> {
+  const contentLength = Number.parseInt(
+    response.headers.get('content-length') || '',
+    10,
+  )
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    return undefined
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    const buffer = Buffer.from(await response.arrayBuffer())
+    return buffer.length > maxBytes ? undefined : buffer.toString('utf8')
+  }
+
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+      total += value.byteLength
+      if (total > maxBytes) {
+        await reader.cancel()
+        return undefined
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  return Buffer.concat(
+    chunks.map((chunk) => Buffer.from(chunk)),
+    total,
+  ).toString('utf8')
+}
+
+function titleRequestHeaders(
+  accept: string,
+  overrides: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    Accept: accept,
+    ...overrides,
   }
 }
 
@@ -69,16 +157,14 @@ function toHttpUrl(feedUrl: string, rsshubBase?: string): string | null {
 
 async function fetchText(url: string): Promise<string | null> {
   try {
-    const response = await session.defaultSession.fetch(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        Accept: 'application/xml, application/rss+xml, text/xml, */*',
-      },
-    })
-    if (!response.ok) return null
-    return response.text()
+    const response = await fetchTitleResource(
+      url,
+      titleRequestHeaders(
+        'application/xml, application/rss+xml, text/xml, */*',
+      ),
+    )
+    if (!response?.ok) return null
+    return (await readResponseText(response, MAX_TITLE_TEXT_BYTES)) || null
   } catch {
     return null
   }
@@ -97,19 +183,16 @@ async function fetchJson(
   url: string,
   headers?: Record<string, string>,
 ): Promise<unknown> {
-  const response = await session.defaultSession.fetch(url, {
-    method: 'GET',
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      Accept: 'application/json, text/plain, */*',
-      ...headers,
-    },
-  })
-  if (!response.ok) {
-    throw new Error(`request failed: ${response.status}`)
+  const response = await fetchTitleResource(
+    url,
+    titleRequestHeaders('application/json, text/plain, */*', headers),
+  )
+  if (!response?.ok) {
+    throw new Error(`request failed: ${response?.status ?? 'blocked'}`)
   }
-  return response.json()
+  const text = await readResponseText(response, MAX_TITLE_JSON_BYTES)
+  if (!text) throw new Error('empty response')
+  return JSON.parse(text)
 }
 
 async function resolveBilibiliNameByUid(

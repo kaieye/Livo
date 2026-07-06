@@ -663,3 +663,47 @@ Renderer review findings to handle in later batches:
 - Feed title fallback may need narrower caller conditions so arbitrary deferred subscription URLs are not fetched only to improve display titles.
 - Feed parser policy modes should preserve local RSSHub, LAN, dev, and intranet compatibility while allowing stricter public discovery paths.
 - Renderer media-source loading still needs a central policy for private/loopback media URLs.
+
+## 2026-07-07 - Feed title fetch hardening
+
+### Review inputs
+
+- Feed title resolver review sub-agent inspected `feed-title-resolver.ts` and found direct Electron fetches in `fetchText()` and `fetchJson()` without the shared network policy, explicit redirect handling, timeouts, or response byte limits.
+- The same review identified `resolveFeedTitleFallback()` as the broadest path because refresh and deferred subscription flows can call it with stored feed URLs.
+- GitNexus was refreshed before impact analysis because the index was stale after the previous remediation commits.
+
+### Fixed in this batch
+
+- `fetchText()` and `fetchJson()` now use a resolver-local guarded fetch helper backed by `assertNetworkFetchUrl()`.
+- Feed title enrichment fetches now use `redirect: 'manual'`, follow at most 5 redirects, and re-run network policy checks on every redirect target before fetching it.
+- Title XML/text reads are capped at 1 MiB.
+- Bilibili JSON reads are capped at 512 KiB and parsed from bounded text instead of using unbounded `response.json()`.
+- Title fetches now use an 8 second timeout.
+- Added regression coverage for generic RSS title resolution, loopback block-before-fetch, redirect-to-loopback blocking, oversized title responses, and Bilibili JSON title resolution.
+- Refreshed GitNexus metadata counts in `AGENTS.md` and `CLAUDE.md` from 7,882 symbols / 20,966 relationships to 7,897 symbols / 21,043 relationships.
+
+### Impact analysis
+
+- `fetchText`: HIGH risk. Direct upstream callers are `resolveTwitterNameByUsername`, `resolveInstagramNameByUsername`, and `resolveFeedTitleFallback`; affected processes include `runRefreshSingleFeed`, `registerFeedHandlers`, `subscribeFeed`, and Agent feed-tool `execute`.
+- `fetchJson`: HIGH risk. Direct upstream caller is `resolveBilibiliNameByUid`; affected processes include `runRefreshSingleFeed`, `subscribeFeed`, Agent feed-tool `execute`, and `registerFeedHandlers`.
+- `resolveFeedTitleFallback`: CRITICAL risk. Direct upstream callers are `runRefreshSingleFeed` and `subscribeFeed`; affected processes include `registerFeedHandlers`, Agent feed-tool `execute`, `runRefreshSingleFeed`, `subscribeFeed`, `onReady`, and `registerFeedSyncHandlers`.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 5 files, 12 symbols, and 0 affected execution flows. The changed production behavior is limited to guarded title-enrichment network fetches and bounded response reads.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/feed/feed-title-resolver.ts src/main/services/feed/feed-title-resolver.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/main/services/feed/feed-title-resolver.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 151 passed test files, 855 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- Feed title fallback may still need narrower caller conditions so arbitrary deferred subscription URLs are not fetched only to improve display titles.
+- Feed parser policy modes should preserve local RSSHub, LAN, dev, and intranet compatibility while allowing stricter public discovery paths.
+- Renderer media-source loading still needs a central policy for private/loopback media URLs.
