@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { ElectronAPI } from '../preload/index'
 import {
   createWebAPI,
@@ -224,6 +224,10 @@ function assertApiShape(
 }
 
 describe('web api contract', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('matches the preload ElectronAPI shape at runtime and type level', () => {
     const api = createWebAPI()
 
@@ -231,6 +235,47 @@ describe('web api contract', () => {
     assertApiShape(
       api as unknown as Record<string, unknown>,
       ELECTRON_API_SHAPE,
+    )
+  })
+
+  it('blocks unsafe external opens in the web fallback API', async () => {
+    const open = vi.fn()
+    vi.stubGlobal('window', {
+      open,
+      location: { origin: 'https://web.example' },
+    })
+    const api = createWebAPI()
+
+    await expect(api.app.openExternal('javascript:alert(1)')).resolves.toEqual({
+      success: false,
+      error: 'unsupported-protocol',
+    })
+    await expect(
+      api.video.openInApp('https://127.0.0.1/feed'),
+    ).resolves.toEqual({
+      success: false,
+      error: 'suspicious_url',
+    })
+
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('opens normalized safe URLs in the web fallback API', async () => {
+    const open = vi.fn()
+    vi.stubGlobal('window', {
+      open,
+      location: { origin: 'https://web.example' },
+    })
+    const api = createWebAPI()
+
+    await expect(
+      api.app.openExternal(' https://example.com/article '),
+    ).resolves.toEqual({ success: true })
+
+    expect(open).toHaveBeenCalledWith(
+      'https://example.com/article',
+      '_blank',
+      'noopener,noreferrer',
     )
   })
 })

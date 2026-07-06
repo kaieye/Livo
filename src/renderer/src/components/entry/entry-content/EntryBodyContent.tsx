@@ -4,6 +4,7 @@ import type { TranslationErrorMap } from '../../../hooks/useAITranslation'
 import { BilingualContent } from '../BilingualContent'
 import { EntryDetailFallback } from './EntryDetailFallback'
 import { getEntryContentLayout } from './entry-content-layout'
+import { openExternalUrlSafe } from '../../../services/external-url'
 
 export function EntryBodyContent({
   isReadabilityMode,
@@ -146,7 +147,7 @@ export function EntryBodyContent({
                 className="text-accent inline-block text-sm hover:underline"
                 onClick={(e) => {
                   e.preventDefault()
-                  window.open(entryUrl, '_blank')
+                  void openExternalUrlSafe(entryUrl)
                 }}
               >
                 {t('entry.readInBrowser')}

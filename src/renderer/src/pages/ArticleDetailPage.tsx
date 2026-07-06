@@ -45,6 +45,7 @@ import { getDateLocale } from '../lib/date-locale'
 import { ROUTES } from '../router/route-paths'
 import { FeedViewType } from '../../../shared/types'
 import { resolveSocialAuthorName } from '../components/entry/entry-list/utils/entry-social'
+import { openExternalUrlSafe } from '../services/external-url'
 
 // 18.3 — Resizable reading panel constants
 const READING_MIN = 360
@@ -374,11 +375,7 @@ export default function ArticleDetailPage() {
         icon: <ExternalLink size={14} />,
         onClick: () => {
           if (!fallbackUrl) return
-          if (window.api?.app?.openExternal) {
-            void window.api.app.openExternal(fallbackUrl)
-          } else {
-            window.open(fallbackUrl, '_blank')
-          }
+          void openExternalUrlSafe(fallbackUrl)
         },
         disabled: !fallbackUrl,
         separator: true,
@@ -574,7 +571,7 @@ export default function ArticleDetailPage() {
                         <button
                           type="button"
                           onClick={() =>
-                            window.open(videoExternalUrl, '_blank')
+                            void openExternalUrlSafe(videoExternalUrl)
                           }
                           className="mt-2 text-sm text-[var(--color-accent)] hover:underline"
                         >

@@ -244,3 +244,48 @@ Renderer review findings to handle in later batches:
 - `VIDEO_OPEN_IN_APP` still creates a general video BrowserWindow and should get its own URL/navigation/popup hardening batch.
 - Remaining renderer/web raw external-open paths should be unified behind `openExternalUrlSafe()`, especially `EntryContent`, `ArticleDetailPage`, discovery/settings anchors, and web API stubs.
 - General feed/readability/discovery/video fetch paths still need a broader private-network, redirect, and DNS-rebinding policy pass outside the already-hardened OPML path.
+
+## 2026-07-07 - Renderer/web external link hardening
+
+### Review inputs
+
+- Renderer external-link review sub-agent inspected `EntryContent`, `EntryBodyContent`, and `ArticleDetailPage`.
+- Confirmed high-risk direct external opens in article body click handling, toolbar/command browser opens, fallback "read in browser" links, article context menus, and video fallback links.
+- Web API review sub-agent did not return before the batch was ready to commit and was closed while still running, so no additional findings were incorporated from that review.
+
+### Fixed in this batch
+
+- `EntryContent` article links, toolbar browser opens, and `entry:open-browser` command handling now route through `openExternalUrlSafe()` instead of raw `window.open()`.
+- `EntryBodyContent` fallback "read in browser" links now route through `openExternalUrlSafe()`.
+- `ArticleDetailPage` context-menu browser opens and video fallback links now route through `openExternalUrlSafe()`.
+- `openExternalUrlSafe()` now reclassifies the confirmed URL immediately before opening and uses the normalized policy URL for IPC and web fallbacks.
+- Web fallback API methods `app.openExternal()` and `video.openInApp()` now reuse the shared external URL policy, reject blocked and suspicious URLs, and open only normalized safe URLs.
+
+### Impact analysis
+
+- `EntryContent`: HIGH risk. Direct upstream callers are `DiscoverPanel`, `ArticleDetailPage`, and `DiscoverPreviewPage`; affected processes include `ArticleDetailPage` and `DiscoverPreviewPage`.
+- `EntryBodyContent`: HIGH risk. Direct upstream caller is `EntryContent`; indirect affected callers include `ArticleDetailPage` and `DiscoverPreviewPage`.
+- `ArticleDetailPage`: LOW risk by symbol impact. No upstream callers reported by GitNexus.
+- `openExternalUrlSafe`: CRITICAL risk for broad helper changes, with 31 impacted symbols, 17 direct callers, and 9 affected processes. This batch keeps the helper change narrowly limited to reclassifying and normalizing the already-confirmed URL before open.
+- `createExternalUrlWarning`: LOW risk from the removed local warning path in `EntryContent`.
+- `src/web/web-api.ts` `openExternal` and `openInApp`: LOW risk by symbol impact. No upstream callers reported.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported CRITICAL risk across 8 files, 10 symbols, and 19 affected execution flows. The high effective scope is expected because shared reading surfaces and `openExternalUrlSafe()` participate in multiple article, image, and video open flows; changed behavior is limited to routing external opens through shared URL policy and normalizing safe URLs before opening.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/components/entry/EntryContent.tsx src/renderer/src/components/entry/entry-content/EntryBodyContent.tsx src/renderer/src/pages/ArticleDetailPage.tsx src/renderer/src/services/external-url.ts src/renderer/src/services/external-url.test.ts src/web/web-api.ts src/web/web-api-contract.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/renderer/src/services/external-url.test.ts src/web/web-api-contract.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 834 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- Discovery/settings/profile/social anchors still need a separate pass to remove remaining raw `_blank` and external-open paths.
+- `FeedsSettings` external link behavior should be reviewed with the broader settings-link pass.
+- General feed/readability/discovery/video fetch paths still need a broader private-network, redirect, and DNS-rebinding policy pass outside the already-hardened OPML path.

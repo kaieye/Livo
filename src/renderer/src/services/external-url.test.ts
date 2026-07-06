@@ -62,4 +62,32 @@ describe('openExternalUrlSafe', () => {
     expect(result).toEqual({ opened: false })
     expect(openExternal).not.toHaveBeenCalled()
   })
+
+  it('does not open suspicious URLs when confirmation is rejected', async () => {
+    const openExternal = vi.fn()
+    ;(globalThis as unknown as { window: { api?: unknown } }).window = {
+      ...((globalThis as unknown as { window: object }).window ?? {}),
+      api: { app: { openExternal } },
+      confirm: vi.fn(() => false),
+    } as unknown as Window
+
+    const result = await openExternalUrlSafe('https://google.com@evil.example/')
+
+    expect(result).toEqual({ opened: false })
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('opens the normalized suspicious URL after confirmation', async () => {
+    const openExternal = vi.fn().mockResolvedValue({ success: true })
+    ;(globalThis as unknown as { window: { api?: unknown } }).window = {
+      ...((globalThis as unknown as { window: object }).window ?? {}),
+      api: { app: { openExternal } },
+      confirm: vi.fn(() => true),
+    } as unknown as Window
+
+    const result = await openExternalUrlSafe(' https://127.0.0.1/feed ')
+
+    expect(result).toEqual({ opened: true })
+    expect(openExternal).toHaveBeenCalledWith('https://127.0.0.1/feed')
+  })
 })

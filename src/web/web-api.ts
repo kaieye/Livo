@@ -11,6 +11,7 @@ import {
   type RendererEventCallback,
   type RendererEventChannel,
 } from '../shared/renderer-events'
+import { classifyExternalUrl } from '../shared/url-policy'
 import type {
   Feed,
   Entry,
@@ -40,6 +41,28 @@ import type {
   TaskRunListOptions,
   TaskRunRecord,
 } from '../shared/types'
+
+function openExternalUrlForWeb(url: string):
+  | { success: true }
+  | {
+      success: false
+      error: string
+    } {
+  const policy = classifyExternalUrl(url)
+  if (policy.blocked) {
+    return { success: false, error: policy.blockedReason || 'blocked_url' }
+  }
+  if (policy.suspicious) {
+    return { success: false, error: 'suspicious_url' }
+  }
+
+  try {
+    window.open(policy.url, '_blank', 'noopener,noreferrer')
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+}
 import { deriveEntryTaskSnapshot } from '../shared/entry-task-status'
 import {
   normalizeDiscoverQueryToFeedUrl,
@@ -2355,14 +2378,7 @@ export function createWebAPI(): ElectronAPI {
     app: {
       getVersion: async () => 'web-dev',
       getIcon: async () => null,
-      openExternal: async (url: string) => {
-        try {
-          window.open(url, '_blank', 'noopener,noreferrer')
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: String(error) }
-        }
-      },
+      openExternal: async (url: string) => openExternalUrlForWeb(url),
       reportError: async (payload: {
         source: string
         message: string
@@ -2789,12 +2805,7 @@ export function createWebAPI(): ElectronAPI {
         error: 'Not available on web platform',
       }),
       openInApp: async (url: string) => {
-        try {
-          window.open(url, '_blank', 'noopener,noreferrer')
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: String(error) }
-        }
+        return openExternalUrlForWeb(url)
       },
       ytLogin: async () => ({ success: false, error: 'Not available on web' }),
       ytStatus: async () => ({ loggedIn: false, name: null }),

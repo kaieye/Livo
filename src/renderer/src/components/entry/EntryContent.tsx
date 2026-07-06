@@ -15,11 +15,8 @@ import { useRegisterCommand } from '../../hooks/useRegisterCommand'
 import { useEntryScrollNavigation } from '../../hooks/useEntryScrollNavigation'
 import { usePlayerStore } from '../media/MediaPlayer'
 import { VideoPlayer } from '../media/MediaPlayer'
-import {
-  sanitizeHTML,
-  isExternalUrl,
-  createExternalLinkWarning,
-} from '../../utils/sanitize'
+import { sanitizeHTML } from '../../utils/sanitize'
+import { openExternalUrlSafe } from '../../services/external-url'
 import {
   Star,
   ExternalLink,
@@ -63,10 +60,6 @@ import { EntryBodyContent } from './entry-content/EntryBodyContent'
 import { EntryEmptyState } from './entry-content/EntryEmptyState'
 import { EntryEndNavigation } from './entry-content/EntryEndNavigation'
 import { EntryFeaturedImage } from './entry-content/EntryFeaturedImage'
-import {
-  ExternalLinkWarningModal,
-  type ExternalLinkWarningState,
-} from './entry-content/ExternalLinkWarningModal'
 import { ToolbarButton } from './entry-content/ToolbarButton'
 import {
   estimateReadingTime,
@@ -166,8 +159,6 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
   const [isFetchingReadable, setIsFetchingReadable] = useState(false)
   const [readabilityError, setReadabilityError] = useState<string | null>(null)
   const [embeddedPageUrl, setEmbeddedPageUrl] = useState<string | null>(null)
-  const [externalLinkWarning, setExternalLinkWarning] =
-    useState<ExternalLinkWarningState | null>(null)
   const [articleMenu, setArticleMenu] = useState<{
     visible: boolean
     x: number
@@ -285,15 +276,10 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
       if (!anchor) return
       const href = anchor.getAttribute('href')
       if (!href) return
-      if (isExternalUrl(href)) {
+      if (/^https?:\/\//i.test(href.trim())) {
         e.preventDefault()
         e.stopPropagation()
-        const info = createExternalLinkWarning(href)
-        if (info.isSuspicious) {
-          setExternalLinkWarning(info)
-        } else {
-          window.open(href, '_blank')
-        }
+        void openExternalUrlSafe(href)
       }
     }
 
@@ -690,7 +676,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
       if (isInput) return false
       e.preventDefault()
       const browserUrl = resolveEntryBrowserOpenUrl(selectedEntry)
-      window.open(browserUrl || selectedEntry.url, '_blank')
+      void openExternalUrlSafe(browserUrl || selectedEntry.url)
     },
   })
 
@@ -934,7 +920,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
             <ToolbarButton
               onClick={() => {
                 const browserUrl = resolveEntryBrowserOpenUrl(selectedEntry)
-                window.open(browserUrl || selectedEntry.url, '_blank')
+                void openExternalUrlSafe(browserUrl || selectedEntry.url)
               }}
               title={t('entry.openInBrowser')}
             >
@@ -1121,18 +1107,6 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
             />
           </article>
         </div>
-      )}
-
-      {/* External link warning modal */}
-      {externalLinkWarning && (
-        <ExternalLinkWarningModal
-          warning={externalLinkWarning}
-          onClose={() => setExternalLinkWarning(null)}
-          onContinue={() => {
-            window.open(externalLinkWarning.url, '_blank')
-            setExternalLinkWarning(null)
-          }}
-        />
       )}
 
       {articleMenu.visible && (

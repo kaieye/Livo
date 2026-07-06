@@ -137,9 +137,14 @@ export async function openExternalUrlSafe(
   }
 
   // User confirmed — open via IPC
+  const policy = classifyExternalUrl(url)
+  if (policy.blocked) {
+    return { opened: false }
+  }
+
   if (window.api?.app?.openExternal) {
     try {
-      const openResult = await window.api.app.openExternal(url)
+      const openResult = await window.api.app.openExternal(policy.url)
       return { opened: openResult.success }
     } catch {
       return { opened: false }
@@ -148,7 +153,7 @@ export async function openExternalUrlSafe(
 
   // Fallback for non-Electron environment
   try {
-    window.open(url, '_blank', 'noopener,noreferrer')
+    window.open(policy.url, '_blank', 'noopener,noreferrer')
     return { opened: true }
   } catch {
     return { opened: false }
