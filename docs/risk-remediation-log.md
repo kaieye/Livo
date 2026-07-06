@@ -289,3 +289,45 @@ Renderer review findings to handle in later batches:
 - Discovery/settings/profile/social anchors still need a separate pass to remove remaining raw `_blank` and external-open paths.
 - `FeedsSettings` external link behavior should be reviewed with the broader settings-link pass.
 - General feed/readability/discovery/video fetch paths still need a broader private-network, redirect, and DNS-rebinding policy pass outside the already-hardened OPML path.
+
+## 2026-07-07 - Video window navigation hardening
+
+### Review inputs
+
+- Existing deferred finding: `VIDEO_OPEN_IN_APP` created a general video `BrowserWindow` and needed URL, navigation, popup, and sandbox hardening.
+- Local review confirmed the handler only checked an `http(s)` prefix, loaded the raw URL, allowed HTTP(S) popups, and created the child window with `sandbox: false`.
+- A video-window review sub-agent did not return before the batch was ready to commit and was closed while still running, so no additional findings were incorporated from that review.
+
+### Fixed in this batch
+
+- `VIDEO_OPEN_IN_APP` now validates requested URLs with the shared external URL policy before creating a window.
+- Blocked or suspicious URLs are rejected before any `BrowserWindow` is created.
+- Safe URLs are normalized before `loadURL()`.
+- The video child window now runs with Electron sandboxing enabled.
+- Popups from the video window are denied.
+- Main-frame navigation is allowed only when the next URL passes the same policy and stays on the original origin.
+
+### Impact analysis
+
+- `registerVideoHandlers`: LOW risk by GitNexus symbol impact. No direct upstream callers or affected processes were reported, though source inspection confirms it is invoked during IPC handler registration.
+- `classifyExternalUrl`: CRITICAL risk if changed broadly, with 45 impacted symbols, 7 direct callers, and 9 affected processes. This batch does not change the shared classifier; it only reuses the existing policy from the video handler.
+- `validateIpcArgs`: LOW risk by symbol impact. No upstream callers or affected processes were reported; this batch does not change IPC argument validation.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 3 files, 1 symbol, and 0 affected execution flows. The changed behavior is limited to `VIDEO_OPEN_IN_APP` URL admission and video child-window navigation controls.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/handlers/video-handlers.ts src/main/handlers/video-handlers.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/main/handlers/video-handlers.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 837 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- Renderer/settings/discovery/profile/social anchors still need the separate safe-opener pass identified by the renderer link review.
+- General feed/readability/discovery/video fetch paths still need a broader private-network, redirect, and DNS-rebinding policy pass outside the already-hardened OPML path.

@@ -7,6 +7,7 @@
  */
 import { BrowserWindow } from 'electron'
 import { IPC } from '../../shared/types'
+import { classifyExternalUrl } from '../../shared/url-policy'
 import { registerChannel } from '../ipc/register-channel'
 import { toHandlerError } from '../ipc/handler-error'
 import { resolveVideoUrl } from '../services/video/video-proxy'
@@ -19,6 +20,35 @@ import {
 const DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 
+function validateVideoWindowUrl(url: string):
+  | {
+      allowed: true
+      url: string
+      origin: string
+    }
+  | {
+      allowed: false
+      error: string
+    } {
+  const policy = classifyExternalUrl(url)
+  if (policy.blocked) {
+    return { allowed: false, error: policy.blockedReason || 'blocked_url' }
+  }
+  if (policy.suspicious) {
+    return { allowed: false, error: 'suspicious_url' }
+  }
+
+  try {
+    return {
+      allowed: true,
+      url: policy.url,
+      origin: new URL(policy.url).origin,
+    }
+  } catch {
+    return { allowed: false, error: 'malformed' }
+  }
+}
+
 export function registerVideoHandlers(): void {
   // 鈹€鈹€ Invidious/Piped video resolution 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
   registerChannel(IPC.VIDEO_RESOLVE, async (_event, url: string) => {
@@ -27,9 +57,11 @@ export function registerVideoHandlers(): void {
 
   registerChannel(IPC.VIDEO_OPEN_IN_APP, async (_event, url: string) => {
     try {
-      if (!/^https?:\/\//i.test(url)) {
-        return { success: false, error: 'Invalid URL' }
+      const initialUrl = validateVideoWindowUrl(url)
+      if (!initialUrl.allowed) {
+        return { success: false, error: initialUrl.error }
       }
+
       const videoWin = new BrowserWindow({
         width: 1280,
         height: 800,
@@ -39,18 +71,24 @@ export function registerVideoHandlers(): void {
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
-          sandbox: false,
+          sandbox: true,
         },
       })
       videoWin.webContents.setUserAgent(DESKTOP_UA)
-      videoWin.webContents.setWindowOpenHandler((details) => {
-        if (/^https?:\/\//i.test(details.url)) {
-          return { action: 'allow' }
-        }
+      videoWin.webContents.setWindowOpenHandler(() => {
         return { action: 'deny' }
       })
+      videoWin.webContents.on('will-navigate', (event, nextUrl) => {
+        const navigationUrl = validateVideoWindowUrl(nextUrl)
+        if (
+          !navigationUrl.allowed ||
+          navigationUrl.origin !== initialUrl.origin
+        ) {
+          event.preventDefault()
+        }
+      })
 
-      await videoWin.loadURL(url)
+      await videoWin.loadURL(initialUrl.url)
       return { success: true }
     } catch (err) {
       return toHandlerError(err)
