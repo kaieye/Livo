@@ -3605,7 +3605,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'https://www.producthunt.com/feed',
     siteUrl: 'https://www.producthunt.com',
     description: 'Product Hunt 每日最新科技产品发现与评测',
-    category: 'social',
+    category: 'articles',
     language: 'English',
   },
   {
@@ -3613,7 +3613,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://github/trending/weekly/any',
     siteUrl: 'https://github',
     description: 'GitHub 每周热门仓库榜单',
-    category: 'social',
+    category: 'articles',
     language: 'English',
   },
   {
@@ -3621,7 +3621,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://github/trending/daily/any',
     siteUrl: 'https://github',
     description: 'GitHub 每日热门仓库榜单',
-    category: 'social',
+    category: 'articles',
     language: 'English',
   },
   {
@@ -3653,7 +3653,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://stockedge/daily-updates/news',
     siteUrl: 'https://stockedge',
     description: '印度股市每日资讯与行情更新',
-    category: 'social',
+    category: 'articles',
     language: 'English',
   },
   {
@@ -3661,7 +3661,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://bloomberg/%2F',
     siteUrl: 'https://bloomberg',
     description: '彭博社财经与商业资讯',
-    category: 'social',
+    category: 'articles',
     language: 'English',
   },
   {
@@ -3669,7 +3669,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://ainvest/news',
     siteUrl: 'https://ainvest',
     description: 'AI 驱动的投资资讯平台，聚合全球金融与科技新闻',
-    category: 'social',
+    category: 'articles',
     language: 'English',
   },
   {
@@ -3677,7 +3677,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://gq/news',
     siteUrl: 'https://gq',
     description: 'GQ 时尚男士杂志，涵盖时尚、文化与生活方式资讯',
-    category: 'social',
+    category: 'articles',
     language: 'English',
   },
   {
@@ -3709,7 +3709,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://bilibili/ranking/0',
     siteUrl: 'https://bilibili',
     description: 'Bilibili 全站排行榜，发现最受欢迎的视频内容',
-    category: 'social',
+    category: 'videos',
     language: 'Chinese',
   },
   {
@@ -3717,7 +3717,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://fastbull/express-news',
     siteUrl: 'https://fastbull',
     description: 'FastBull 实时财经快讯，覆盖外汇、大宗商品与全球市场',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3725,7 +3725,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://gelonghui/live',
     siteUrl: 'https://gelonghui',
     description: '格隆汇实时快讯，聚焦港股与全球投资资讯',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3733,7 +3733,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://techflowpost/express',
     siteUrl: 'https://techflowpost',
     description: '深潮 TechFlow Web3 与加密货币实时快讯',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3741,7 +3741,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://theblockbeats/newsflash/0',
     siteUrl: 'https://theblockbeats',
     description: '律动 BlockBeats 区块链与加密货币实时快讯',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3749,7 +3749,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'https://api.theblockbeats.news/v1/open-api/home-xml',
     siteUrl: 'https://api.theblockbeats.news',
     description: '律动 BlockBeats 区块链行业深度报道与资讯',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3757,7 +3757,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://36kr/hot-list',
     siteUrl: 'https://36kr',
     description: '36氪 24 小时热榜，科技创业资讯与深度报道',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3765,7 +3765,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://solidot/www',
     siteUrl: 'https://solidot',
     description: '奇客 Solidot，汇聚科技与互联网领域重要资讯',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3773,7 +3773,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://yyets/article/all',
     siteUrl: 'https://yyets',
     description: '人人影视字幕组资讯，影视剧集更新与字幕动态',
-    category: 'social',
+    category: 'videos',
     language: 'Chinese',
   },
   {
@@ -3781,7 +3781,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://telegram/channel/TestFlightCN',
     siteUrl: 'https://telegram',
     description: '科技圈在花 Telegram 频道，分享 TestFlight 与科技资讯',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3789,7 +3789,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://telegram/channel/tnews365',
     siteUrl: 'https://telegram',
     description: '竹新社 Telegram 频道，聚焦中文世界重要新闻',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3797,7 +3797,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'https://v2ex-create.nexmm.com/rss.xml',
     siteUrl: 'https://v2ex-create.nexmm.com',
     description: 'V2EX 分享创造节点每日精华，独立开发者产品展示',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3805,7 +3805,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://jinse/lives/0',
     siteUrl: 'https://jinse',
     description: '金色财经区块链与加密货币全品类实时资讯',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3813,7 +3813,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://fx678/kx',
     siteUrl: 'https://fx678',
     description: '汇通财经 7×24 小时外汇与财经实时快讯',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3829,7 +3829,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://telegram/channel/abskoop',
     siteUrl: 'https://telegram',
     description: 'A 姐分享 Telegram 频道，每日精选优质资源',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3837,7 +3837,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://telegram/channel/me888888888888',
     siteUrl: 'https://telegram',
     description: '小声逼逼 Telegram 频道，分享互联网资讯与工具',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3845,7 +3845,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://telegram/channel/Aliyun_4K_Movies',
     siteUrl: 'https://telegram',
     description: '阿里云盘 4K 影视资源 Telegram 频道',
-    category: 'social',
+    category: 'videos',
     language: 'Chinese',
   },
   {
@@ -3861,7 +3861,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://telegram/channel/Q66Share',
     siteUrl: 'https://telegram',
     description: '阿里云盘吧 Telegram 频道，分享网盘资源',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3869,7 +3869,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://telegram/channel/shareAliyun',
     siteUrl: 'https://telegram',
     description: '阿里云盘发布频道，官方资源分享',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3885,7 +3885,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://telegram/channel/jike_collection',
     siteUrl: 'https://telegram',
     description: '即刻精选 Telegram 频道，汇聚优质内容',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3893,7 +3893,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://cnbeta',
     siteUrl: 'https://cnbeta',
     description: 'cnBeta 中文科技资讯站，聚合国内外 IT 与互联网新闻',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3901,7 +3901,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'https://feeds.feedburner.com/36kr/hot-list',
     siteUrl: 'https://feeds.feedburner.com',
     description: '36氪资讯热榜，48 小时人气与综合榜单',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3917,7 +3917,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://telegram/channel/xhqcankao',
     siteUrl: 'https://telegram',
     description: '风向旗参考快讯 Telegram 频道，聚焦时事与财经',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3925,7 +3925,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'https://rsshub.bestblogs.dev/juejin/trending/all/weekly',
     siteUrl: 'https://rsshub.bestblogs.dev',
     description: '掘金本周最热文章，聚焦前端与后端开发技术',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3949,7 +3949,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://telegram/channel/pseudoyulife',
     siteUrl: 'https://telegram',
     description: "Yu's Life Telegram 频道，分享技术与生活感悟",
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -3965,7 +3965,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://bilibili/user/dynamic/546195',
     siteUrl: 'https://space.bilibili.com/546195',
     description: '老番茄 Bilibili 动态，游戏与生活内容创作者',
-    category: 'social',
+    category: 'videos',
     language: '',
   },
   {
@@ -4093,7 +4093,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://juejin/trending/all/weekly',
     siteUrl: 'https://juejin',
     description: '掘金本周全站热门文章',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -4101,7 +4101,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://juejin/trending/frontend/weekly',
     siteUrl: 'https://juejin',
     description: '掘金本周前端热门文章',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -4109,7 +4109,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://juejin/trending/backend/weekly',
     siteUrl: 'https://juejin',
     description: '掘金本周后端热门文章',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -4117,7 +4117,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://csdn/blog',
     siteUrl: 'https://csdn',
     description: 'CSDN 热门博客文章',
-    category: 'social',
+    category: 'articles',
     language: 'Chinese',
   },
   {
@@ -4157,7 +4157,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://instagram/user/nasa',
     siteUrl: 'https://instagram.com/nasa',
     description: 'NASA 官方 Instagram，分享太空探索精彩瞬间',
-    category: 'social',
+    category: 'ins',
     language: '',
   },
   {
@@ -4165,7 +4165,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://instagram/user/natgeo',
     siteUrl: 'https://instagram.com/natgeo',
     description: '国家地理官方 Instagram，汇聚全球顶级摄影作品',
-    category: 'social',
+    category: 'ins',
     language: '',
   },
   {
@@ -4173,7 +4173,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://instagram/user/figma',
     siteUrl: 'https://instagram.com/figma',
     description: 'Figma 官方 Instagram，展示设计工具与创意作品',
-    category: 'social',
+    category: 'ins',
     language: '',
   },
   {
@@ -4181,7 +4181,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     url: 'rsshub://instagram/user/google',
     siteUrl: 'https://instagram.com/google',
     description: 'Google 官方 Instagram，分享产品与公司文化',
-    category: 'social',
+    category: 'ins',
     language: '',
   },
   {
