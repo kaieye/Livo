@@ -6,6 +6,7 @@ import type { DeepLinkAction } from '../shared/deep-link'
 import { classifyExternalUrl } from '../shared/url-policy'
 import type { AppCommandPayload } from '../shared/types'
 import { getAppIconPath } from './app-icon'
+import { classifyNetworkFetchUrl } from './services/system/network-url-policy'
 import { logError, logInfo, logWarn } from './services/system/logger'
 import {
   hasSavedWindowState,
@@ -55,7 +56,9 @@ export class WindowManager {
     this.revealMainWindowIfReady()
   }
 
-  safeOpenExternal(url: string): void {
+  async safeOpenExternal(
+    url: string,
+  ): Promise<{ success: boolean; error?: string }> {
     try {
       const policy = classifyExternalUrl(url)
       if (policy.blocked) {
@@ -63,19 +66,37 @@ export class WindowManager {
           url,
           reason: policy.blockedReason,
         })
-        return
+        return { success: false, error: policy.blockedReason || 'blocked' }
       }
+
+      const networkPolicy = await classifyNetworkFetchUrl(policy.url)
+      if (!networkPolicy.allowed) {
+        logWarn('[external] blocked private url', {
+          url: policy.url,
+          hostname: networkPolicy.hostname,
+          reason: networkPolicy.blockedReason,
+          resolvedAddresses: networkPolicy.resolvedAddresses,
+        })
+        return {
+          success: false,
+          error: networkPolicy.blockedReason || 'blocked',
+        }
+      }
+
       if (policy.suspicious) {
         logWarn('[external] opening suspicious url', {
           url: policy.url,
           hostname: policy.hostname,
         })
       }
-      void shell.openExternal(policy.url).catch((error) => {
-        logWarn('[external] failed to open url', policy.url, error)
-      })
+      await shell.openExternal(policy.url)
+      return { success: true }
     } catch (error) {
       logWarn('[external] invalid external url', url, error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
     }
   }
 
@@ -288,7 +309,7 @@ export class WindowManager {
       if (fromBilibiliPlayer && /bilibili\.com/i.test(details.url)) {
         return { action: 'deny' }
       }
-      this.safeOpenExternal(details.url)
+      void this.safeOpenExternal(details.url)
       return { action: 'deny' }
     })
 
@@ -299,7 +320,7 @@ export class WindowManager {
       logWarn('[window] blocked main-frame navigation', {
         url: navigationUrl,
       })
-      this.safeOpenExternal(navigationUrl)
+      void this.safeOpenExternal(navigationUrl)
     })
 
     mainWindow.webContents.on(
@@ -328,7 +349,7 @@ export class WindowManager {
 
     mainWindow.webContents.on('did-attach-webview', (_event, webContents) => {
       webContents.setWindowOpenHandler((details) => {
-        this.safeOpenExternal(details.url)
+        void this.safeOpenExternal(details.url)
         return { action: 'deny' }
       })
 
@@ -337,7 +358,7 @@ export class WindowManager {
         logWarn('[window] blocked webview navigation', {
           url: navigationUrl,
         })
-        this.safeOpenExternal(navigationUrl)
+        void this.safeOpenExternal(navigationUrl)
       })
     })
 

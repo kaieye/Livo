@@ -237,7 +237,9 @@ declare global {
       }
       app: {
         getVersion: () => Promise<string>
-        openExternal: (url: string) => Promise<{ success: boolean }>
+        openExternal: (
+          url: string,
+        ) => Promise<{ success: boolean; error?: string }>
         reportError: (payload: {
           source: string
           message: string

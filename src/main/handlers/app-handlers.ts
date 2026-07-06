@@ -32,8 +32,7 @@ function logStartupTiming(label: string, startedAt: number): void {
 export function registerAppHandlers(windowManager: WindowManager): void {
   registerChannel(IPC.APP_GET_VERSION, () => app.getVersion())
   registerChannel(IPC.APP_OPEN_EXTERNAL, (_event, url: string) => {
-    windowManager.safeOpenExternal(url)
-    return { success: true }
+    return windowManager.safeOpenExternal(url)
   })
   registerChannel(
     IPC.APP_REPORT_ERROR,

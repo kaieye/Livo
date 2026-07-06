@@ -1178,3 +1178,44 @@ Renderer review findings to handle in later batches:
 
 - External-open policy still permits private/loopback HTTP(S) links through `classifyExternalUrl()`/`WindowManager.safeOpenExternal`; address this in a dedicated batch because relevant symbols have HIGH/CRITICAL impact.
 - Feed/article/media/video fallback open paths should be reviewed against the external-open policy once a narrower untrusted external URL policy is available.
+
+## 2026-07-07 - Main external-open private URL hardening
+
+### Review inputs
+
+- External-open review found that renderer confirmation was not a sufficient boundary because direct IPC or blocked navigation paths could still reach `WindowManager.safeOpenExternal()`.
+- The review also found that `classifyExternalUrl()` has broad CRITICAL impact and still treats some private HTTP(S) targets as suspicious rather than blocked, so this batch keeps the fix at the narrower main-process external-open boundary.
+
+### Fixed in this batch
+
+- `WindowManager.safeOpenExternal()` now returns a real `{ success, error? }` result and awaits `shell.openExternal()` failures instead of fire-and-forget logging.
+- Before opening HTTP(S) URLs, the main process now applies `classifyNetworkFetchUrl()` and blocks loopback/private/reserved DNS results at the final external-open boundary.
+- The `APP_OPEN_EXTERNAL` IPC handler now returns the main-process result instead of always reporting success.
+- Window-open and navigation interception call sites remain fire-and-forget but now share the stricter main-process validation.
+- Added regression coverage for public URL opening, direct loopback blocking, and hostnames resolving to private addresses.
+
+### Impact analysis
+
+- `WindowManager.safeOpenExternal`: HIGH risk. Direct callers include `registerAppHandlers` and `bindWindowEvents`; affected processes include `onReady`, `handleActivate`, `registerAppHandlers`, and `bindWindowEvents`.
+- `registerAppHandlers`: LOW risk.
+- `classifyExternalUrl`: CRITICAL risk across 129 impacted symbols and 21 processes. It was intentionally not edited in this batch.
+- Pre-commit `detect_changes --scope staged` reported HIGH risk across 8 files, 13 symbols, and 15 affected processes, including `RegisterAppHandlers` URL-policy flows and `BindWindowEvents`/`HandleActivate` window flows.
+
+### Verification
+
+- `pnpm test -- src/main/window-manager.test.ts src/main/services/system/network-url-policy.test.ts src/shared/url-policy.test.ts src/renderer/src/services/external-url.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 159 passed test files, 922 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/window-manager.ts src/main/window-manager.test.ts src/main/handlers/app-handlers.ts src/preload/index.ts src/renderer/src/env.d.ts src/main/services/system/network-url-policy.ts src/shared/url-policy.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- `safeOpenExternal()` now performs DNS resolution before opening HTTP(S) URLs. That closes the private/loopback bypass at the main boundary but can make external opening fail closed when DNS resolution fails.
+- Renderer-specific untrusted external-open policies remain a follow-up, including media/video fallback paths that can open raw source URLs.
+- Plaintext token/settings secret storage and renderer broadcast exposure remain deferred high-risk findings.
