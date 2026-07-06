@@ -2076,3 +2076,42 @@ Renderer review findings to handle in later batches:
 
 - This batch does not redact embedded URLs inside entry text/content fields because that can alter article content.
 - Web settings secret persistence, web digest-run text redaction, legacy WeChat token cleanup, public-only discovery/feed fetch policy, and update installer verification remain separate findings.
+
+## 2026-07-07 - Remove legacy WeChat token trust
+
+### Review inputs
+
+- Persistence review found `WechatRssSettings` still treated the legacy `livo-wechat-mp-token` localStorage key as proof of local authorization.
+- Current login success already uses `livo-wechat-mp-logged-in`, and current writers remove the legacy token key.
+- Keeping the legacy token key trusted can preserve stale authorization state and leave old token material in localStorage.
+
+### Fixed in this batch
+
+- `hasPersistedAuthorization()` now trusts only the `livo-wechat-mp-logged-in` marker.
+- Reading persisted authorization migrates legacy state by removing `livo-wechat-mp-token` whenever it is found.
+- Added regression coverage proving the legacy token alone no longer authorizes the settings page and is removed during migration.
+- Added coverage proving an existing logged-in marker remains trusted while the legacy token is removed.
+
+### Impact analysis
+
+- `hasPersistedAuthorization`: LOW risk. GitNexus reported one direct caller (`checkLoginStatus`) and no affected processes; transitive callers are `WechatRssSettings` and `startLogin`.
+
+### Verification
+
+- `pnpm test -- src/renderer/src/components/settings/WechatRssSettings.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 169 passed test files, 988 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/components/settings/WechatRssSettings.tsx src/renderer/src/components/settings/WechatRssSettings.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed after formatting `src/renderer/src/components/settings/WechatRssSettings.test.ts`.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 3 files, 1 symbol, 0 affected processes, LOW risk.
+  - Changed symbol: `hasPersistedAuthorization`.
+
+### Deferred findings
+
+- Web settings secret persistence, web digest-run text redaction, public-only discovery/feed fetch policy, and update installer verification remain separate findings.

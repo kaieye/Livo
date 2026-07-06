@@ -18,12 +18,13 @@ export function resolveWechatAuthorizationState(input: {
   return input.serverIsLoggedIn || input.hasPersistedAuthorization
 }
 
-function hasPersistedAuthorization(): boolean {
+export function hasPersistedAuthorization(): boolean {
   try {
-    return (
-      localStorage.getItem(STORAGE_KEY_LOGGED_IN) === '1' ||
-      Boolean(localStorage.getItem(STORAGE_KEY_TOKEN))
-    )
+    const hasLoggedInFlag = localStorage.getItem(STORAGE_KEY_LOGGED_IN) === '1'
+    if (localStorage.getItem(STORAGE_KEY_TOKEN) !== null) {
+      localStorage.removeItem(STORAGE_KEY_TOKEN)
+    }
+    return hasLoggedInFlag
   } catch {
     return false
   }
