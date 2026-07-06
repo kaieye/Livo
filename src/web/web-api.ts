@@ -1454,6 +1454,7 @@ export function createWebAPI(): ElectronAPI {
             id,
             title: title?.trim() || parsed.title || storedUrl,
             url: storedUrl,
+            upstreamUrl: rawProtocolUrl,
             siteUrl: parsed.link,
             description: parsed.description,
             imageUrl: await getFeedAvatarFromParsed(
@@ -1669,6 +1670,7 @@ export function createWebAPI(): ElectronAPI {
                     id,
                     title: opmlFeed.title || parsed.title || storedXmlUrl,
                     url: storedXmlUrl,
+                    upstreamUrl: storedXmlUrl,
                     siteUrl: opmlFeed.htmlUrl || parsed.link,
                     description: parsed.description,
                     imageUrl: await getFeedAvatarFromParsed(

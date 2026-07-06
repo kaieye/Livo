@@ -76,6 +76,11 @@ export async function getAllFeeds(): Promise<Feed[]> {
         if ((f as unknown as Record<string, unknown>).showInAll === undefined) {
           ;(f as unknown as Record<string, unknown>).showInAll = true
         }
+        if (
+          (f as unknown as Record<string, unknown>).upstreamUrl === undefined
+        ) {
+          ;(f as unknown as Record<string, unknown>).upstreamUrl = f.url
+        }
       }
       resolve(feeds)
     }

@@ -1192,6 +1192,10 @@ Renderer review findings to handle in later batches:
   - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
 - `pnpm format:check`
   - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 4 files, 5 symbols, 0 affected processes, LOW risk.
+  - Changed symbols reported: `getAllFeeds`, `createWebAPI`, web `add`, web `importOPML`, and web `api`.
+  - The staged scope is the expected web API, web storage, storage test, and remediation log batch.
 
 ### Deferred findings
 
@@ -1810,3 +1814,44 @@ Renderer review findings to handle in later batches:
 - `AI_SUMMARIZE_ENTRY`, `AI_TRANSLATE_ENTRY_SEGMENTS`, and digest/filter AI flows use separate entry/task-specific paths and were not changed in this direct renderer-payload batch.
 - The exact AI limits are intentionally generous; they can be tightened later with product telemetry or provider-specific constraints.
 - Web-only feed `upstreamUrl` provenance remains a separate low-risk data-model batch.
+
+## 2026-07-07 - Preserve web feed upstream URL provenance
+
+### Review inputs
+
+- Web `Feed.url` is the operational fetch and dedupe key through the IndexedDB unique `url` index and refresh paths.
+- Sanitizing or replacing `Feed.url` would change fetch behavior and duplicate detection.
+- Desktop feeds already preserve an `upstreamUrl` provenance field; web subscribe/import paths did not populate it.
+- Older web IndexedDB feed rows can lack `upstreamUrl`.
+
+### Fixed in this batch
+
+- Web `feeds.add()` now stores `upstreamUrl` as the normalized raw protocol URL before platform limit hints are applied.
+- Web OPML import now stores `upstreamUrl` alongside the stored XML URL.
+- Web `getAllFeeds()` now defaults missing legacy `upstreamUrl` values to `url` while reading feeds.
+- Fetch, refresh, dedupe, OPML export sanitization, and the unique IndexedDB `url` index are unchanged.
+- Added a focused storage test for legacy feed reads that default `upstreamUrl`, `view`, and `showInAll`.
+
+### Impact analysis
+
+- Web `add` (`Function:src/web/web-api.ts:add`): MEDIUM risk. GitNexus reported 6 direct web-module impacts and no affected processes.
+- Web `importOPML` (`Function:src/web/web-api.ts:importOPML`): LOW risk. GitNexus reported no upstream impacted symbols or affected processes.
+- Web `getAllFeeds` (`Function:src/web/storage.ts:getAllFeeds`): MEDIUM risk. Direct callers include web list, refresh, refreshAll, export, snapshot, digest candidates, and stats paths; affected processes include `refresh` and `refreshAll`.
+
+### Verification
+
+- `pnpm test -- src/web/storage.test.ts src/web/web-api-contract.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 167 passed test files, 972 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/web/web-api.ts src/web/storage.ts src/web/storage.test.ts src/web/web-api-contract.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- This batch does not sanitize or replace web `Feed.url`; separating fetch URL, canonical URL, and display/provenance URL would be a larger data-model migration.
+- OPML export still exports the operational `url` field, with existing persisted URL redaction applied.
