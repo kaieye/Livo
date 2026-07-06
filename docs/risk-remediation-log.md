@@ -707,3 +707,48 @@ Renderer review findings to handle in later batches:
 - Feed title fallback may still need narrower caller conditions so arbitrary deferred subscription URLs are not fetched only to improve display titles.
 - Feed parser policy modes should preserve local RSSHub, LAN, dev, and intranet compatibility while allowing stricter public discovery paths.
 - Renderer media-source loading still needs a central policy for private/loopback media URLs.
+
+## 2026-07-07 - Renderer playback media-source hardening
+
+### Review inputs
+
+- Renderer media-source review sub-agent found that feed-controlled media URLs are assigned directly to renderer `src` and `poster` attributes, including video players, audio playback, image viewers, cached images, featured images, and sanitized article HTML.
+- Local review scoped this batch to passive audio/video playback sinks so old cached direct media URLs cannot trigger loopback or private-network playback loads.
+- Broader feed-ingestion, sanitized HTML, and image rendering findings are deferred below to avoid mixing parser/storage and renderer rendering changes in one batch.
+
+### Fixed in this batch
+
+- Added a renderer media-source policy for passive playback URLs.
+- Playback media policy blocks unsupported schemes, credentialed URLs, `localhost`, loopback, link-local, RFC1918 IPv4, IPv6 loopback/ULA/link-local, and IPv4-mapped IPv6 private/loopback literals.
+- `AudioPlaybackService.load()` now refuses blocked media URLs before assigning `el.src`.
+- The current inline `components/ui/VideoPlayer` now filters direct `<video src>`, preview candidates, and video posters through the playback media policy.
+- The legacy `components/media/MediaPlayer` direct-video path now filters `<video src>`, YouTube direct playback URLs, and video posters through the playback media policy.
+- Added regression coverage for the playback media URL policy and blocked audio-source assignment.
+
+### Impact analysis
+
+- `VideoPlayer` in `components/ui`: CRITICAL risk. Direct callers include social media item rendering, article detail, overlay gallery, and video player page; affected processes include `SocialMediaItem`, `ArticleDetailPage`, `SocialOverlayView`, `VideoPlayerPage`, and `DiscoverPreviewPage`.
+- `buildPreviewCandidates`: LOW risk. Direct upstream caller is the UI video player's preview candidate derivation.
+- `AudioPlaybackService.load`: LOW risk. Direct upstream caller is player-store `activate`; indirect callers include queue playback, next, previous, and play actions.
+- `VideoPlayer` in `components/media`: HIGH risk. Direct upstream caller is `EntryContent`; affected processes include `EntryContent`, `ArticleDetailPage`, and `DiscoverPreviewPage`.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 7 files, 10 symbols, and 0 affected execution flows. The changed production behavior is limited to blocking unsafe passive audio/video playback sources and posters/previews.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/lib/media-source-policy.ts src/renderer/src/lib/media-source-policy.test.ts src/renderer/src/lib/audio-playback.ts src/renderer/src/lib/audio-playback.test.ts src/renderer/src/components/ui/VideoPlayer.tsx src/renderer/src/components/media/MediaPlayer.tsx`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/renderer/src/lib/media-source-policy.test.ts src/renderer/src/lib/audio-playback.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 152 passed test files, 866 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- Feed ingestion should filter private/loopback media URLs before storing `Entry.media` and `Entry.imageUrl`.
+- Sanitized article HTML should validate `src`, `srcset`, and `poster` with the media-source policy rather than only the external-link policy.
+- Image rendering sinks such as `ImageViewerPage`, `CachedImage`, `QueuedImage`, `EntryFeaturedImage`, and feed/avatar images still need safe media-src fallbacks for old cached entries.
+- External-open policy still treats private IPs as suspicious rather than blocked; that is separate from passive media loading and should be reviewed explicitly.

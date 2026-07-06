@@ -13,6 +13,8 @@
  * cover, source).
  */
 
+import { isAllowedPlaybackMediaUrl } from './media-source-policy'
+
 /** Allowed playback speeds, shared across the UI (10.3 unified speed control). */
 export const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
 export type PlaybackSpeed = (typeof SPEED_OPTIONS)[number]
@@ -118,6 +120,10 @@ export class AudioPlaybackService {
 
   /** Load (and by default start) a track from a URL. */
   load(url: string, autoplay = true): void {
+    if (!isAllowedPlaybackMediaUrl(url)) {
+      this.stop()
+      return
+    }
     const el = this.ensureElement()
     el.src = url
     el.playbackRate = this.snapshot.playbackRate

@@ -89,6 +89,14 @@ describe('AudioPlaybackService', () => {
     expect(el.playCalls).toBe(0)
   })
 
+  it('does not assign blocked private media URLs to the audio element', () => {
+    const el = createFakeElement()
+    const svc = new AudioPlaybackService(() => el)
+    svc.load('http://127.0.0.1/a.mp3')
+    expect(el.src).toBe('')
+    expect(el.playCalls).toBe(0)
+  })
+
   it('emits snapshots on element events', () => {
     const el = createFakeElement()
     const svc = new AudioPlaybackService(() => el)

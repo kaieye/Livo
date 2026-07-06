@@ -15,6 +15,7 @@ import {
   extractYoutubeVideoId,
   resolveYoutubePlayback,
 } from '../../lib/youtube-playback'
+import { isAllowedPlaybackMediaUrl } from '../../lib/media-source-policy'
 
 // ====== Player store + mini bar ======
 // The audio player state machine moved to `store/player-store.ts` (backed by
@@ -99,6 +100,8 @@ export function VideoPlayer({
   const isBilibiliVideo = /(?:^|\.)(?:bilibili\.com|b23\.tv)\//i.test(url)
   const youtubeVideoId = extractYoutubeVideoId(url)
   const isYouTubeVideo = !!youtubeVideoId
+  const isPlaybackSourceAllowed = isAllowedPlaybackMediaUrl(url)
+  const safePoster = poster && isAllowedPlaybackMediaUrl(poster) ? poster : ''
   const shouldUseBilibiliWebview = isBilibiliVideo && !bilibiliOpenInPage
   const youtubeFallbackIframeUrl = youtubeVideoId
     ? buildYoutubeIframeUrl(youtubeVideoId)
@@ -190,8 +193,12 @@ export function VideoPlayer({
               className="h-full w-full bg-black"
               useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
             />
-          ) : poster ? (
-            <img src={poster} alt="" className="h-full w-full object-cover" />
+          ) : safePoster ? (
+            <img
+              src={safePoster}
+              alt=""
+              className="h-full w-full object-cover"
+            />
           ) : (
             <iframe
               src={iframeSrc}
@@ -244,7 +251,8 @@ export function VideoPlayer({
                       正在解析视频地址...
                     </span>
                   </div>
-                ) : youtubePlayback?.kind === 'direct' ? (
+                ) : youtubePlayback?.kind === 'direct' &&
+                  isAllowedPlaybackMediaUrl(youtubePlayback.url) ? (
                   <video
                     src={youtubePlayback.url}
                     className="h-full w-full rounded-xl bg-black"
@@ -298,8 +306,8 @@ export function VideoPlayer({
     <div className="group relative overflow-hidden rounded-xl bg-black">
       <video
         ref={videoRef}
-        src={url}
-        poster={poster}
+        src={isPlaybackSourceAllowed ? url : undefined}
+        poster={safePoster || undefined}
         className="w-full"
         controls
         onPlay={() => setIsPlaying(true)}

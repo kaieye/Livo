@@ -20,6 +20,7 @@ import {
 import { useSettingsStore } from '../../store/settings-store'
 import { isDirectVideoUrl } from '@shared/video-url'
 import { openExternalUrlSafe } from '../../services/external-url'
+import { isAllowedPlaybackMediaUrl } from '../../lib/media-source-policy'
 
 export const PAUSE_INLINE_VIDEOS_EVENT = 'livo:pause-inline-videos'
 
@@ -121,6 +122,7 @@ function buildPreviewCandidates(previewImage?: string): string[] {
   const unique: string[] = []
   for (const c of candidates) {
     if (!c || !/^https?:\/\//i.test(c)) continue
+    if (!isAllowedPlaybackMediaUrl(c)) continue
     if (!unique.includes(c)) unique.push(c)
   }
   return unique
@@ -151,6 +153,7 @@ export function VideoPlayer({
     (s) => s.settings.general.bilibiliOpenInPage,
   )
   const isBilibiliVideo = /(?:^|\.)(?:bilibili\.com|b23\.tv)\//i.test(src)
+  const isPlaybackSourceAllowed = isAllowedPlaybackMediaUrl(src)
   const previewCandidates = useMemo(
     () => buildPreviewCandidates(previewImage),
     [previewImage],
@@ -175,6 +178,11 @@ export function VideoPlayer({
         if (src) void openExternalUrlSafe(src)
         return
       }
+      if (!isPlaybackSourceAllowed) {
+        setVideoError(true)
+        setIsStarting(false)
+        return
+      }
       if (!hasStarted) {
         setHasStarted(true)
         setIsStarting(true)
@@ -193,7 +201,7 @@ export function VideoPlayer({
         setIsStarting(false)
       }
     },
-    [hasStarted, videoError, src],
+    [hasStarted, isPlaybackSourceAllowed, videoError, src],
   )
 
   const handleTimeUpdate = useCallback(() => {
@@ -380,8 +388,8 @@ export function VideoPlayer({
       {hasStarted && !videoError ? (
         <video
           ref={videoRef}
-          src={src}
-          poster={previewImage}
+          src={isPlaybackSourceAllowed ? src : undefined}
+          poster={activePreviewImage || undefined}
           muted={isMuted}
           autoPlay
           playsInline
