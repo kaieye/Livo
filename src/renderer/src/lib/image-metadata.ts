@@ -1,3 +1,4 @@
+import { sanitizePersistedUrl } from '../../../shared/persisted-url-policy'
 import { getSafeImageSrc } from './safe-image-source'
 
 export interface ImageMetadata {
@@ -23,11 +24,15 @@ function normalizeImageMetadata(
   return { width, height }
 }
 
+function normalizeImageMetadataCacheKey(url: string): string {
+  return sanitizePersistedUrl(url)
+}
+
 export function getRememberedImageMetadata(
   url: string,
 ): ImageMetadata | undefined {
   if (!url) return undefined
-  return imageMetadataByUrl.get(url)
+  return imageMetadataByUrl.get(normalizeImageMetadataCacheKey(url))
 }
 
 export function hasRememberedImageMetadata(url: string): boolean {
@@ -42,10 +47,18 @@ export function loadPersistedImageMetadata(): void {
     const raw = window.localStorage.getItem(IMAGE_METADATA_STORAGE_KEY)
     if (!raw) return
     const parsed = JSON.parse(raw) as Record<string, Partial<ImageMetadata>>
+    const migratedEntries: Array<readonly [string, ImageMetadata]> = []
     for (const [url, value] of Object.entries(parsed || {})) {
       const normalized = normalizeImageMetadata(value)
       if (!url || !normalized) continue
-      imageMetadataByUrl.set(url, normalized)
+      const sanitizedUrl = normalizeImageMetadataCacheKey(url)
+      if (!sanitizedUrl) continue
+      imageMetadataByUrl.set(sanitizedUrl, normalized)
+      migratedEntries.push([sanitizedUrl, normalized])
+    }
+    const migratedRaw = JSON.stringify(Object.fromEntries(migratedEntries))
+    if (raw !== migratedRaw) {
+      window.localStorage.setItem(IMAGE_METADATA_STORAGE_KEY, migratedRaw)
     }
   } catch {
     // Ignore malformed cache payloads.
@@ -63,9 +76,17 @@ export function schedulePersistedImageMetadata(): void {
       const entries = Array.from(imageMetadataByUrl.entries()).slice(
         -IMAGE_METADATA_LIMIT,
       )
+      const sanitizedEntries = entries
+        .map(([url, metadata]) => {
+          const sanitizedUrl = normalizeImageMetadataCacheKey(url)
+          return sanitizedUrl ? ([sanitizedUrl, metadata] as const) : null
+        })
+        .filter((entry): entry is readonly [string, ImageMetadata] => {
+          return entry !== null
+        })
       window.localStorage.setItem(
         IMAGE_METADATA_STORAGE_KEY,
-        JSON.stringify(Object.fromEntries(entries)),
+        JSON.stringify(Object.fromEntries(sanitizedEntries)),
       )
     } catch {
       // Ignore storage quota / serialization failures.
@@ -80,10 +101,12 @@ export function rememberImageMetadata(
   if (!url) return false
   const normalized = normalizeImageMetadata(metadata)
   if (!normalized) return false
-  const prev = imageMetadataByUrl.get(url)
+  const cacheKey = normalizeImageMetadataCacheKey(url)
+  if (!cacheKey) return false
+  const prev = imageMetadataByUrl.get(cacheKey)
   if (prev?.width === normalized.width && prev?.height === normalized.height)
     return false
-  imageMetadataByUrl.set(url, normalized)
+  imageMetadataByUrl.set(cacheKey, normalized)
   schedulePersistedImageMetadata()
   return true
 }

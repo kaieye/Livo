@@ -4,7 +4,7 @@
  */
 
 import { useSettingsStore } from '../store/settings-store'
-import { useFeedStore } from '../store/feed-store'
+import { serializeFeedsForCache, useFeedStore } from '../store/feed-store'
 import { useActionsStore } from '../store/actions-store'
 import { useAuthStore } from '../store/auth-store'
 import { useEntryStore } from '../store/entry-store'
@@ -116,7 +116,7 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
     useFeedStore.setState({ feeds, isLoading: false })
     // Save to localStorage cache for next startup
     try {
-      localStorage.setItem('livo-feeds-cache', JSON.stringify(feeds))
+      localStorage.setItem('livo-feeds-cache', serializeFeedsForCache(feeds))
     } catch {
       /* ignore quota errors */
     }

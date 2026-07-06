@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   getRememberedImageMetadata,
@@ -24,6 +24,11 @@ describe('image metadata cache', () => {
       clearTimeout,
     })
     vi.restoreAllMocks()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('remembers valid image dimensions', () => {
@@ -91,5 +96,72 @@ describe('image metadata cache', () => {
 
     expect(assigned).toEqual(['https://cdn.example.com/public.jpg'])
     expect(onResolved).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes secret URL components before persisting image metadata', async () => {
+    vi.useFakeTimers()
+    vi.resetModules()
+    const storage = new Map<string, string>()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value)
+        },
+      },
+      setTimeout,
+      clearTimeout,
+    })
+    const { rememberImageMetadata } = await import('./image-metadata')
+
+    rememberImageMetadata(
+      'https://user:pass@example.com/a.jpg?token=raw-token&ig_cache_key=abc',
+      {
+        width: 800,
+        height: 600,
+      },
+    )
+    await vi.runAllTimersAsync()
+
+    const persisted = storage.get('livo:image-metadata:v1') || ''
+    expect(persisted).not.toContain('raw-token')
+    expect(persisted).not.toContain('user:pass')
+    expect(persisted).toContain('https://example.com/a.jpg?ig_cache_key=abc')
+  })
+
+  it('sanitizes legacy image metadata cache keys during hydration', async () => {
+    vi.resetModules()
+    const storage = new Map<string, string>([
+      [
+        'livo:image-metadata:v1',
+        JSON.stringify({
+          'https://user:pass@example.com/a.jpg?token=raw-token&ig_cache_key=abc':
+            { width: 800, height: 600 },
+        }),
+      ],
+    ])
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value)
+        },
+      },
+      setTimeout,
+      clearTimeout,
+    })
+    const { getRememberedImageMetadata, loadPersistedImageMetadata } =
+      await import('./image-metadata')
+
+    loadPersistedImageMetadata()
+
+    expect(
+      getRememberedImageMetadata(
+        'https://user:pass@example.com/a.jpg?token=raw-token&ig_cache_key=abc',
+      ),
+    ).toEqual({ width: 800, height: 600 })
+    const persisted = storage.get('livo:image-metadata:v1') || ''
+    expect(persisted).not.toContain('raw-token')
+    expect(persisted).not.toContain('user:pass')
   })
 })

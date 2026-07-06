@@ -1,7 +1,11 @@
 import type {
+  FeedWithCount,
+  MediaItem,
+  ReaderSnapshotEntry,
   ReaderSnapshot,
   ReaderSnapshotRequest,
 } from '../../../shared/types'
+import { sanitizePersistedUrl } from '../../../shared/persisted-url-policy'
 
 const STORAGE_KEY = 'livo:reader-snapshot-cache:v2'
 const CACHE_VERSION = 2
@@ -71,9 +75,15 @@ function readPersistedCache(): PersistedSnapshotCache {
       cachedPersistedSnapshotCache = emptyPersistedCache()
       return cachedPersistedSnapshotCache
     }
-    cachedPersistedSnapshotCache = {
+    const cache = {
       version: CACHE_VERSION,
       entries: parsed.entries,
+    }
+    const sanitizedCache = sanitizePersistedSnapshotCache(cache)
+    cachedPersistedSnapshotCache = sanitizedCache
+    const sanitizedRaw = JSON.stringify(sanitizedCache)
+    if (raw !== sanitizedRaw) {
+      storage.setItem(STORAGE_KEY, sanitizedRaw)
     }
     return cachedPersistedSnapshotCache
   } catch {
@@ -91,6 +101,73 @@ function writePersistedCache(cache: PersistedSnapshotCache): void {
     storage.setItem(STORAGE_KEY, JSON.stringify(cache))
   } catch {
     // 快照缓存只是首屏体验优化，写入失败不影响真实数据加载。
+  }
+}
+
+function sanitizeFeedForSnapshotCache(feed: FeedWithCount): FeedWithCount {
+  return {
+    ...feed,
+    url: sanitizePersistedUrl(feed.url),
+    siteUrl: feed.siteUrl ? sanitizePersistedUrl(feed.siteUrl) : feed.siteUrl,
+    imageUrl: feed.imageUrl
+      ? sanitizePersistedUrl(feed.imageUrl)
+      : feed.imageUrl,
+    upstreamUrl: feed.upstreamUrl
+      ? sanitizePersistedUrl(feed.upstreamUrl)
+      : feed.upstreamUrl,
+  }
+}
+
+function sanitizeMediaForSnapshotCache(media: MediaItem): MediaItem {
+  return {
+    ...media,
+    url: sanitizePersistedUrl(media.url),
+    previewUrl: media.previewUrl
+      ? sanitizePersistedUrl(media.previewUrl)
+      : media.previewUrl,
+  }
+}
+
+function sanitizeEntryForSnapshotCache(
+  entry: ReaderSnapshotEntry,
+): ReaderSnapshotEntry {
+  return {
+    ...entry,
+    url: sanitizePersistedUrl(entry.url),
+    authorAvatar: entry.authorAvatar
+      ? sanitizePersistedUrl(entry.authorAvatar)
+      : entry.authorAvatar,
+    imageUrl: entry.imageUrl
+      ? sanitizePersistedUrl(entry.imageUrl)
+      : entry.imageUrl,
+    media: entry.media?.map(sanitizeMediaForSnapshotCache),
+  }
+}
+
+function sanitizeSnapshotForPersistence(
+  snapshot: ReaderSnapshot,
+): ReaderSnapshot {
+  return {
+    ...snapshot,
+    feeds: snapshot.feeds.map(sanitizeFeedForSnapshotCache),
+    entries: snapshot.entries.map(sanitizeEntryForSnapshotCache),
+  }
+}
+
+function sanitizePersistedSnapshotCache(
+  cache: PersistedSnapshotCache,
+): PersistedSnapshotCache {
+  return {
+    ...cache,
+    entries: Object.fromEntries(
+      Object.entries(cache.entries).map(([key, entry]) => [
+        key,
+        {
+          ...entry,
+          snapshot: sanitizeSnapshotForPersistence(entry.snapshot),
+        },
+      ]),
+    ),
   }
 }
 
@@ -126,7 +203,7 @@ export function writeDefaultHomeSnapshotCache(
   const cache = readPersistedCache()
   cache.entries[key] = {
     cachedAt: Date.now(),
-    snapshot,
+    snapshot: sanitizeSnapshotForPersistence(snapshot),
   }
 
   const overflowKeys = Object.entries(cache.entries)

@@ -932,6 +932,9 @@ Renderer review findings to handle in later batches:
   - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
 - `pnpm format:check`
   - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 13 files, 19 symbols, 2 affected execution flows, MEDIUM risk.
+  - Affected flows are `SocialOverlayView -> NormalizeImageMetadata` and `UserSettings -> LoadFeedsFromCache`.
 
 ### Deferred findings
 
@@ -1532,3 +1535,54 @@ Renderer review findings to handle in later batches:
 
 - Console output still receives the original developer-facing arguments; this batch focused on persisted/exported diagnostics surfaces.
 - Renderer feed cache, reader snapshot cache, media/image metadata caches, OPML export, and Web IndexedDB/export paths can still persist or export tokenized feed/media URLs. Next batch should introduce a shared persisted URL sanitizer rather than changing `isAllowedStoredMediaUrl`, which is CRITICAL and has broader playback/storage semantics.
+
+## 2026-07-07 - Renderer cache URL secret redaction
+
+### Review inputs
+
+- Renderer feed cache wrote `Feed.url`, `siteUrl`, `imageUrl`, and `upstreamUrl` verbatim to `livo-feeds-cache`.
+- Reader snapshot cache wrote `ReaderSnapshot` objects verbatim to `livo:reader-snapshot-cache:v2`, including feed, entry, avatar, image, media, and preview URLs.
+- Media fallback and image metadata caches used URL strings as persisted keys/values, so signed media URLs could land in `livo-picture-src-cache-v4` and `livo:image-metadata:v1`.
+- Follow-up review found two additional direct feed-cache writers in startup hydration and queued partial feed updates.
+
+### Fixed in this batch
+
+- Added `sanitizePersistedUrl()` for persistence-only URL redaction.
+- The sanitizer removes URL userinfo, fragments, token/key/password/secret query parameters, S3/CloudFront/GCS signed URL parameters, Azure SAS parameters, and `X-Amz-*` / `X-Goog-*` query parameters while preserving ordinary identity/display parameters such as `ig_cache_key`, `width`, `ok`, and `utm_source`.
+- Added `serializeFeedsForCache()` and routed all `livo-feeds-cache` writers through it: feed-store load, startup hydrate, and queued partial feed updates.
+- Reader snapshot persistence now sanitizes feed URLs, entry URLs, author avatars, image URLs, media URLs, and preview URLs before writing.
+- Media source and image metadata caches now persist sanitized keys/values and migrate legacy dirty localStorage entries on read.
+- Runtime fetch/render objects from IPC are not mutated; the sanitizer is applied to cache copies and best-effort cache lookup keys only.
+
+### Impact analysis
+
+- `saveFeedsToCache`: LOW risk. Direct caller is `loadFeeds`; no affected processes in the index.
+- `loadFeeds`: MEDIUM risk. Direct store callers include add/remove/update/refresh/import flows.
+- `hydrateDataToMemory`: LOW risk. Direct startup hydration caller only.
+- `setupBackgroundEventListeners`: LOW risk. GitNexus reported no upstream callers in the current index.
+- `loadFeedsFromCache`: CRITICAL risk because initial cached feeds feed settings, entry list/detail, discover subscribe config, quick search, and recommended-feed flows. The migration is limited to sanitizing the localStorage cache copy.
+- `writeDefaultHomeSnapshotCache` and `readPersistedCache`: LOW risk.
+- `persistMediaSrcCache`, `ensureMediaSrcCacheLoaded`, `getRememberedMediaSrc`, and `rememberMediaSrc`: LOW risk.
+- `loadPersistedImageMetadata`: HIGH risk because it feeds social overlay, image viewer, and wide-view sizing paths. The change only normalizes persisted cache keys and metadata remains unchanged.
+- `getRememberedImageMetadata`: MEDIUM risk. Lookup now uses the same sanitized key form used for persistence.
+
+### Verification
+
+- `pnpm test -- src/shared/persisted-url-policy.test.ts src/renderer/src/store/feed-store.test.ts src/renderer/src/lib/reader-snapshot-cache.test.ts src/renderer/src/lib/entry-media-decision.test.ts src/renderer/src/lib/image-metadata.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 166 passed test files, 965 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/shared/persisted-url-policy.ts src/shared/persisted-url-policy.test.ts src/renderer/src/store/feed-store.ts src/renderer/src/store/feed-store.test.ts src/renderer/src/lib/reader-snapshot-cache.ts src/renderer/src/lib/reader-snapshot-cache.test.ts src/renderer/src/lib/entry-media-decision.ts src/renderer/src/lib/entry-media-decision.test.ts src/renderer/src/lib/image-metadata.ts src/renderer/src/lib/image-metadata.test.ts src/renderer/src/initialize/hydrate.ts src/renderer/src/initialize/queue.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Desktop OPML export still writes raw `xmlUrl`/`htmlUrl`; GitNexus marks `generateOPML` HIGH risk because it feeds IPC export and agent export flows, so it should be a separate export-focused batch.
+- Web OPML export duplicates the desktop OPML generator and still writes raw feed URLs.
+- Web IndexedDB feed persistence still stores raw feed URLs; sanitizing stored `Feed.url` would change future fetch/dedupe behavior, so that needs a separate design for fetch URL vs export/display URL.
+- `entry-media-utils.ts` contains an unimported duplicate media source cache writer for the same storage key; no current imports were found, so it was left for cleanup or removal separately.
+- Snapshot `content` and `summary` may still contain embedded secret-bearing URLs inside HTML/text snippets. This batch covers structured URL fields only.

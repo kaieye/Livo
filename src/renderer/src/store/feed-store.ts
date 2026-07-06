@@ -1,6 +1,7 @@
 import { createAppStore } from './helpers'
 import type { FeedWithCount } from '../../../shared/types'
 import { FeedViewType } from '../../../shared/types'
+import { sanitizePersistedUrl } from '../../../shared/persisted-url-policy'
 import type {
   FeedRefreshProgressPayload,
   ImportRefreshProgressPayload,
@@ -29,7 +30,14 @@ function loadFeedsFromCache(): FeedWithCount[] {
   hasLoadedFeedsFromStorage = true
   try {
     const raw = localStorage.getItem(FEEDS_CACHE_KEY)
-    cachedFeedsFromStorage = raw ? JSON.parse(raw) : []
+    const parsed = raw ? JSON.parse(raw) : []
+    cachedFeedsFromStorage = Array.isArray(parsed)
+      ? sanitizeFeedsForCache(parsed)
+      : []
+    const sanitizedRaw = JSON.stringify(cachedFeedsFromStorage)
+    if (raw && raw !== sanitizedRaw) {
+      localStorage.setItem(FEEDS_CACHE_KEY, sanitizedRaw)
+    }
     return cachedFeedsFromStorage
   } catch {
     cachedFeedsFromStorage = []
@@ -37,11 +45,30 @@ function loadFeedsFromCache(): FeedWithCount[] {
   }
 }
 
+function sanitizeFeedsForCache(feeds: FeedWithCount[]): FeedWithCount[] {
+  return feeds.map((feed) => ({
+    ...feed,
+    url: sanitizePersistedUrl(feed.url),
+    siteUrl: feed.siteUrl ? sanitizePersistedUrl(feed.siteUrl) : feed.siteUrl,
+    imageUrl: feed.imageUrl
+      ? sanitizePersistedUrl(feed.imageUrl)
+      : feed.imageUrl,
+    upstreamUrl: feed.upstreamUrl
+      ? sanitizePersistedUrl(feed.upstreamUrl)
+      : feed.upstreamUrl,
+  }))
+}
+
+export function serializeFeedsForCache(feeds: FeedWithCount[]): string {
+  return JSON.stringify(sanitizeFeedsForCache(feeds))
+}
+
 function saveFeedsToCache(feeds: FeedWithCount[]): void {
+  const cachedFeeds = sanitizeFeedsForCache(feeds)
   hasLoadedFeedsFromStorage = true
-  cachedFeedsFromStorage = feeds
+  cachedFeedsFromStorage = cachedFeeds
   try {
-    localStorage.setItem(FEEDS_CACHE_KEY, JSON.stringify(feeds))
+    localStorage.setItem(FEEDS_CACHE_KEY, JSON.stringify(cachedFeeds))
   } catch {
     /* ignore quota errors */
   }

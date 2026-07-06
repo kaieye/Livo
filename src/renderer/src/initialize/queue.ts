@@ -42,7 +42,8 @@ export async function setupBackgroundEventListeners(): Promise<void> {
   if (!window.api?.on) return
 
   // 动态导入避免循环依赖
-  const { useFeedStore } = await import('../store/feed-store')
+  const { serializeFeedsForCache, useFeedStore } =
+    await import('../store/feed-store')
   const { useEntryStore } = await import('../store/entry-store')
   const { buildHomeFeedLoadOptions } = await import('../lib/home-feed-scope')
 
@@ -113,7 +114,7 @@ export async function setupBackgroundEventListeners(): Promise<void> {
           try {
             localStorage.setItem(
               'livo-feeds-cache',
-              JSON.stringify(updatedFeeds),
+              serializeFeedsForCache(updatedFeeds),
             )
           } catch {
             /* ignore quota errors */

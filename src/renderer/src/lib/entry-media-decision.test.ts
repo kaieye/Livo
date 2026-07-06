@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry } from '../../../shared/types'
 import {
   buildMediaFallbackCandidates,
@@ -23,6 +23,25 @@ function entry(overrides: Partial<Entry> = {}): Entry {
 }
 
 describe('entry-media-decision', () => {
+  beforeEach(() => {
+    const storage = new Map<string, string>()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value)
+        },
+      },
+      setTimeout,
+      clearTimeout,
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
   it('gallery 去重时优先保留带 Instagram 缓存键和 previewUrl 的高质量变体', () => {
     const result = dedupeGalleryPhotoVariants([
       {
@@ -208,5 +227,72 @@ describe('entry-media-decision', () => {
         cover: 'https://example.com/cover.jpg',
       },
     )
+  })
+
+  it('removes secret URL components before persisting remembered media sources', async () => {
+    vi.useFakeTimers()
+    vi.resetModules()
+    const storage = new Map<string, string>()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value)
+        },
+      },
+      setTimeout,
+      clearTimeout,
+    })
+    const { rememberMediaSrc } = await import('./entry-media-decision')
+
+    rememberMediaSrc(
+      'https://user:pass@example.com/cover.jpg?token=raw-key&ok=1',
+      'https://cdn.example.com/resolved.jpg?X-Amz-Signature=raw-signature&ig_cache_key=abc',
+    )
+    await vi.runAllTimersAsync()
+
+    const persisted = storage.get('livo-picture-src-cache-v4') || ''
+    expect(persisted).not.toContain('raw-')
+    expect(persisted).not.toContain('user:pass')
+    expect(persisted).toContain('https://example.com/cover.jpg?ok=1')
+    expect(persisted).toContain(
+      'https://cdn.example.com/resolved.jpg?ig_cache_key=abc',
+    )
+  })
+
+  it('sanitizes legacy remembered media source cache entries during hydration', async () => {
+    vi.resetModules()
+    const storage = new Map<string, string>([
+      [
+        'livo-picture-src-cache-v4',
+        JSON.stringify({
+          'url:https://user:pass@example.com/cover.jpg?token=raw-key&ok=1':
+            'https://cdn.example.com/resolved.jpg?X-Amz-Signature=raw-signature&ig_cache_key=abc',
+        }),
+      ],
+    ])
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value)
+        },
+      },
+      setTimeout,
+      clearTimeout,
+    })
+    const { getRememberedMediaSrc } = await import('./entry-media-decision')
+
+    const remembered = getRememberedMediaSrc(
+      'https://user:pass@example.com/cover.jpg?token=raw-key&ok=1',
+      'https://cdn.example.com/fallback.jpg',
+    )
+
+    expect(remembered).toBe(
+      'https://cdn.example.com/resolved.jpg?ig_cache_key=abc',
+    )
+    const persisted = storage.get('livo-picture-src-cache-v4') || ''
+    expect(persisted).not.toContain('raw-')
+    expect(persisted).not.toContain('user:pass')
   })
 })

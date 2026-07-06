@@ -32,13 +32,23 @@ function createMemoryStorage(initial: Record<string, string> = {}): Storage {
   }
 }
 
-async function loadFeedStore() {
+async function loadFeedStore(
+  options: {
+    feeds?: FeedWithCount[]
+    localStorageItems?: Record<string, string>
+  } = {},
+) {
   vi.resetModules()
-  const storage = createMemoryStorage()
+  const storage = createMemoryStorage(options.localStorageItems)
+  const api = {
+    feeds: {
+      list: vi.fn(async () => options.feeds ?? []),
+    },
+  }
   vi.stubGlobal('localStorage', storage)
-  vi.stubGlobal('window', { localStorage: storage })
+  vi.stubGlobal('window', { localStorage: storage, api })
   const mod = await import('./feed-store')
-  return mod
+  return { ...mod, storage, api }
 }
 
 describe('resolveSnapshotFeeds', () => {
@@ -167,5 +177,75 @@ describe('useFeedStore selectors', () => {
         excludeCategory: 'Recommended',
       }),
     ).toEqual([feeds[1]])
+  })
+})
+
+describe('useFeedStore feed cache persistence', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('removes secret URL components before writing feeds to localStorage', async () => {
+    const rawFeed = makeFeed({
+      url: 'https://user:pass@example.com/rss.xml?token=raw-token&ok=1',
+      siteUrl: 'https://example.com/site?api_key=raw-api-key&utm_source=reader',
+      imageUrl:
+        'https://cdn.example.com/icon.png?X-Amz-Signature=raw-signature&size=1',
+      upstreamUrl:
+        'https://upstream.example.com/feed?refresh_token=raw-refresh&view=1',
+    })
+    const { useFeedStore, storage } = await loadFeedStore({ feeds: [rawFeed] })
+
+    await useFeedStore.getState().loadFeeds()
+
+    const persisted = JSON.parse(
+      storage.getItem('livo-feeds-cache') || '[]',
+    ) as FeedWithCount[]
+    expect(persisted[0].url).toBe('https://example.com/rss.xml?ok=1')
+    expect(persisted[0].siteUrl).toBe(
+      'https://example.com/site?utm_source=reader',
+    )
+    expect(persisted[0].imageUrl).toBe(
+      'https://cdn.example.com/icon.png?size=1',
+    )
+    expect(persisted[0].upstreamUrl).toBe(
+      'https://upstream.example.com/feed?view=1',
+    )
+    expect(JSON.stringify(persisted)).not.toContain('raw-')
+    expect(useFeedStore.getState().feeds[0].url).toBe(rawFeed.url)
+  })
+
+  it('serializes sanitized feed cache payloads for non-store writers', async () => {
+    const { serializeFeedsForCache } = await loadFeedStore()
+
+    const serialized = serializeFeedsForCache([
+      makeFeed({
+        url: 'https://user:pass@example.com/rss.xml?token=raw-token&ok=1',
+      }),
+    ])
+
+    expect(serialized).not.toContain('raw-token')
+    expect(serialized).not.toContain('user:pass')
+    expect(JSON.parse(serialized)[0].url).toBe(
+      'https://example.com/rss.xml?ok=1',
+    )
+  })
+
+  it('sanitizes legacy feed cache payloads during hydration', async () => {
+    const { useFeedStore, storage } = await loadFeedStore({
+      localStorageItems: {
+        'livo-feeds-cache': JSON.stringify([
+          makeFeed({
+            url: 'https://user:pass@example.com/rss.xml?token=raw-token&ok=1',
+          }),
+        ]),
+      },
+    })
+
+    const cached = useFeedStore.getState().hydrateFromCache()
+
+    expect(cached[0].url).toBe('https://example.com/rss.xml?ok=1')
+    expect(storage.getItem('livo-feeds-cache')).not.toContain('raw-token')
+    expect(storage.getItem('livo-feeds-cache')).not.toContain('user:pass')
   })
 })

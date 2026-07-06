@@ -1,5 +1,6 @@
 import type { SyntheticEvent } from 'react'
 import type { Entry, MediaItem } from '../../../shared/types'
+import { sanitizePersistedUrl } from '../../../shared/persisted-url-policy'
 import {
   decodeHtmlEntitiesUrl,
   decodeMediaUrl,
@@ -196,12 +197,36 @@ function ensureMediaSrcCacheLoaded(): void {
     const raw = window.localStorage.getItem(MEDIA_SRC_CACHE_STORAGE_KEY)
     if (!raw) return
     const parsed = JSON.parse(raw) as Record<string, string>
+    const migrated = new Map<string, string>()
     for (const [k, v] of Object.entries(parsed || {})) {
-      if (k && v) mediaSrcCache.set(k, v)
+      const key = sanitizeMediaSrcCacheStorageKey(k)
+      const value = sanitizePersistedUrl(v)
+      if (key && value) {
+        mediaSrcCache.set(key, value)
+        migrated.set(key, value)
+      }
+    }
+    const migratedRaw = JSON.stringify(Object.fromEntries(migrated))
+    if (raw !== migratedRaw) {
+      window.localStorage.setItem(MEDIA_SRC_CACHE_STORAGE_KEY, migratedRaw)
     }
   } catch {
     // 媒体缓存是 best-effort，解析失败不影响渲染。
   }
+}
+
+function sanitizeMediaSrcCacheStorageKey(key: string): string {
+  if (key.startsWith('url:')) {
+    const sanitizedUrlKey = sanitizePersistedUrl(key.slice(4))
+    return sanitizedUrlKey ? `url:${sanitizedUrlKey}` : ''
+  }
+  return sanitizePersistedUrl(key)
+}
+
+function buildMediaSrcCacheStorageKey(url: string): string {
+  const normalized = normalizeImageCacheKey(url)
+  const sanitized = normalized ? sanitizePersistedUrl(normalized) : ''
+  return sanitized ? `url:${sanitized}` : ''
 }
 
 function persistMediaSrcCache(): void {
@@ -215,7 +240,16 @@ function persistMediaSrcCache(): void {
         entries.length > maxEntries
           ? entries.slice(entries.length - maxEntries)
           : entries
-      const obj = Object.fromEntries(sliced)
+      const sanitizedEntries = sliced
+        .map(([key, value]) => {
+          const sanitizedKey = sanitizeMediaSrcCacheStorageKey(key)
+          const sanitizedValue = sanitizePersistedUrl(value)
+          return sanitizedKey && sanitizedValue
+            ? ([sanitizedKey, sanitizedValue] as const)
+            : null
+        })
+        .filter((entry): entry is readonly [string, string] => entry !== null)
+      const obj = Object.fromEntries(sanitizedEntries)
       window.localStorage.setItem(
         MEDIA_SRC_CACHE_STORAGE_KEY,
         JSON.stringify(obj),
@@ -350,14 +384,15 @@ export function getRememberedMediaSrc(
   primaryUrl: string,
 ): string {
   ensureMediaSrcCacheLoaded()
-  const byUrl = mediaSrcCache.get(`url:${normalizeImageCacheKey(coverUrl)}`)
+  const key = buildMediaSrcCacheStorageKey(coverUrl)
+  const byUrl = key ? mediaSrcCache.get(key) : ''
   if (byUrl) {
     const safeRememberedUrl = getSafeImageSrc(byUrl)
     if (
       !safeRememberedUrl ||
       /^https?:\/\/media\.(picnob|pixnoy)\.[^/]+\/get\?/i.test(byUrl)
     ) {
-      mediaSrcCache.delete(`url:${normalizeImageCacheKey(coverUrl)}`)
+      if (key) mediaSrcCache.delete(key)
     } else {
       return safeRememberedUrl
     }
@@ -370,8 +405,8 @@ export function rememberMediaSrc(coverUrl: string, resolvedSrc: string): void {
   const safeSrc = getSafeImageSrc(src)
   if (!safeSrc) return
   ensureMediaSrcCacheLoaded()
-  const urlKey = normalizeImageCacheKey(coverUrl)
-  if (urlKey) mediaSrcCache.set(`url:${urlKey}`, safeSrc)
+  const urlKey = buildMediaSrcCacheStorageKey(coverUrl)
+  if (urlKey) mediaSrcCache.set(urlKey, safeSrc)
   persistMediaSrcCache()
 }
 
