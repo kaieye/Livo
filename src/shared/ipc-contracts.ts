@@ -31,6 +31,11 @@ const IPC_READING_ACTIVITY_COUNT_MAX = 1_000_000
 const IPC_FEED_EDITABLE_TEXT_MAX_LENGTH = 512
 const IPC_FEED_EDITABLE_IMAGE_URL_MAX_LENGTH = 2048
 const IPC_FEED_MAX_ENTRIES_MAX = 10_000
+const IPC_ENTRY_LIST_MAX_LIMIT = 1000
+const IPC_ENTRY_LIST_MAX_OFFSET = 100_000
+const IPC_ENTRY_LIST_MAX_FEED_IDS = 900
+const IPC_ENTRY_LIST_FEED_ID_MAX_LENGTH = 128
+const IPC_ENTRY_LIST_MAX_CONTENT_LENGTH = 10_000
 const IPC_AI_DIRECT_CONTENT_MAX_LENGTH = 200_000
 const IPC_AI_LANGUAGE_MAX_LENGTH = 120
 const IPC_AI_REQUEST_ID_MAX_LENGTH = 120
@@ -1144,14 +1149,43 @@ function assertReadingActivityDays(value: unknown): void {
 
 function validateEntryListOptions(value: unknown): void {
   assertObject(value, 'options')
-  assertOptionalString(value.feedId, 'options.feedId')
-  assertOptionalStringArray(value.feedIds, 'options.feedIds')
+  if (value.feedId !== undefined) {
+    assertString(value.feedId, 'options.feedId')
+    assertStringLengthRange(value.feedId, 'options.feedId', {
+      min: 1,
+      max: IPC_ENTRY_LIST_FEED_ID_MAX_LENGTH,
+    })
+  }
+  if (value.feedIds !== undefined) {
+    assertBoundedStringArray(value.feedIds, 'options.feedIds', {
+      maxCount: IPC_ENTRY_LIST_MAX_FEED_IDS,
+      maxItemLength: IPC_ENTRY_LIST_FEED_ID_MAX_LENGTH,
+    })
+  }
   assertOptionalBoolean(value.starred, 'options.starred')
   assertOptionalBoolean(value.unreadOnly, 'options.unreadOnly')
   assertOptionalNumber(value.limit, 'options.limit')
+  if (value.limit !== undefined) {
+    assertIntegerRange(value.limit, 'options.limit', {
+      min: 1,
+      max: IPC_ENTRY_LIST_MAX_LIMIT,
+    })
+  }
   assertOptionalNumber(value.offset, 'options.offset')
+  if (value.offset !== undefined) {
+    assertIntegerRange(value.offset, 'options.offset', {
+      min: 0,
+      max: IPC_ENTRY_LIST_MAX_OFFSET,
+    })
+  }
   assertOptionalBoolean(value.compact, 'options.compact')
   assertOptionalNumber(value.maxContentLength, 'options.maxContentLength')
+  if (value.maxContentLength !== undefined) {
+    assertIntegerRange(value.maxContentLength, 'options.maxContentLength', {
+      min: 1,
+      max: IPC_ENTRY_LIST_MAX_CONTENT_LENGTH,
+    })
+  }
   assertOptionalBoolean(value.skipDedupe, 'options.skipDedupe')
 }
 

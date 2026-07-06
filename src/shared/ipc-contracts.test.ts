@@ -211,6 +211,45 @@ describe('ipc-contracts', () => {
     }
   })
 
+  it('bounds entry list pagination options at the IPC boundary', () => {
+    const validOptions = {
+      feedId: 'feed-1',
+      feedIds: ['feed-1', 'feed-2'],
+      starred: false,
+      unreadOnly: true,
+      limit: 1000,
+      offset: 100_000,
+      compact: true,
+      maxContentLength: 10_000,
+      skipDedupe: true,
+    }
+
+    expect(validateIpcArgs(IPC.ENTRY_LIST, [validOptions])).toEqual([
+      validOptions,
+    ])
+
+    for (const invalidOptions of [
+      { feedId: '' },
+      { feedId: 'f'.repeat(129) },
+      { feedIds: Array.from({ length: 901 }, (_, index) => `feed-${index}`) },
+      { feedIds: ['feed-1', ''] },
+      { feedIds: ['f'.repeat(129)] },
+      { limit: 0 },
+      { limit: 1001 },
+      { limit: 1.5 },
+      { offset: -1 },
+      { offset: 100_001 },
+      { offset: 1.5 },
+      { maxContentLength: 0 },
+      { maxContentLength: 10_001 },
+      { maxContentLength: 1.5 },
+    ]) {
+      expect(() => validateIpcArgs(IPC.ENTRY_LIST, [invalidOptions])).toThrow(
+        IpcValidationError,
+      )
+    }
+  })
+
   it('rejects oversized AI IPC payloads', () => {
     expect(
       validateIpcArgs(IPC.AI_SUMMARIZE, [

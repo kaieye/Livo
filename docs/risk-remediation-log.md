@@ -1947,3 +1947,43 @@ Renderer review findings to handle in later batches:
 
 - Existing recommended/social feed URL repair now needs a dedicated, non-generic migration path if URL canonicalization is still desired.
 - `entry:list` pagination bounds, `actions:sync` deep validation, settings schema patch validation, public-only feed fetch policy, and update installer verification remain separate findings.
+
+## 2026-07-07 - Bound renderer entry list queries
+
+### Review inputs
+
+- Privileged IPC review found `entry:list` accepted renderer-controlled pagination and filter options with only shallow type checks.
+- `limit`, `offset`, `feedIds`, and `maxContentLength` flow from IPC validation into entry repository SQL generation.
+- Normal renderer flows already clamp page size, but the IPC boundary still needs to reject hostile or compromised renderer input.
+
+### Fixed in this batch
+
+- Added IPC boundary caps for entry list `limit`, `offset`, `feedIds`, feed ID string length, and compact content budget.
+- `entry:list` now rejects empty/oversized feed IDs, excessive feed ID arrays, non-integer page values, and out-of-range numeric values before repository access.
+- Preserved legitimate current renderer behavior including the settings favorites panel request with `limit: 1000`.
+- Added regression coverage for accepted boundary values and rejected abusive options.
+
+### Impact analysis
+
+- `validateEntryListOptions`: HIGH risk. GitNexus reported one direct caller (`validateArgs`) and three affected IPC registration flows through the shared IPC contract module: `registerFeedHandlers`, `registerFeverHandlers`, and `registerReadabilityHandlers`.
+- Repository entry listing code was not edited; this batch constrains renderer input before SQL construction.
+
+### Verification
+
+- `pnpm test -- src/shared/ipc-contracts.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 168 passed test files, 977 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/shared/ipc-contracts.ts src/shared/ipc-contracts.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 3 files, 7 symbols, 0 affected processes, LOW risk.
+  - Changed symbols include `validateEntryListOptions`, `IPC`, and `IPC_CONTRACTS`.
+
+### Deferred findings
+
+- `actions:sync` deep validation, settings schema patch validation, public-only feed fetch policy, and update installer verification remain separate findings.
