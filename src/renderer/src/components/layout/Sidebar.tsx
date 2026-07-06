@@ -57,6 +57,7 @@ import { VIEW_TYPE_SLUGS } from '../../router/route-paths'
 import { getFeedRefreshIssueLabel } from '../../lib/feed-refresh-issue'
 import { FeedRefreshIssueBadge } from './FeedRefreshIssueBadge'
 import { NotificationBell } from '../notifications/NotificationBell'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 import {
   markStartupComponentMounted,
   measureStartupRender,
@@ -3007,9 +3008,9 @@ const FeedIcon = memo(function FeedIcon({
         if (!nestedRaw) return ''
         try {
           const decoded = decodeURIComponent(nestedRaw)
-          return /^https?:\/\//i.test(decoded) ? decoded : ''
+          return getSafeImageSrc(decoded) ?? ''
         } catch {
-          return /^https?:\/\//i.test(nestedRaw) ? nestedRaw : ''
+          return getSafeImageSrc(nestedRaw) ?? ''
         }
       }
       if (
@@ -3026,7 +3027,7 @@ const FeedIcon = memo(function FeedIcon({
           normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
         try {
           const decoded = atob(padded)
-          return /^https?:\/\//i.test(decoded) ? decoded : ''
+          return getSafeImageSrc(decoded) ?? ''
         } catch {
           return ''
         }
@@ -3210,12 +3211,17 @@ const FeedIcon = memo(function FeedIcon({
   const px = `${size}px`
   const iconSize = Math.round(size * 0.6)
   const accent = accentClass || 'bg-accent/20 text-accent'
+  const safeImageUrl = getSafeImageSrc(imageUrl)
+  const safeTwitterAvatarUrl = getSafeImageSrc(twitterAvatarUrl)
+  const safeInstagramAvatarUrl = getSafeImageSrc(instagramAvatarUrl)
+  const safeFaviconUrl = getSafeImageSrc(faviconUrl)
+  const safeInitialsUrl = getSafeImageSrc(initialsUrl)
 
   // 0. For Twitter/X feeds, use unavatar.io for always-fresh avatar
-  if (twitterAvatarUrl && !twitterFailed) {
+  if (safeTwitterAvatarUrl && !twitterFailed) {
     return (
       <img
-        src={twitterAvatarUrl}
+        src={safeTwitterAvatarUrl}
         alt=""
         className="flex-shrink-0 rounded-full object-cover"
         style={{ width: px, height: px }}
@@ -3226,21 +3232,21 @@ const FeedIcon = memo(function FeedIcon({
 
   // 1. Try imageUrl, except generic Instagram app icons.
   if (
-    imageUrl &&
+    safeImageUrl &&
     !imgFailed &&
     !isInstagramUnavatarImage &&
-    !(instagramAvatarUrl && isGenericInstagramIcon)
+    !(safeInstagramAvatarUrl && isGenericInstagramIcon)
   ) {
     return (
       <img
-        src={imageUrl}
+        src={safeImageUrl}
         alt=""
         className="flex-shrink-0 rounded-full object-cover"
         style={{ width: px, height: px }}
         referrerPolicy="no-referrer-when-downgrade"
         onError={(e) => {
           const img = e.currentTarget
-          const origin = extractMirrorOrigin(imageUrl)
+          const origin = extractMirrorOrigin(safeImageUrl)
           if (origin && !img.dataset.originTried) {
             img.dataset.originTried = '1'
             img.src = origin
@@ -3256,10 +3262,10 @@ const FeedIcon = memo(function FeedIcon({
   // Let favicon/initials act as temporary fallback until a real feed avatar is refreshed.
 
   // 2. Try favicon from siteUrl
-  if (faviconUrl && !faviconFailed) {
+  if (safeFaviconUrl && !faviconFailed) {
     return (
       <img
-        src={faviconUrl}
+        src={safeFaviconUrl}
         alt=""
         className="flex-shrink-0 rounded-full object-cover"
         style={{ width: px, height: px }}
@@ -3269,10 +3275,10 @@ const FeedIcon = memo(function FeedIcon({
   }
 
   // 3. Try initials avatar
-  if (initialsUrl) {
+  if (safeInitialsUrl) {
     return (
       <img
-        src={initialsUrl}
+        src={safeInitialsUrl}
         alt=""
         className="flex-shrink-0 rounded-full object-cover"
         style={{ width: px, height: px }}

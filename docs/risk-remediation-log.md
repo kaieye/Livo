@@ -981,3 +981,40 @@ Renderer review findings to handle in later batches:
 - Sidebar `FeedIcon` still needs a focused pass because it has both direct `<img src={imageUrl}>` and imperative fallback assignment to `img.src = origin`.
 - Context menu image download/open paths should be reviewed separately because they use selected image URLs as IPC/download inputs rather than passive image element sources.
 - Entry merge policy should still be reviewed for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.
+
+## 2026-07-07 - Sidebar feed icon source hardening
+
+### Review inputs
+
+- Deferred renderer image-sink review identified `Sidebar.FeedIcon` as the remaining passive image surface with both direct `imageUrl` rendering and imperative mirror fallback assignment.
+- This batch focuses only on Sidebar feed icons; context-menu image IPC/download paths and entry merge policy remain separate remediation slices.
+
+### Fixed in this batch
+
+- `FeedIcon` now filters feed image URLs, Twitter/X unavatar URLs, Instagram unavatar branch checks, favicon URLs, and generated initials avatar URLs through `getSafeImageSrc()` before any rendered `<img src>`.
+- `extractMirrorOrigin()` now validates decoded mirror-origin candidates through the same stored-media policy before returning them.
+- The `onError` mirror fallback now receives a sanitized base image URL and can only assign a sanitized decoded origin to `img.src`.
+
+### Impact analysis
+
+- `FeedIcon`: LOW risk. Direct callers are `renderFeedRow` and `RecommendedSection`; affected processes are `Sidebar` and `HomePage`.
+- `extractMirrorOrigin`: LOW risk. Direct upstream caller is `FeedIcon`; affected process is `Sidebar`.
+- Pre-commit `detect_changes --scope staged` reported LOW risk across 2 files, 3 symbols, and 0 affected processes.
+
+### Verification
+
+- `pnpm test -- src/renderer/src/lib/safe-image-source.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 155 passed test files, 898 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/components/layout/Sidebar.tsx`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Context menu image download/open paths should be reviewed separately because they use selected image URLs as IPC/download inputs rather than passive image element sources.
+- Entry merge policy should still be reviewed for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.
