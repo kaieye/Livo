@@ -981,6 +981,9 @@ Renderer review findings to handle in later batches:
   - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
 - `pnpm format:check`
   - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 5 files, 3 symbols, 1 affected execution flow, MEDIUM risk.
+  - Affected flow is `Execute -> EscapeXML` through `generateOPML`.
 
 ### Deferred findings
 
@@ -1586,3 +1589,43 @@ Renderer review findings to handle in later batches:
 - Web IndexedDB feed persistence still stores raw feed URLs; sanitizing stored `Feed.url` would change future fetch/dedupe behavior, so that needs a separate design for fetch URL vs export/display URL.
 - `entry-media-utils.ts` contains an unimported duplicate media source cache writer for the same storage key; no current imports were found, so it was left for cleanup or removal separately.
 - Snapshot `content` and `summary` may still contain embedded secret-bearing URLs inside HTML/text snippets. This batch covers structured URL fields only.
+
+## 2026-07-07 - OPML export URL secret redaction
+
+### Review inputs
+
+- Desktop OPML export wrote `feed.url` as `xmlUrl` and `feed.siteUrl` as `htmlUrl` without redaction.
+- The desktop generator feeds both user-triggered IPC export and agent data export.
+- Web fallback OPML export had a duplicate generator with the same raw `xmlUrl`/`htmlUrl` behavior.
+- Web IndexedDB persistence was reviewed separately and intentionally not changed because persisted `Feed.url` is also the fetch/dedupe URL.
+
+### Fixed in this batch
+
+- Desktop `generateOPML()` now sanitizes only exported `xmlUrl` and `htmlUrl` values using `sanitizePersistedUrl()`.
+- Web `generateOPMLContent()` now applies the same sanitizer for fallback OPML exports.
+- Import, fetch, refresh, dedupe, and stored feed records are unchanged.
+- Added regression coverage for desktop and web OPML exports proving userinfo, token query parameters, and signed URL query parameters are removed while ordinary query parameters remain.
+
+### Impact analysis
+
+- `generateOPML`: HIGH risk. Direct caller is `exportOPML`; affected processes include `onReady`, `registerFeedHandlers`, `registerIpcHandlers`, and agent `execute`.
+- `generateOPMLContent`: LOW risk. Direct caller is web fallback `exportOPML`.
+- `sanitizePersistedUrl`: reused from the renderer cache batch; no sanitizer semantics were changed in this batch.
+
+### Verification
+
+- `pnpm test -- src/main/services/feed/opml-parser.test.ts src/web/web-api-contract.test.ts src/shared/persisted-url-policy.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 166 passed test files, 967 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/feed/opml-parser.ts src/main/services/feed/opml-parser.test.ts src/web/web-api.ts src/web/web-api-contract.test.ts src/shared/persisted-url-policy.ts src/shared/persisted-url-policy.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Web IndexedDB still stores raw feed URLs because changing stored `Feed.url` would alter refresh/fetch and unique-index dedupe behavior.
+- OPML import still stores imported URLs as fetch URLs; separating export/display URLs from fetch URLs is a separate design decision.

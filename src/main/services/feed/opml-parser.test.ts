@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { OPMLParseLimitError, parseOPML } from './opml-parser'
+import { generateOPML, OPMLParseLimitError, parseOPML } from './opml-parser'
 
 function opmlBody(body: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -67,5 +67,25 @@ describe('parseOPML', () => {
         { maxAttributeTextLength: 10 },
       ),
     ).toThrow(OPMLParseLimitError)
+  })
+})
+
+describe('generateOPML', () => {
+  it('removes secret URL components from exported feed URLs', () => {
+    const opml = generateOPML([
+      {
+        title: 'Private feed',
+        url: 'https://user:pass@example.com/rss.xml?token=raw-token&ok=1',
+        siteUrl:
+          'https://example.com/site?X-Amz-Signature=raw-signature&view=1',
+        category: 'Private',
+      },
+    ])
+
+    expect(opml).not.toContain('raw-token')
+    expect(opml).not.toContain('raw-signature')
+    expect(opml).not.toContain('user:pass')
+    expect(opml).toContain('xmlUrl="https://example.com/rss.xml?ok=1"')
+    expect(opml).toContain('htmlUrl="https://example.com/site?view=1"')
   })
 })

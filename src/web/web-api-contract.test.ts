@@ -2,6 +2,7 @@ import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { ElectronAPI } from '../preload/index'
 import {
   createWebAPI,
+  generateOPMLContent,
   getFeedImageFromParsed,
   getSiteAvatarFromHtml,
 } from './web-api'
@@ -277,6 +278,29 @@ describe('web api contract', () => {
       '_blank',
       'noopener,noreferrer',
     )
+  })
+})
+
+describe('generateOPMLContent', () => {
+  it('removes secret URL components from exported feed URLs', () => {
+    const opml = generateOPMLContent([
+      {
+        id: 'feed-1',
+        title: 'Private feed',
+        url: 'https://user:pass@example.com/rss.xml?token=raw-token&ok=1',
+        siteUrl:
+          'https://example.com/site?X-Goog-Signature=raw-signature&view=1',
+        view: 0,
+        errorCount: 0,
+        createdAt: 1000,
+      },
+    ])
+
+    expect(opml).not.toContain('raw-token')
+    expect(opml).not.toContain('raw-signature')
+    expect(opml).not.toContain('user:pass')
+    expect(opml).toContain('xmlUrl="https://example.com/rss.xml?ok=1"')
+    expect(opml).toContain('htmlUrl="https://example.com/site?view=1"')
   })
 })
 

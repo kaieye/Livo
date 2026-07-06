@@ -3,6 +3,8 @@
  * Parses OPML XML into a flat list of feeds with categories.
  */
 
+import { sanitizePersistedUrl } from '../../../shared/persisted-url-policy'
+
 export interface OPMLFeed {
   title: string
   xmlUrl: string // RSS feed URL
@@ -194,16 +196,21 @@ export function generateOPML(
   }
 
   let body = ''
+  const renderFeed = (f: (typeof feeds)[number], indent: string): string => {
+    const xmlUrl = sanitizePersistedUrl(f.url)
+    const htmlUrl = f.siteUrl ? sanitizePersistedUrl(f.siteUrl) : ''
+    return `${indent}<outline type="rss" text="${escapeXML(f.title)}" title="${escapeXML(f.title)}" xmlUrl="${escapeXML(xmlUrl)}"${htmlUrl ? ` htmlUrl="${escapeXML(htmlUrl)}"` : ''} />\n`
+  }
   for (const [category, catFeeds] of categories) {
     if (category) {
       body += `    <outline text="${escapeXML(category)}" title="${escapeXML(category)}">\n`
       for (const f of catFeeds) {
-        body += `      <outline type="rss" text="${escapeXML(f.title)}" title="${escapeXML(f.title)}" xmlUrl="${escapeXML(f.url)}"${f.siteUrl ? ` htmlUrl="${escapeXML(f.siteUrl)}"` : ''} />\n`
+        body += renderFeed(f, '      ')
       }
       body += `    </outline>\n`
     } else {
       for (const f of catFeeds) {
-        body += `    <outline type="rss" text="${escapeXML(f.title)}" title="${escapeXML(f.title)}" xmlUrl="${escapeXML(f.url)}"${f.siteUrl ? ` htmlUrl="${escapeXML(f.siteUrl)}"` : ''} />\n`
+        body += renderFeed(f, '    ')
       }
     }
   }

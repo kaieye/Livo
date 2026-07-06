@@ -12,6 +12,7 @@ import {
   type RendererEventChannel,
 } from '../shared/renderer-events'
 import { classifyExternalUrl } from '../shared/url-policy'
+import { sanitizePersistedUrl } from '../shared/persisted-url-policy'
 import type {
   Feed,
   Entry,
@@ -1345,7 +1346,7 @@ function parseOPMLContent(xml: string): Array<{
   return feeds
 }
 
-function generateOPMLContent(feeds: Feed[]): string {
+export function generateOPMLContent(feeds: Feed[]): string {
   const cats = new Map<string, Feed[]>()
   for (const f of feeds) {
     const cat = f.category || ''
@@ -1353,15 +1354,18 @@ function generateOPMLContent(feeds: Feed[]): string {
     cats.get(cat)!.push(f)
   }
   let body = ''
+  const renderFeed = (f: Feed, indent: string): string => {
+    const xmlUrl = sanitizePersistedUrl(f.url)
+    const htmlUrl = f.siteUrl ? sanitizePersistedUrl(f.siteUrl) : ''
+    return `${indent}<outline type="rss" text="${escXML(f.title)}" title="${escXML(f.title)}" xmlUrl="${escXML(xmlUrl)}"${htmlUrl ? ` htmlUrl="${escXML(htmlUrl)}"` : ''} />\n`
+  }
   for (const [cat, catFeeds] of cats) {
     if (cat) {
       body += `    <outline text="${escXML(cat)}" title="${escXML(cat)}">\n`
-      for (const f of catFeeds)
-        body += `      <outline type="rss" text="${escXML(f.title)}" title="${escXML(f.title)}" xmlUrl="${escXML(f.url)}"${f.siteUrl ? ` htmlUrl="${escXML(f.siteUrl)}"` : ''} />\n`
+      for (const f of catFeeds) body += renderFeed(f, '      ')
       body += `    </outline>\n`
     } else {
-      for (const f of catFeeds)
-        body += `    <outline type="rss" text="${escXML(f.title)}" title="${escXML(f.title)}" xmlUrl="${escXML(f.url)}"${f.siteUrl ? ` htmlUrl="${escXML(f.siteUrl)}"` : ''} />\n`
+      for (const f of catFeeds) body += renderFeed(f, '    ')
     }
   }
   return `<?xml version="1.0" encoding="UTF-8"?>\n<opml version="2.0">\n  <head>\n    <title>Livo Subscriptions</title>\n    <dateCreated>${new Date().toUTCString()}</dateCreated>\n  </head>\n  <body>\n${body}  </body>\n</opml>`
