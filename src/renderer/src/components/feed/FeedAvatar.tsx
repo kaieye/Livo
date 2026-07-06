@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Rss } from 'lucide-react'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 
 // Shared feed avatar: render `imageUrl` as <img> and gracefully degrade to an
 // Rss glyph when missing or load-failed. Shadow / decoration are caller-owned
@@ -32,14 +33,15 @@ export function FeedAvatar({
   alt = '',
 }: FeedAvatarProps) {
   const [errored, setErrored] = useState(false)
+  const safeImageUrl = getSafeImageSrc(imageUrl)
   const sizeCls = SIZE_CLASSES[size]
   const wrapperCls =
     `${sizeCls} flex-shrink-0 bg-[var(--color-bg-tertiary)] ${className}`.trim()
 
-  if (imageUrl && !errored) {
+  if (safeImageUrl && !errored) {
     return (
       <img
-        src={imageUrl}
+        src={safeImageUrl}
         alt={alt}
         loading="lazy"
         onError={() => setErrored(true)}

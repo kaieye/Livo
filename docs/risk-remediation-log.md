@@ -840,3 +840,48 @@ Renderer review findings to handle in later batches:
 - Entry merge policy should be reviewed separately for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.
 - Image rendering sinks outside sanitized article HTML still need safe media-src fallbacks for old cached entries.
 - External-open policy still treats private IPs as suspicious rather than blocked; that should be reviewed separately from passive media loading.
+
+## 2026-07-07 - Renderer image primitive hardening
+
+### Review inputs
+
+- Local renderer sink review found that old cached `Entry.imageUrl`, `Entry.media[].url`, `Entry.media[].previewUrl`, feed avatars, and author avatars could still reach reusable image primitives even after new feed ingestion and sanitized HTML were hardened.
+- GitNexus was refreshed after the feed media commit; metadata counts changed from 7,916 symbols / 21,101 relationships to 7,927 symbols / 21,150 relationships.
+- This batch intentionally targets reusable image primitives and direct featured/avatar primitives; broader bespoke direct `<img>` surfaces are deferred below.
+
+### Fixed in this batch
+
+- Added `getSafeImageSrc()` in `src/renderer/src/lib/safe-image-source.ts` as the renderer image-src wrapper around the shared stored-media URL policy.
+- `CachedImage` now strips blocked image URLs before assigning `img.src` or remembering image metadata.
+- `QueuedImage` now strips blocked image URLs before eager loads, intersection-observed queued loads, or queue activation.
+- `EntryFeaturedImage` now renders nothing for blocked image URLs instead of assigning them to `img.src`.
+- `FeedAvatar` and entry-list `EntryAvatar` now fall back to their existing non-image placeholders when the image URL is blocked.
+- Added pure regression coverage for public image preservation and blocked loopback, localhost, private, link-local, credentialed, unsupported-scheme, data, and relative image sources.
+
+### Impact analysis
+
+- `CachedImage`: HIGH risk. Direct callers include `OverlayMediaGallery`, `PictureMasonry`, `SocialAuthorHeader`, and `ImageViewerPage`; affected processes include `ArticleDetailPage`, `SocialOverlayView`, `ImageViewerPage`, and `DiscoverPreviewPage`.
+- `EntryFeaturedImage`: HIGH risk. Direct caller is `EntryContent`; affected processes include `EntryContent`, `ArticleDetailPage`, and `DiscoverPreviewPage`.
+- `QueuedImage`: LOW risk. Direct upstream caller is `EntryCard`; no affected execution flows were reported.
+- `FeedAvatar`: LOW risk. Direct callers are Discover panel/config surfaces and `DiscoverPreviewPage`; affected process is `DiscoverPreviewPage`.
+- `EntryAvatar`: LOW risk. Direct callers are `GridCard` and `SocialMediaItem`; affected process is `SocialMediaItem`.
+- Pre-commit `detect_changes --scope staged` reported MEDIUM risk across 10 files, 15 symbols, and 1 affected execution flow: `SocialOverlayView → NormalizeImageMetadata`.
+
+### Verification
+
+- `pnpm test -- src/renderer/src/lib/safe-image-source.test.ts src/shared/media-url-policy.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 155 passed test files, 894 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/lib/safe-image-source.ts src/renderer/src/lib/safe-image-source.test.ts src/renderer/src/components/ui/CachedImage.tsx src/renderer/src/components/ui/QueuedImage.tsx src/renderer/src/components/entry/entry-content/EntryFeaturedImage.tsx src/renderer/src/components/feed/FeedAvatar.tsx src/renderer/src/components/entry/entry-list/components/EntryAvatar.tsx`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed after formatting `AGENTS.md`, `CLAUDE.md`, and the new safe-image helper.
+
+### Deferred findings
+
+- Bespoke direct image tags in social galleries, Discover preview cards/panels, Sidebar feed icons, settings feed rows, audio mini-bar cover art, and similar surfaces still need a follow-up pass.
+- Context menu image download/open paths should be reviewed separately because they use selected image URLs as IPC/download inputs rather than passive image element sources.
+- Entry merge policy should still be reviewed for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.

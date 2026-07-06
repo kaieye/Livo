@@ -10,6 +10,7 @@ import {
   loadPersistedImageMetadata,
   rememberImageMetadata,
 } from '../../lib/image-metadata'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 
 type CachedImageProps = ImgHTMLAttributes<HTMLImageElement> & {
   preserveAspectRatio?: boolean
@@ -21,10 +22,13 @@ export const CachedImage = forwardRef<HTMLImageElement, CachedImageProps>(
     ref,
   ) {
     loadPersistedImageMetadata()
+    const safeSrc = getSafeImageSrc(src)
     const remembered = useMemo(
       () =>
-        typeof src === 'string' ? getRememberedImageMetadata(src) : undefined,
-      [src],
+        typeof safeSrc === 'string'
+          ? getRememberedImageMetadata(safeSrc)
+          : undefined,
+      [safeSrc],
     )
     const [localAspectRatio, setLocalAspectRatio] = useState<
       string | undefined
@@ -39,13 +43,13 @@ export const CachedImage = forwardRef<HTMLImageElement, CachedImageProps>(
 
     const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
       if (
-        typeof src === 'string' &&
-        rememberImageMetadata(src, {
+        typeof safeSrc === 'string' &&
+        rememberImageMetadata(safeSrc, {
           width: event.currentTarget.naturalWidth,
           height: event.currentTarget.naturalHeight,
         })
       ) {
-        const next = getRememberedImageMetadata(src)
+        const next = getRememberedImageMetadata(safeSrc)
         if (next) {
           setLocalAspectRatio(`${next.width} / ${next.height}`)
         }
@@ -56,7 +60,7 @@ export const CachedImage = forwardRef<HTMLImageElement, CachedImageProps>(
     return (
       <img
         ref={ref}
-        src={src}
+        src={safeSrc}
         style={mergedStyle}
         onLoad={handleLoad}
         {...props}

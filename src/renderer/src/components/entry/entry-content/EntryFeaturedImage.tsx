@@ -1,4 +1,5 @@
 import { Maximize2 } from 'lucide-react'
+import { getSafeImageSrc } from '../../../lib/safe-image-source'
 
 export function EntryFeaturedImage({
   imageUrl,
@@ -9,10 +10,13 @@ export function EntryFeaturedImage({
   title: string
   onOpen: () => void
 }) {
+  const safeImageUrl = getSafeImageSrc(imageUrl)
+  if (!safeImageUrl) return null
+
   return (
     <div className="group/featured relative -mx-2 mb-8 overflow-hidden rounded-xl">
       <img
-        src={imageUrl}
+        src={safeImageUrl}
         alt=""
         className="max-h-[400px] w-full object-cover transition-transform duration-500 hover:scale-[1.02]"
         loading="lazy"

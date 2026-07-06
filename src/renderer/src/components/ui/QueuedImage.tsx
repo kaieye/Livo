@@ -2,12 +2,14 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ImgHTMLAttributes,
   type SyntheticEvent,
 } from 'react'
 import { previewImageLoadQueue } from '../../lib/image-load-queue'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 
 type QueuedImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
   src: string
@@ -22,9 +24,10 @@ export const QueuedImage = forwardRef<HTMLImageElement, QueuedImageProps>(
   ) {
     const imgRef = useRef<HTMLImageElement | null>(null)
     const releaseActiveRef = useRef<(() => void) | null>(null)
+    const safeSrc = useMemo(() => getSafeImageSrc(src), [src])
     const [isVisible, setIsVisible] = useState(eager)
     const [activeSrc, setActiveSrc] = useState<string | undefined>(
-      eager ? src : undefined,
+      eager ? safeSrc : undefined,
     )
 
     const releaseActive = useCallback(() => {
@@ -50,7 +53,7 @@ export const QueuedImage = forwardRef<HTMLImageElement, QueuedImageProps>(
       setIsVisible(eager)
 
       const element = imgRef.current
-      if (!src || eager) return
+      if (!safeSrc || eager) return
       if (!element || typeof IntersectionObserver === 'undefined') {
         setIsVisible(true)
         return
@@ -69,12 +72,12 @@ export const QueuedImage = forwardRef<HTMLImageElement, QueuedImageProps>(
       return () => {
         observer.disconnect()
       }
-    }, [eager, releaseActive, rootMargin, src])
+    }, [eager, releaseActive, rootMargin, safeSrc])
 
     useEffect(() => {
-      if (!src || !isVisible) return
+      if (!safeSrc || !isVisible) return
       if (eager) {
-        setActiveSrc(src)
+        setActiveSrc(safeSrc)
         return
       }
 
@@ -85,7 +88,7 @@ export const QueuedImage = forwardRef<HTMLImageElement, QueuedImageProps>(
           return
         }
         releaseActiveRef.current = ticket.release
-        setActiveSrc(src)
+        setActiveSrc(safeSrc)
       })
 
       return () => {
@@ -93,7 +96,7 @@ export const QueuedImage = forwardRef<HTMLImageElement, QueuedImageProps>(
         cancelQueue()
         releaseActive()
       }
-    }, [eager, isVisible, releaseActive, src])
+    }, [eager, isVisible, releaseActive, safeSrc])
 
     const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
       releaseActive()

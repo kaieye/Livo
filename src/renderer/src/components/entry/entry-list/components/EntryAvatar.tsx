@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { getSafeImageSrc } from '../../../../lib/safe-image-source'
 
 interface EntryAvatarProps {
   avatarUrl: string
@@ -28,11 +29,12 @@ export const EntryAvatar = memo(function EntryAvatar({
   }
 
   const sizeClass = sizeClasses[size]
+  const safeAvatarUrl = getSafeImageSrc(avatarUrl)
 
-  if (avatarUrl && !avatarImageFailed) {
+  if (safeAvatarUrl && !avatarImageFailed) {
     return (
       <img
-        src={avatarUrl}
+        src={safeAvatarUrl}
         alt=""
         className={`${sizeClass} rounded-full object-cover ${className}`}
         loading="lazy"
