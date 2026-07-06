@@ -38,17 +38,17 @@
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
-    "@supabase/supabase-js": "^2.107.0",
-    "better-sqlite3": "^12.10.0",
-    "chardet": "^2.1.1",
-    "dompurify": "^3.3.3",
+    "@supabase/supabase-js": "^2.110.0",
+    "better-sqlite3": "^12.11.1",
+    "chardet": "^2.2.0",
+    "dompurify": "^3.4.11",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.8.9",
     "linkedom": "^0.18.12",
-    "openai": "^4.73.0",
+    "openai": "^6.45.0",
     "rss-parser": "^3.13.0",
     "socket.io-client": "^4.8.3",
-    "uuid": "^11.0.3"
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^1.0.1",
