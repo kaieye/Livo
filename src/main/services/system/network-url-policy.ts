@@ -43,8 +43,39 @@ function isIpv4InRange(address: string, base: string, mask: number): boolean {
   return ipv4ToInt(address) >>> shift === ipv4ToInt(base) >>> shift
 }
 
+function ipv4FromMappedIpv6(address: string): string | null {
+  const normalized = address.toLowerCase()
+  const dottedMatch = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+  if (dottedMatch && isIP(dottedMatch[1]) === 4) {
+    return dottedMatch[1]
+  }
+
+  const hexMatch = normalized.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/)
+  if (!hexMatch) return null
+
+  const high = Number.parseInt(hexMatch[1], 16)
+  const low = Number.parseInt(hexMatch[2], 16)
+  if (
+    !Number.isInteger(high) ||
+    !Number.isInteger(low) ||
+    high < 0 ||
+    high > 0xffff ||
+    low < 0 ||
+    low > 0xffff
+  ) {
+    return null
+  }
+
+  return [(high >> 8) & 0xff, high & 0xff, (low >> 8) & 0xff, low & 0xff].join(
+    '.',
+  )
+}
+
 function isLoopbackAddress(address: string): boolean {
   const normalized = address.toLowerCase()
+  const mappedIpv4 = ipv4FromMappedIpv6(normalized)
+  if (mappedIpv4) return isLoopbackAddress(mappedIpv4)
+
   return (
     normalized === 'localhost' ||
     normalized === '::1' ||
@@ -55,6 +86,9 @@ function isLoopbackAddress(address: string): boolean {
 
 function isPrivateNetworkAddress(address: string): boolean {
   const normalized = address.toLowerCase()
+  const mappedIpv4 = ipv4FromMappedIpv6(normalized)
+  if (mappedIpv4) return isPrivateNetworkAddress(mappedIpv4)
+
   if (isLoopbackAddress(normalized)) return true
   if (isIP(normalized) === 4) {
     return PRIVATE_IPV4_RANGES.some((range) =>

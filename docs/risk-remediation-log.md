@@ -457,3 +457,45 @@ Renderer review findings to handle in later batches:
 - Feed avatar/title enrichment should classify and skip blocked URLs before best-effort fetches.
 - Video duration/proxy/media paths need redirect caps and final media URL classification.
 - Web build proxy paths can only apply basic URL classification client-side; trusted proxy-side network enforcement should be documented separately.
+
+## 2026-07-07 - Network URL IPv4-mapped IPv6 hardening
+
+### Review inputs
+
+- Network policy review sub-agent found that `isPrivateNetworkAddress()` did not cover IPv4-mapped IPv6 addresses such as `::ffff:127.0.0.1`.
+- Existing network policy tests covered direct IPv4 and IPv6 loopback/private literals, but not mapped IPv6 forms.
+
+### Fixed in this batch
+
+- Added IPv4-mapped IPv6 normalization for both dotted and hex forms.
+- Loopback checks now treat mapped IPv4 loopback addresses as loopback.
+- Private-network checks now treat mapped IPv4 private addresses as private-network addresses.
+- Added regression coverage for mapped loopback, mapped RFC1918 dotted IPv4, and mapped RFC1918 hex IPv4.
+
+### Impact analysis
+
+- `isPrivateNetworkAddress`: LOW risk by symbol impact. No upstream callers or affected processes were reported.
+- `isLoopbackAddress`: LOW risk. Direct upstream caller: `isPrivateNetworkAddress`.
+- `classifyNetworkFetchUrl`: LOW risk by symbol impact. No upstream callers or affected processes were reported.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported MEDIUM risk across 3 files, 4 symbols, and 1 affected execution flow: `SearchYouTubeChannelsByKeyword → NormalizeHostnameForNetworkPolicy`. The changed behavior is limited to classifying mapped IPv6 forms with the existing IPv4 private/loopback policy.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/system/network-url-policy.ts src/main/services/system/network-url-policy.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/main/services/system/network-url-policy.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 841 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- DNS rebinding remains only partially mitigated by preflight lookup; socket-level pinning or redirect-aware fetch helpers need separate design.
+- Feed fetching remains intentionally permissive for local RSSHub, LAN, dev, and intranet feeds; it needs an explicit public/private policy mode before changing shared parser behavior.
+- Discovery public fetches still need redirect-aware public-only fetch handling.
+- Feed avatar/title enrichment should classify and skip blocked URLs before best-effort fetches.
+- Video duration/proxy/media paths need redirect caps and final media URL classification.
