@@ -7,6 +7,7 @@ import {
   IPC,
   FeedViewType,
   type Feed,
+  type FeedEditablePatch,
   type FeedWithCount,
 } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
@@ -72,6 +73,21 @@ function toRendererFeed(feed: Feed): Feed {
     feed.folder ??
     (feed.category === RECOMMENDED_CATEGORY ? '' : feed.category || '')
   return { ...feed, folder }
+}
+
+function toFeedEditableUpdate(updates: FeedEditablePatch): FeedEditablePatch {
+  const next: FeedEditablePatch = {}
+  if (typeof updates.title === 'string') next.title = updates.title
+  if (typeof updates.folder === 'string') next.folder = updates.folder
+  if (typeof updates.category === 'string') next.category = updates.category
+  if (typeof updates.view === 'number') next.view = updates.view
+  if (typeof updates.imageUrl === 'string') next.imageUrl = updates.imageUrl
+  if (typeof updates.showInAll === 'boolean') next.showInAll = updates.showInAll
+  if (Object.prototype.hasOwnProperty.call(updates, 'maxEntries')) {
+    next.maxEntries =
+      typeof updates.maxEntries === 'number' ? updates.maxEntries : undefined
+  }
+  return next
 }
 
 export function registerFeedHandlers(): void {
@@ -169,8 +185,8 @@ export function registerFeedHandlers(): void {
   // Update feed
   registerChannel(
     IPC.FEED_UPDATE,
-    (_event, feedId: string, updates: Partial<Feed>) => {
-      const next = { ...updates }
+    (_event, feedId: string, updates: FeedEditablePatch) => {
+      const next = toFeedEditableUpdate(updates)
       if (typeof next.folder === 'string') {
         if (next.category !== RECOMMENDED_CATEGORY) {
           next.category = next.folder

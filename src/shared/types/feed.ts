@@ -80,6 +80,17 @@ export interface Feed {
   createdAt: number
 }
 
+export type FeedEditablePatch = Pick<
+  Partial<Feed>,
+  | 'title'
+  | 'folder'
+  | 'category'
+  | 'view'
+  | 'imageUrl'
+  | 'showInAll'
+  | 'maxEntries'
+>
+
 export interface FeedWithCount extends Feed {
   unreadCount: number
 }

@@ -9,7 +9,7 @@ import {
 } from '../shared/renderer-events'
 import type {
   AppSettings,
-  Feed,
+  FeedEditablePatch,
   Entry,
   EntryListResult,
   FeedWithCount,
@@ -92,7 +92,7 @@ const api = {
     list: (): Promise<FeedWithCount[]> => invokeIpc(IPC.FEED_LIST),
     refresh: (feedId: string) => invokeIpc(IPC.FEED_REFRESH, feedId),
     refreshAll: () => invokeIpc(IPC.FEED_REFRESH_ALL),
-    update: (feedId: string, updates: Partial<Feed>) =>
+    update: (feedId: string, updates: FeedEditablePatch) =>
       invokeIpc(IPC.FEED_UPDATE, feedId, updates),
     importOPML: () => invokeIpc(IPC.FEED_IMPORT_OPML),
     exportOPML: () => invokeIpc(IPC.FEED_EXPORT_OPML),

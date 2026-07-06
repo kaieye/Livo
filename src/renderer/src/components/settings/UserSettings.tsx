@@ -1035,7 +1035,6 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
               const updates: {
                 category?: string
                 view?: FeedViewType
-                url?: string
                 title?: string
               } = {}
               if (existing.category === RECOMMENDED_CATEGORY) {
@@ -1044,9 +1043,6 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
               }
               if (existing.view !== targetView) {
                 updates.view = targetView
-              }
-              if (existing.url !== canonicalUrl) {
-                updates.url = canonicalUrl
               }
               const preferredTitle = `${creator.uname} - Bilibili`
               if (existing.title !== preferredTitle) {

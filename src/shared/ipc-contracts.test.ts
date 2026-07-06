@@ -8,6 +8,7 @@ import {
   unwrapIpcEnvelope,
   validateIpcArgs,
 } from './ipc-contracts'
+import { FeedViewType } from './types'
 
 describe('ipc-contracts', () => {
   it('validates channel arguments before they reach handlers', () => {
@@ -153,6 +154,59 @@ describe('ipc-contracts', () => {
           'device-1',
           [{ day: '2026-07-07', count }],
         ]),
+      ).toThrow(IpcValidationError)
+    }
+  })
+
+  it('allows only bounded editable feed update fields', () => {
+    const editablePatch = {
+      title: 'New title',
+      folder: 'Design',
+      category: 'Design',
+      view: FeedViewType.Pictures,
+      imageUrl: 'https://example.com/avatar.png',
+      showInAll: false,
+      maxEntries: 100,
+    }
+
+    expect(validateIpcArgs(IPC.FEED_UPDATE, ['feed-1', editablePatch])).toEqual(
+      ['feed-1', editablePatch],
+    )
+
+    for (const blocked of [
+      { url: 'https://evil.example/feed.xml' },
+      { upstreamUrl: 'https://evil.example/feed.xml' },
+      { provider: 'fever' },
+      { remoteFeedId: 'remote-1' },
+      { fetchSource: 'private-aggregator' },
+      { lastFetched: Date.now() },
+      { etag: 'etag' },
+      { lastModified: 'now' },
+      { errorCount: 99 },
+      { lastRefreshStatus: 'succeeded' },
+      { lastRefreshRawError: 'raw' },
+      { createdAt: 1 },
+    ]) {
+      expect(() =>
+        validateIpcArgs(IPC.FEED_UPDATE, ['feed-1', blocked]),
+      ).toThrow(IpcValidationError)
+    }
+
+    expect(() =>
+      validateIpcArgs(IPC.FEED_UPDATE, ['feed-1', { title: 'x'.repeat(513) }]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.FEED_UPDATE, [
+        'feed-1',
+        { imageUrl: `https://example.com/${'x'.repeat(2048)}` },
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.FEED_UPDATE, ['feed-1', { view: 99 }]),
+    ).toThrow(IpcValidationError)
+    for (const maxEntries of [0, -1, 1.5, 10_001]) {
+      expect(() =>
+        validateIpcArgs(IPC.FEED_UPDATE, ['feed-1', { maxEntries }]),
       ).toThrow(IpcValidationError)
     }
   })

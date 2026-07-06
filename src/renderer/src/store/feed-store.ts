@@ -1,5 +1,5 @@
 import { createAppStore } from './helpers'
-import type { FeedWithCount } from '../../../shared/types'
+import type { FeedEditablePatch, FeedWithCount } from '../../../shared/types'
 import { FeedViewType } from '../../../shared/types'
 import { sanitizePersistedUrl } from '../../../shared/persisted-url-policy'
 import type {
@@ -175,19 +175,7 @@ interface FeedState {
   refreshAll: () => Promise<void>
   setSelectedFeed: (feedId: string | null) => void
   setActiveView: (view: FeedViewType | null) => void
-  updateFeed: (
-    feedId: string,
-    updates: {
-      title?: string
-      url?: string
-      folder?: string
-      category?: string
-      view?: FeedViewType
-      imageUrl?: string
-      showInAll?: boolean
-      maxEntries?: number
-    },
-  ) => Promise<void>
+  updateFeed: (feedId: string, updates: FeedEditablePatch) => Promise<void>
   importOPML: () => Promise<{
     success: boolean
     imported?: number

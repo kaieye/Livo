@@ -213,23 +213,6 @@ export function useInitRecommendedFeeds(): void {
         }
       }
 
-      // Repair existing Instagram recommended feeds: switch to an actually working instance URL.
-      const currentAfterCollect = useFeedStore.getState().feeds
-      for (const feed of currentAfterCollect) {
-        if (feed.category !== RECOMMENDED_CATEGORY) continue
-        const m = feed.url.match(/\/instagram\/user\/([^/?#]+)/i)
-        if (!m) continue
-        try {
-          const username = decodeURIComponent(m[1])
-          const result = await window.api.discover.probeInstagramUser(username)
-          if (result.valid && result.feedUrl && result.feedUrl !== feed.url) {
-            await window.api.feeds.update(feed.id, { url: result.feedUrl })
-          }
-        } catch {
-          // Keep the existing URL if probing fails.
-        }
-      }
-
       // Subscribe in batches
       const batchSize = 4
       for (let i = 0; i < toAdd.length; i += batchSize) {

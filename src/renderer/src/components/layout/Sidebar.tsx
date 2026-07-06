@@ -1649,7 +1649,6 @@ export function Sidebar({ width }: { width?: number }) {
         )
         await updateFeed(existingInOtherView.id, {
           view: preferredView,
-          url: feedUrl,
           title: finalTitle,
           imageUrl: candidateImage || existingInOtherView.imageUrl,
         })
@@ -1703,7 +1702,6 @@ export function Sidebar({ width }: { width?: number }) {
         })
         if (existingRecommended) {
           await updateFeed(existingRecommended.id, {
-            url: feedUrl,
             category: '',
             title: finalTitle,
             imageUrl: candidateImage || existingRecommended.imageUrl,
@@ -2105,7 +2103,6 @@ export function Sidebar({ width }: { width?: number }) {
                         await window.api.discover.probeInstagramUser(username)
                       if (result.valid && result.feedUrl) {
                         await updateFeed(contextMenu.feedId, {
-                          url: result.feedUrl,
                           category: '',
                         })
                         setContextMenu(null)
@@ -2602,7 +2599,6 @@ export function Sidebar({ width }: { width?: number }) {
                 onClick={() => {
                   updateFeed(editingFeed.id, {
                     title: editingFeed.title.trim() || undefined,
-                    url: editingFeed.url.trim() || undefined,
                     category: editingFeed.category.trim(),
                     view: editingFeed.view,
                     showInAll: editingFeed.showInAll,

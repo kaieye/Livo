@@ -127,9 +127,7 @@ export function ViewRecommendations({ viewType }: { viewType: FeedViewType }) {
         )
       })
       if (existing) {
-        const updates: { category: string; url?: string } = { category: '' }
-        if (existing.url !== resolvedUrl) updates.url = resolvedUrl
-        await updateFeed(existing.id, updates)
+        await updateFeed(existing.id, { category: '' })
         setSubscribedUrls((prev) => new Set(prev).add(resolvedUrl))
       } else {
         const result = await addFeed(resolvedUrl, '', viewType, feed.title)

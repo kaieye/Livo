@@ -4,8 +4,7 @@ import type {
   AITranslateEntrySegmentsInput,
   AppSettings,
   DownloadUrlOptions,
-  Feed,
-  FeedViewType,
+  FeedEditablePatch,
   FeverAccount,
   NativeContextMenuItem,
   ReaderSnapshotRequest,
@@ -13,6 +12,7 @@ import type {
 } from './types'
 import type { ActionRule } from './actions'
 import type { AISemanticFilterInput, AIDigestPreset } from './types'
+import { FeedViewType } from './types/feed'
 
 const IPC_TEXT_CONTENT_MAX_LENGTH = 10 * 1024 * 1024
 const IPC_TEXT_FIELD_MAX_LENGTH = 512
@@ -28,6 +28,9 @@ const IPC_IMPORTED_REFRESH_ID_MAX_LENGTH = 128
 const IPC_READING_ACTIVITY_DAYS_MAX_COUNT = 400
 const IPC_READING_ACTIVITY_DEVICE_ID_MAX_LENGTH = 128
 const IPC_READING_ACTIVITY_COUNT_MAX = 1_000_000
+const IPC_FEED_EDITABLE_TEXT_MAX_LENGTH = 512
+const IPC_FEED_EDITABLE_IMAGE_URL_MAX_LENGTH = 2048
+const IPC_FEED_MAX_ENTRIES_MAX = 10_000
 const IPC_AI_DIRECT_CONTENT_MAX_LENGTH = 200_000
 const IPC_AI_LANGUAGE_MAX_LENGTH = 120
 const IPC_AI_REQUEST_ID_MAX_LENGTH = 120
@@ -268,7 +271,7 @@ export type IpcArgsByChannel = {
   [IPC.FEED_LIST]: []
   [IPC.FEED_REFRESH]: [feedId: string]
   [IPC.FEED_REFRESH_ALL]: []
-  [IPC.FEED_UPDATE]: [feedId: string, updates: Partial<Feed>]
+  [IPC.FEED_UPDATE]: [feedId: string, updates: FeedEditablePatch]
   [IPC.FEED_IMPORT_OPML]: []
   [IPC.FEED_EXPORT_OPML]: []
   [IPC.FEED_REFRESH_IMPORTED]: [feedIds: string[]]
@@ -1152,6 +1155,64 @@ function validateEntryListOptions(value: unknown): void {
   assertOptionalBoolean(value.skipDedupe, 'options.skipDedupe')
 }
 
+const editableFeedUpdateKeys = new Set([
+  'title',
+  'folder',
+  'category',
+  'view',
+  'imageUrl',
+  'showInAll',
+  'maxEntries',
+])
+
+function assertFeedEditablePatch(value: unknown): void {
+  assertObject(value, 'updates')
+  for (const key of Object.keys(value)) {
+    if (!editableFeedUpdateKeys.has(key)) {
+      throw new IpcValidationError('Invalid IPC argument', {
+        [`updates.${key}`]: 'unsupported_field',
+      })
+    }
+  }
+
+  assertOptionalBoundedString(
+    value.title,
+    'updates.title',
+    IPC_FEED_EDITABLE_TEXT_MAX_LENGTH,
+  )
+  assertOptionalBoundedString(
+    value.folder,
+    'updates.folder',
+    IPC_FEED_EDITABLE_TEXT_MAX_LENGTH,
+  )
+  assertOptionalBoundedString(
+    value.category,
+    'updates.category',
+    IPC_FEED_EDITABLE_TEXT_MAX_LENGTH,
+  )
+  assertOptionalBoundedString(
+    value.imageUrl,
+    'updates.imageUrl',
+    IPC_FEED_EDITABLE_IMAGE_URL_MAX_LENGTH,
+  )
+  assertOptionalBoolean(value.showInAll, 'updates.showInAll')
+  if (value.view !== undefined) {
+    assertNumber(value.view, 'updates.view')
+    if (!Object.values(FeedViewType).includes(value.view as FeedViewType)) {
+      throw new IpcValidationError('Invalid IPC argument', {
+        'updates.view': 'unsupported_view',
+      })
+    }
+  }
+  if (value.maxEntries !== undefined) {
+    assertNumber(value.maxEntries, 'updates.maxEntries')
+    assertIntegerRange(value.maxEntries, 'updates.maxEntries', {
+      min: 1,
+      max: IPC_FEED_MAX_ENTRIES_MAX,
+    })
+  }
+}
+
 function validateReaderSnapshotInput(value: unknown): void {
   assertOptionalObject(value, 'input')
   if (value === undefined) return
@@ -1200,7 +1261,7 @@ export const IPC_CONTRACTS = {
     validateArgs: (args) => {
       assertArity(IPC.FEED_UPDATE, args, 2)
       assertString(args[0], 'feedId')
-      assertObject(args[1], 'updates')
+      assertFeedEditablePatch(args[1])
       return args as IpcArgs<typeof IPC.FEED_UPDATE>
     },
   },

@@ -1236,6 +1236,10 @@ Renderer review findings to handle in later batches:
   - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
 - `pnpm format:check`
   - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 15 files, 16 symbols, 10 affected processes, HIGH risk.
+  - Changed symbols include `registerFeedHandlers`, preload `update`/`api`, renderer feed update call sites, `FeedState`, `IPC_CONTRACTS`, and shared feed type attribution.
+  - Affected execution flows are centered on feed IPC registration and handler error/envelope paths, including `RegisterFeedHandlers -> IpcValidationError` and `OnReady -> ToRendererFeed`.
 
 ### Deferred findings
 
@@ -1900,3 +1904,46 @@ Renderer review findings to handle in later batches:
 
 - The sanitizer intentionally handles URL-shaped text only; it does not alter non-URL chat content.
 - Active in-memory chat messages keep original URLs until the session is reloaded from persisted history.
+
+## 2026-07-07 - Restrict renderer feed update fields
+
+### Review inputs
+
+- Privileged IPC review found `feed:update` accepted arbitrary `Partial<Feed>` objects from the renderer.
+- The handler merged renderer-controlled fields directly into the stored feed record, including operational fields such as `url`, `upstreamUrl`, `provider`, refresh metadata, and error counters.
+- Existing UI flows legitimately edit presentation fields such as title, folder/category, view, image URL, visibility in All, and max entry retention.
+- Some renderer convenience flows also attempted URL canonicalization through `feed:update`; that needs a dedicated migration path rather than generic edit IPC.
+
+### Fixed in this batch
+
+- Added `FeedEditablePatch`, a narrow renderer-facing update type for presentation/editable feed fields only.
+- `FEED_UPDATE` IPC validation now rejects unsupported fields and bounds editable strings, image URL length, enum view values, and `maxEntries`.
+- Preload and renderer feed store update typing now use `FeedEditablePatch`.
+- Main `registerFeedHandlers()` normalizes the editable patch before preserving the existing folder/category compatibility behavior.
+- Removed renderer `url` updates from discover subscribe, sidebar, recommended-feed repair, Bilibili import, and view recommendation flows.
+- Added regression coverage proving internal fields are rejected and only normalized editable fields reach the database update.
+
+### Impact analysis
+
+- `Feed`: CRITICAL risk. The core feed model is shared across desktop, web, main, renderer, sync, and agent paths; the batch avoids changing existing `Feed` semantics and adds a separate editable patch type.
+- `registerFeedHandlers`: LOW risk. GitNexus reported no upstream impacted symbols or affected processes.
+- `validateEntryListOptions`: HIGH risk when considering the separate pagination finding; this batch does not edit that symbol.
+- Repository `updateFeed` symbols were ambiguous in GitNexus; reported candidates were LOW risk, and this batch constrains input before repository merge rather than changing repository behavior.
+
+### Verification
+
+- `pnpm test -- src/shared/ipc-contracts.test.ts src/main/handlers/feed-handlers.test.ts src/renderer/src/lib/discover-subscribe-config.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 168 passed test files, 976 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/shared/types/feed.ts src/shared/ipc-contracts.ts src/shared/ipc-contracts.test.ts src/main/handlers/feed-handlers.ts src/main/handlers/feed-handlers.test.ts src/preload/index.ts src/renderer/src/store/feed-store.ts src/renderer/src/pages/DiscoverSubscribeConfigPage.tsx src/renderer/src/components/discover/SubscribeConfigDialog.tsx src/renderer/src/hooks/useInitRecommendedFeeds.ts src/renderer/src/components/layout/Sidebar.tsx src/renderer/src/components/settings/AccountsSettings.tsx src/renderer/src/components/settings/UserSettings.tsx src/renderer/src/components/entry/ViewRecommendations.tsx`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Existing recommended/social feed URL repair now needs a dedicated, non-generic migration path if URL canonicalization is still desired.
+- `entry:list` pagination bounds, `actions:sync` deep validation, settings schema patch validation, public-only feed fetch policy, and update installer verification remain separate findings.

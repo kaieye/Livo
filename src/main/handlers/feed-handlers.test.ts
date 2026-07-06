@@ -10,6 +10,7 @@ import { registerFeedHandlers } from './feed-handlers'
 
 const registerChannelMock = vi.hoisted(() => vi.fn())
 const addFeedMock = vi.hoisted(() => vi.fn())
+const updateFeedMock = vi.hoisted(() => vi.fn())
 const mocks = vi.hoisted(() => ({
   showOpenDialog: vi.fn(),
   sendEvent: vi.fn(),
@@ -95,6 +96,7 @@ describe('registerFeedHandlers', () => {
   beforeEach(() => {
     registerChannelMock.mockReset()
     addFeedMock.mockReset()
+    updateFeedMock.mockReset()
     mocks.showOpenDialog.mockReset()
     mocks.sendEvent.mockReset()
     vi.mocked(fetchAndParseFeed).mockReset()
@@ -104,6 +106,7 @@ describe('registerFeedHandlers', () => {
         getFeedByUrl: vi.fn(() => null),
         getFeedById: vi.fn(() => null),
         insertFeed: vi.fn(),
+        updateFeed: updateFeedMock,
       },
       entries: {
         insertEntries: vi.fn(),
@@ -138,6 +141,30 @@ describe('registerFeedHandlers', () => {
       deferInitialFetch: true,
     })
     expect(result).toEqual({ success: true, feed })
+  })
+
+  it('persists only normalized editable feed updates from IPC', async () => {
+    registerFeedHandlers()
+    const handler = getRegisteredHandler(IPC.FEED_UPDATE)
+
+    const result = await handler({}, 'feed-1', {
+      title: undefined,
+      folder: 'Design',
+      view: FeedViewType.Pictures,
+      imageUrl: 'https://example.com/avatar.png',
+      showInAll: false,
+      maxEntries: undefined,
+    })
+
+    expect(result).toEqual({ success: true })
+    expect(updateFeedMock).toHaveBeenCalledWith('feed-1', {
+      folder: 'Design',
+      category: 'Design',
+      view: FeedViewType.Pictures,
+      imageUrl: 'https://example.com/avatar.png',
+      showInAll: false,
+      maxEntries: undefined,
+    })
   })
 
   it('rejects non-OPML file selections before importing', async () => {

@@ -103,7 +103,6 @@ export function SubscribeConfigDialog({
       if (existingFeed) {
         await updateFeed(existingFeed.id, {
           title: nextTitle,
-          url: nextUrl,
           category: nextCategory,
           folder: nextCategory,
           view: resolvedView,
