@@ -499,3 +499,41 @@ Renderer review findings to handle in later batches:
 - Discovery public fetches still need redirect-aware public-only fetch handling.
 - Feed avatar/title enrichment should classify and skip blocked URLs before best-effort fetches.
 - Video duration/proxy/media paths need redirect caps and final media URL classification.
+
+## 2026-07-07 - Video duration redirect cap
+
+### Review inputs
+
+- Network policy review sub-agent found that video duration API/page fetches preflight URLs with the strict network guard, but duration redirects could recurse without a maximum cap.
+- Local impact analysis confirmed `fetchText` in `video-duration.ts` is LOW risk, with direct callers `fetchYouTubeDuration`, `fetchBilibiliDuration`, and the request callback helper.
+
+### Fixed in this batch
+
+- Added a maximum redirect depth for video duration fetches.
+- Redirect targets still recurse through `fetchText()`, so each hop continues to pass through `assertNetworkFetchUrl()`.
+- Added tests for over-limit redirects and for a bounded redirect that successfully parses the final duration response.
+
+### Impact analysis
+
+- `fetchText`: LOW risk. Direct upstream callers are `fetchYouTubeDuration`, `fetchBilibiliDuration`, and the request callback helper; indirect duration enrichment callers remain unchanged.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 3 files, 5 symbols, and 0 affected execution flows.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/video/video-duration.ts src/main/services/video/video-duration-task.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/main/services/video/video-duration-task.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 843 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- `resolveVideoUrl()` should classify selected resolver stream URLs before returning them.
+- Renderer media-source loading still needs a central policy for private/loopback media URLs.
+- Discovery public fetches still need redirect-aware public-only fetch handling.
+- Feed avatar/title enrichment should classify and skip blocked URLs before best-effort fetches.

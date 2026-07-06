@@ -23,6 +23,7 @@ const PER_FEED_COOLDOWN_MS = 30 * 60 * 1000
 const MAX_FETCH_PER_FEED = 12
 const STARTUP_BACKFILL_MAX_FEEDS = 3
 const STARTUP_BACKFILL_COOLDOWN_MS = 12 * 60 * 60 * 1000
+const MAX_FETCH_REDIRECTS = 5
 
 /**
  * Extract YouTube video ID from various URL formats.
@@ -45,7 +46,11 @@ function extractBilibiliId(url: string): string | null {
 /**
  * Fetch a URL and return the response body as string.
  */
-async function fetchText(url: string, timeoutMs = 8000): Promise<string> {
+async function fetchText(
+  url: string,
+  timeoutMs = 8000,
+  redirectsRemaining = MAX_FETCH_REDIRECTS,
+): Promise<string> {
   const safeUrl = await assertNetworkFetchUrl(url)
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(safeUrl)
@@ -69,8 +74,15 @@ async function fetchText(url: string, timeoutMs = 8000): Promise<string> {
           res.statusCode < 400 &&
           res.headers.location
         ) {
+          if (redirectsRemaining <= 0) {
+            reject(new Error('too many redirects'))
+            return
+          }
           const redirectUrl = new URL(res.headers.location, safeUrl).href
-          fetchText(redirectUrl, timeoutMs).then(resolve, reject)
+          fetchText(redirectUrl, timeoutMs, redirectsRemaining - 1).then(
+            resolve,
+            reject,
+          )
           return
         }
         const chunks: Buffer[] = []

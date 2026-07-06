@@ -1,13 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'events'
 import { VIDEO_DURATION_ENRICH_TASK } from '../system/task-contracts'
 import { resetLocalTaskRunnerForTest } from '../system/task-runner-service'
-import { queueVideoDurationEnrich } from './video-duration'
+import { fetchVideoDuration, queueVideoDurationEnrich } from './video-duration'
 
 const mocks = vi.hoisted(() => ({
   eventSend: vi.fn(),
   getEntries: vi.fn(),
   updateEntry: vi.fn(),
   getAllFeeds: vi.fn(),
+  httpsGet: vi.fn(),
+  assertNetworkFetchUrl: vi.fn(async (url: string) => url),
+}))
+
+vi.mock('https', () => ({
+  default: { get: mocks.httpsGet },
+  get: mocks.httpsGet,
 }))
 
 vi.mock('../../database', () => ({
@@ -26,12 +34,49 @@ vi.mock('../system/event-bus', () => ({
   getEventBus: () => ({ send: mocks.eventSend }),
 }))
 
+vi.mock('../system/network-url-policy', () => ({
+  assertNetworkFetchUrl: mocks.assertNetworkFetchUrl,
+}))
+
+function mockHttpsResponses(
+  responses: Array<{
+    statusCode: number
+    location?: string
+    body?: string
+  }>,
+) {
+  mocks.httpsGet.mockImplementation((_url, _options, callback) => {
+    const response = responses.shift()
+    if (!response) {
+      throw new Error('unexpected request')
+    }
+
+    const res = new EventEmitter() as EventEmitter & {
+      statusCode: number
+      headers: Record<string, string>
+    }
+    res.statusCode = response.statusCode
+    res.headers = response.location ? { location: response.location } : {}
+
+    queueMicrotask(() => {
+      callback(res)
+      if (response.body) {
+        res.emit('data', Buffer.from(response.body))
+      }
+      res.emit('end')
+    })
+
+    return { on: vi.fn() }
+  })
+}
+
 describe('queueVideoDurationEnrich', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetLocalTaskRunnerForTest()
     mocks.getEntries.mockReturnValue({ entries: [] })
     mocks.getAllFeeds.mockReturnValue([])
+    mocks.assertNetworkFetchUrl.mockImplementation(async (url: string) => url)
   })
 
   it('通过 Task Runner 记录视频时长补全任务状态', async () => {
@@ -67,5 +112,36 @@ describe('queueVideoDurationEnrich', () => {
 
     expect(second).toBe(first)
     await expect(first).resolves.toBe(0)
+  })
+
+  it('caps duration lookup redirects', async () => {
+    mockHttpsResponses(
+      Array.from({ length: 6 }, (_, index) => ({
+        statusCode: 302,
+        location: `https://www.youtube.com/watch?v=abcdefghijk&r=${index}`,
+      })),
+    )
+
+    await expect(
+      fetchVideoDuration('https://www.youtube.com/watch?v=abcdefghijk'),
+    ).resolves.toBeUndefined()
+    expect(mocks.httpsGet).toHaveBeenCalledTimes(6)
+  })
+
+  it('follows bounded duration redirects and parses the final response', async () => {
+    mockHttpsResponses([
+      {
+        statusCode: 302,
+        location: 'https://www.youtube.com/watch?v=abcdefghijk&redirect=1',
+      },
+      {
+        statusCode: 200,
+        body: '{"lengthSeconds":"123"}',
+      },
+    ])
+
+    await expect(
+      fetchVideoDuration('https://www.youtube.com/watch?v=abcdefghijk'),
+    ).resolves.toBe(123)
   })
 })
