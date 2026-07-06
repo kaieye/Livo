@@ -415,3 +415,45 @@ Renderer review findings to handle in later batches:
 ### Deferred findings
 
 - General feed/readability/discovery/video fetch paths still need a broader private-network, redirect, and DNS-rebinding policy pass outside the already-hardened OPML path.
+
+## 2026-07-07 - Readability private-network hardening
+
+### Review inputs
+
+- Network policy review sub-agent inspected feed, readability, discovery, video, enrichment, and web fetch paths.
+- Confirmed high-risk readability/full-text behavior: `fetchReadableContent()` allowed loopback and private-network targets from feed-controlled entry URLs before fetching article HTML.
+- The same review identified broader DNS-rebinding, redirect, feed-parser, discovery, avatar/title, video media, and web-proxy follow-up slices; those are deferred below.
+
+### Fixed in this batch
+
+- `fetchReadableContent()` now uses the strict default `assertNetworkFetchUrl()` policy.
+- Loopback and private-network article URLs are rejected before the main-process readability fetch is attempted.
+- Added a regression test that loopback article fetches are blocked before `fetch()` is called.
+
+### Impact analysis
+
+- `fetchReadableContent`: LOW risk. Direct upstream callers are `fetchAndPersistReadableContent` and `fetchReadability`; no affected processes were reported.
+- `fetchFeedText` and `fetchWithConditional` were reviewed but not changed. GitNexus reports CRITICAL risk for those feed parser paths because they participate in subscription, refresh, discovery preview, and Agent feed-tool flows.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 3 files, 1 symbol, and 0 affected execution flows.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/entry/readability.ts src/main/services/entry/readability.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/main/services/entry/readability.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 838 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- Shared network policy should cover IPv4-mapped IPv6 private/loopback addresses and eventually handle DNS rebinding beyond preflight lookup.
+- Feed fetching remains intentionally permissive for local RSSHub, LAN, dev, and intranet feeds; it needs an explicit public/private policy mode before changing shared parser behavior.
+- Discovery public fetches still need redirect-aware public-only fetch handling, and discovery preview/direct URL probes should be moved onto a public policy mode.
+- Feed avatar/title enrichment should classify and skip blocked URLs before best-effort fetches.
+- Video duration/proxy/media paths need redirect caps and final media URL classification.
+- Web build proxy paths can only apply basic URL classification client-side; trusted proxy-side network enforcement should be documented separately.

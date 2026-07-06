@@ -1,7 +1,15 @@
-import { describe, expect, it } from 'vitest'
-import { extractReadableContent, resolveRelativeUrls } from './readability'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  extractReadableContent,
+  fetchReadableContent,
+  resolveRelativeUrls,
+} from './readability'
 
 describe('readability service', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('extracts sanitized article content and metadata', () => {
     const html = `
       <html>
@@ -36,5 +44,15 @@ describe('readability service', () => {
 
     expect(resolved).toContain('src="https://example.com/image.jpg"')
     expect(resolved).toContain('href="https://example.com/child"')
+  })
+
+  it('blocks loopback article fetches before making a network request', async () => {
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(
+      fetchReadableContent('http://127.0.0.1:8080/article'),
+    ).rejects.toThrow('loopback')
+    expect(fetch).not.toHaveBeenCalled()
   })
 })

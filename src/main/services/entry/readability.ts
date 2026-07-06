@@ -200,10 +200,7 @@ export function extractReadableContent(
 export async function fetchReadableContent(
   url: string,
 ): Promise<ReadabilityResult> {
-  const safeUrl = await assertNetworkFetchUrl(url, {
-    allowLoopback: true,
-    allowPrivateNetwork: true,
-  })
+  const safeUrl = await assertNetworkFetchUrl(url)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
