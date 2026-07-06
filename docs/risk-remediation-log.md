@@ -1022,6 +1022,8 @@ Renderer review findings to handle in later batches:
   - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
 - `pnpm format:check`
   - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: no changed symbols or affected execution flows detected.
 
 ### Deferred findings
 
@@ -1629,3 +1631,46 @@ Renderer review findings to handle in later batches:
 
 - Web IndexedDB still stores raw feed URLs because changing stored `Feed.url` would alter refresh/fetch and unique-index dedupe behavior.
 - OPML import still stores imported URLs as fetch URLs; separating export/display URLs from fetch URLs is a separate design decision.
+
+## 2026-07-07 - Remove stale media cache utility surface
+
+### Review inputs
+
+- Follow-up review found `src/renderer/src/lib/entry-media-utils.ts` duplicated media fallback and media-source cache helpers using the same `livo-picture-src-cache-v4` localStorage key as the live `entry-media-decision.ts` implementation.
+- The duplicate file had weaker behavior: direct `localStorage` use, no `window` guard, no persisted URL redaction, no unsafe URL filtering, no legacy cache migration, and no max-entry cap.
+- Full-repo search found no static imports, dynamic imports, tests, or barrel exports for `entry-media-utils.ts`.
+- The live media implementation is `entry-media-decision.ts`, imported by `SocialMediaGallery.tsx` and entry-list media utilities, with cache redaction and tests already in place.
+
+### Fixed in this batch
+
+- Deleted the unused `entry-media-utils.ts` file instead of sanitizing it.
+- This removes an unmaintained duplicate API surface that could otherwise be accidentally imported later and reintroduce raw signed media URL persistence.
+- No runtime media rendering path was changed.
+
+### Impact analysis
+
+- `decodeMediaUrls` in `entry-media-utils.ts`: LOW risk. GitNexus reported 0 impacted symbols and no affected processes.
+- `persistMediaSrcCache` in `entry-media-utils.ts`: LOW risk. GitNexus reported only intra-file impact.
+- `rememberMediaSrc` in `entry-media-utils.ts`: LOW risk. GitNexus reported only intra-file impact.
+- Other exported symbols in the deleted file were not present as reachable targets in the current GitNexus index, and `rg` found no import or dynamic import references.
+
+### Verification
+
+- `rg -n "entry-media-utils|from ['\\\"][^'\\\"]*entry-media-utils|import\\([^)]*entry-media-utils" src config scripts e2e package.json tsconfig.json`
+  - Result: no references.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm test -- src/renderer/src/lib/entry-media-decision.test.ts src/renderer/src/components/entry/entry-list/utils/entry-social.test.ts src/renderer/src/lib/entry-list-model.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 166 passed test files, 967 passed tests, 13 skipped tests.
+- `pnpm lint -- src/renderer/src/lib/entry-media-decision.ts src/renderer/src/lib/entry-media-decision.test.ts src/renderer/src/components/entry/SocialMediaGallery.tsx src/renderer/src/components/entry/entry-list/utils/entry-media.ts src/renderer/src/lib/entry-list-model.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Reader snapshot cached HTML/text fields can still contain embedded secret-bearing URLs in `content`, `summary`, `readabilityContent`, `readabilityExcerpt`, or `aiSummary`; cache-only embedded URL redaction should be a separate snapshot-cache batch.
+- Fever IPC still returns stored account API keys to the renderer; list/create/update responses should return a renderer-safe DTO.
+- AI IPC accepts large prompt/message payloads; shared AI IPC contract limits should be added separately.
