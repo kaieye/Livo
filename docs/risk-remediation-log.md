@@ -1855,3 +1855,48 @@ Renderer review findings to handle in later batches:
 
 - This batch does not sanitize or replace web `Feed.url`; separating fetch URL, canonical URL, and display/provenance URL would be a larger data-model migration.
 - OPML export still exports the operational `url` field, with existing persisted URL redaction applied.
+
+## 2026-07-07 - Redact persisted AI chat history URLs
+
+### Review inputs
+
+- AI chat sessions are persisted in renderer localStorage under `livo-chat-sessions`.
+- Session titles and message content can contain pasted source URLs with credentials or signed query parameters.
+- Assistant citations can persist source URLs and snippets returned from RAG/tool results.
+- Runtime chat messages should keep their original values during the active session; redaction should apply only to persisted history and legacy history hydration.
+
+### Fixed in this batch
+
+- Added chat-history-local URL redaction for embedded `http` and `https` URL tokens in session titles, message content, and citation snippets.
+- Redacted direct citation `url` fields with the existing `sanitizePersistedUrl()` policy.
+- `ChatHistoryStore.save()` now writes a sanitized copy and does not mutate the runtime session object.
+- `ChatHistoryStore.loadAll()` now sanitizes legacy stored sessions and rewrites localStorage when dirty persisted history is found.
+- Added focused tests for save-time redaction, legacy hydration migration, citation URL redaction, embedded snippet/message/title URLs, and non-mutation of the original session.
+
+### Impact analysis
+
+- `writeSessions`: LOW risk. Direct callers are `ChatHistoryStore.save`, `deleteById`, and `clearAll`; affected process is AI chat `onDone`.
+- `readSessions`: LOW risk. Direct caller is `ChatHistoryStore.loadAll`; affected process is AI chat `onDone` through `saveCurrentSession`.
+- `ChatHistoryStore` object target was not available as a GitNexus symbol; method-level impact was used instead.
+
+### Verification
+
+- `pnpm test -- src/renderer/src/store/chat-history-store.test.ts src/renderer/src/store/ai-chat-store.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 168 passed test files, 974 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/store/chat-history-store.ts src/renderer/src/store/chat-history-store.test.ts src/renderer/src/store/ai-chat-store.ts src/renderer/src/store/ai-chat-store.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed after formatting `src/renderer/src/store/chat-history-store.ts` and `src/renderer/src/store/chat-history-store.test.ts`.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 3 files, 10 symbols, 1 affected process, MEDIUM risk.
+  - Changed symbols reported: chat-history redaction helpers, `readSessions`, `writeSessions`, `CHAT_SESSIONS_KEY`, and `TRAILING_URL_PUNCTUATION_PATTERN`.
+  - Affected execution flow is the expected AI chat persistence path: `OnDone -> SanitizeSessionsForChatHistory`.
+
+### Deferred findings
+
+- The sanitizer intentionally handles URL-shaped text only; it does not alter non-URL chat content.
+- Active in-memory chat messages keep original URLs until the session is reloaded from persisted history.
