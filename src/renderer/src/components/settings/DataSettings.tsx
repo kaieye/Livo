@@ -14,6 +14,7 @@ import {
   FolderCog,
   HardDriveDownload,
 } from 'lucide-react'
+import { redactSettingsSecrets } from '../../../../shared/settings-secrets'
 
 interface DbStats {
   totalFeeds: number
@@ -146,15 +147,16 @@ export function DataSettings() {
           window.api.settings.get(),
           window.api.data.stats(),
         ])
+        const safeSettings = redactSettingsSecrets(settings)
         const bundle = {
           exportedAt: new Date().toISOString(),
           appVersion: await window.api.app.getVersion(),
           stats: latestStats,
           settings: {
-            general: settings.general,
-            data: settings.data,
-            aggregator: settings.aggregator,
-            translation: settings.translation,
+            general: safeSettings.general,
+            data: safeSettings.data,
+            aggregator: safeSettings.aggregator,
+            translation: safeSettings.translation,
           },
           recentLogs,
         }

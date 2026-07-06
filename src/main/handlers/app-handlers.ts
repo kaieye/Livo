@@ -1,6 +1,7 @@
 import { app, Menu, nativeImage } from 'electron'
 import { IPC, type NativeContextMenuItem } from '../../shared/types'
 import type { FeedWithCount } from '../../shared/types'
+import { redactSettingsSecrets } from '../../shared/settings-secrets'
 import { getAppIconPath } from '../app-icon'
 import { registerChannel } from '../ipc/register-channel'
 import {
@@ -153,7 +154,7 @@ export function registerAppHandlers(windowManager: WindowManager): void {
     logStartupTiming('app.hydrate.dbReady', dbStartTime)
 
     const settingsStartTime = performance.now()
-    const settings = settingsProvider.get()
+    const settings = redactSettingsSecrets(settingsProvider.get())
     logStartupTiming('app.hydrate.settings', settingsStartTime)
 
     const feedsStartTime = performance.now()

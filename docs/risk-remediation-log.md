@@ -1303,3 +1303,57 @@ Renderer review findings to handle in later batches:
 
 - Backend Socket.IO authentication should still verify the query user id against an authenticated principal or replace the query identity with token-authenticated handshake data.
 - Settings secrets are still persisted/broadcast/cached in plaintext and remain the next high-risk remediation target.
+
+## 2026-07-07 - Settings secret redaction and encrypted persistence
+
+### Review inputs
+
+- Settings-secret review confirmed that AI provider keys and aggregator secrets were persisted in `settings.json`, returned by `settings:get`, returned by `app:hydrate`, broadcast through `settings:changed`, cached in renderer `localStorage`, and exported in diagnostics.
+- Diagnostics/cache review additionally flagged `aggregator.deviceId` and credential-bearing `general.proxyUrl` as sensitive settings fields.
+- Renderer-to-main boundary review returned separate webview/video/reading-activity findings; those are deferred to later batches so this batch stays focused on settings secrets.
+
+### Fixed in this batch
+
+- Added shared settings secret helpers that redact configured AI API keys, per-provider AI keys, aggregator API key, aggregator device ID, and proxy URLs containing credentials.
+- `SettingsProvider` now encrypts protected settings fields with Electron `safeStorage` before writing `settings.json`.
+- Existing plaintext settings secrets are decoded on load and rewritten without plaintext when settings are next loaded.
+- Ordinary proxy URLs without credentials remain plaintext and are not rewritten as protected secrets.
+- Renderer-facing settings surfaces now receive redacted settings: `settings:get`, `settings:set`, `app:hydrate`, and `settings:changed`.
+- `SettingsProvider.update()` preserves existing secret values when renderer updates contain the redacted sentinel, preventing unrelated settings saves from clearing configured secrets.
+- Renderer settings cache now writes the redacted settings snapshot to `livo-settings-cache`.
+- AI API key and proxy URL inputs treat redacted sentinel values as “configured but hidden” and only replace the stored secret when the user types a new value.
+- Diagnostics export applies redaction again before serializing the settings subset.
+- Added regression coverage for shared redaction/preservation helpers, settings IPC redaction, encrypted disk persistence, redacted broadcasts, hydrate redaction, and renderer cache redaction.
+
+### Impact analysis
+
+- `SettingsProvider.update`: HIGH risk. Direct callers include `applySettingsUpdate` and `registerSettingsHandlers`; affected processes include `onReady`, `registerIpcHandlers`, `registerSettingsHandlers`, and agent settings tool execution.
+- `SettingsProvider.persist`: HIGH risk. Direct caller is `SettingsProvider.update`; affected processes include `onReady`, `registerIpcHandlers`, `registerSettingsHandlers`, and agent settings tool execution.
+- `registerSettingsHandlers`: LOW risk. Direct caller is `AppManager.registerIpcHandlers`; affected processes include `registerIpcHandlers` and `onReady`.
+- `registerAppHandlers`: LOW risk. Direct caller is `AppManager.onReady`; affected process is `onReady`.
+- `saveSettingsToCache`: LOW risk. Direct callers are `loadSettings` and `updateSettings`.
+- `AISettings`, `GeneralSettings`, and `handleExportDiagnostics`: LOW risk. GitNexus reported no upstream callers or affected processes for these component-local changes.
+
+### Verification
+
+- `pnpm test -- src/shared/settings-secrets.test.ts src/main/handlers/settings-handlers.test.ts src/main/handlers/app-handlers.test.ts src/renderer/src/store/settings-store.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 163 passed test files, 937 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/shared/settings-secrets.ts src/shared/settings-secrets.test.ts src/main/services/system/settings-provider.ts src/main/handlers/settings-handlers.ts src/main/handlers/settings-handlers.test.ts src/main/handlers/app-handlers.ts src/main/handlers/app-handlers.test.ts src/renderer/src/store/settings-store.ts src/renderer/src/store/settings-store.test.ts src/renderer/src/components/settings/AISettings.tsx src/renderer/src/components/settings/GeneralSettings.tsx src/renderer/src/components/settings/DataSettings.tsx`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 13 files, 23 symbols, 57 affected execution flows, CRITICAL risk.
+  - Changed symbols include `SettingsProvider`, `SettingsProvider.update`, `SettingsProvider.loadFromDisk`, `SettingsProvider.persist`, `registerSettingsHandlers`, `registerAppHandlers`, `AISettings`, `GeneralSettings`, `DataSettings`, and `saveSettingsToCache`.
+  - The critical scope is expected for this batch because protected settings flow through app hydration, settings IPC, provider persistence, renderer settings UI, and renderer cache writes.
+
+### Deferred findings
+
+- If `safeStorage` encryption is unavailable, newly saved protected settings fields are intentionally not persisted plaintext and may need to be re-entered after restart.
+- Recent log export and diagnostics `recentLogs` remain unredacted; add log redaction for bearer tokens, API-key query parameters, cookies, authorization headers, and URL userinfo in a dedicated logging batch.
+- Renderer feed/media caches can still contain tokenized feed or signed media URLs; sanitize those caches separately to avoid changing feed refresh/export semantics in this settings batch.
+- Webview private/internal URL loading, video in-app private DNS navigation, and reading-activity IPC validation remain separate renderer-to-main boundary follow-ups.

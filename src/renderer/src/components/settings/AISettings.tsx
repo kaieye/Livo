@@ -21,6 +21,7 @@ import {
   WEB_SEARCH_PROVIDERS,
   type WebSearchProviderId,
 } from '../../../../shared/settings-schema'
+import { isRedactedSecretValue } from '../../../../shared/settings-secrets'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import {
   Eye,
@@ -184,7 +185,9 @@ export function AISettings() {
 
   const providerConfig = AI_PROVIDERS[draftAi.provider]
   const isCustomProvider = draftAi.provider === 'custom'
-  const isApiKeyMissing = !draftAi.apiKey.trim()
+  const hasConfiguredApiKey =
+    isRedactedSecretValue(draftAi.apiKey) || !!draftAi.apiKey.trim()
+  const isApiKeyMissing = !hasConfiguredApiKey
   const isBaseUrlMissing = isCustomProvider && !(draftAi.baseUrl || '').trim()
   const isModelMissing = isCustomProvider && !draftAi.model.trim()
   const baseUrlHint = isCustomProvider
@@ -513,11 +516,17 @@ export function AISettings() {
           <div className="relative">
             <input
               type={showKey ? 'text' : 'password'}
-              value={draftAi.apiKey}
+              value={
+                isRedactedSecretValue(draftAi.apiKey) ? '' : draftAi.apiKey
+              }
               onChange={(e) => handleApiKeyChange(e.target.value)}
-              placeholder={t('settings.apiKeyPlaceholder', {
-                provider: providerConfig.name,
-              })}
+              placeholder={
+                isRedactedSecretValue(draftAi.apiKey)
+                  ? `${providerConfig.name} API Key 已配置，输入新值可替换`
+                  : t('settings.apiKeyPlaceholder', {
+                      provider: providerConfig.name,
+                    })
+              }
               required={isCustomProvider}
               className={`${inputClass} pr-10`}
             />

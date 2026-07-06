@@ -9,6 +9,7 @@ import {
   DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
   type AppSettings,
 } from '../../../shared/types'
+import { REDACTED_SECRET_VALUE } from '../../../shared/settings-secrets'
 
 const SETTINGS_CACHE_KEY = 'livo-settings-cache'
 
@@ -101,5 +102,39 @@ describe('useSettingsStore agent timeout settings', () => {
     expect(useSettingsStore.getState().settings.agent.runTimeoutSeconds).toBe(
       45,
     )
+  })
+
+  it('stores only redacted settings secrets in localStorage cache', async () => {
+    const initial = cloneDefaultSettings()
+    initial.general.proxyUrl = 'http://user:pass@127.0.0.1:7890'
+    initial.ai.apiKey = 'sk-live'
+    initial.ai.apiKeys = { openai: 'sk-live' }
+    initial.aggregator.apiKey = 'aggregator-secret'
+    initial.aggregator.deviceId = 'device-secret'
+
+    const storage = createMemoryStorage()
+    const { useSettingsStore } = await loadSettingsStore({
+      storage,
+      settingsApi: createSettingsApi(initial),
+    })
+
+    await useSettingsStore.getState().loadSettings()
+
+    const cached = storage.getItem(SETTINGS_CACHE_KEY)
+    expect(cached).not.toContain('sk-live')
+    expect(cached).not.toContain('aggregator-secret')
+    expect(cached).not.toContain('device-secret')
+    expect(cached).not.toContain('user:pass')
+    expect(JSON.parse(cached || '{}')).toMatchObject({
+      general: { proxyUrl: REDACTED_SECRET_VALUE },
+      ai: {
+        apiKey: REDACTED_SECRET_VALUE,
+        apiKeys: { openai: REDACTED_SECRET_VALUE },
+      },
+      aggregator: {
+        apiKey: REDACTED_SECRET_VALUE,
+        deviceId: REDACTED_SECRET_VALUE,
+      },
+    })
   })
 })

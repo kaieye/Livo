@@ -5,6 +5,7 @@ import {
   mergeSettings,
   normalizeSettings,
 } from '../../../shared/settings'
+import { redactSettingsSecrets } from '../../../shared/settings-secrets'
 import { useOverlayStackStore } from './overlay-stack-store'
 
 const SETTINGS_CACHE_KEY = 'livo-settings-cache'
@@ -26,9 +27,12 @@ function loadSettingsFromCache(): AppSettings | null {
 
 function saveSettingsToCache(settings: AppSettings): void {
   hasLoadedSettingsFromStorage = true
-  cachedSettingsFromStorage = settings
+  cachedSettingsFromStorage = redactSettingsSecrets(settings)
   try {
-    localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(settings))
+    localStorage.setItem(
+      SETTINGS_CACHE_KEY,
+      JSON.stringify(cachedSettingsFromStorage),
+    )
   } catch {
     /* ignore */
   }

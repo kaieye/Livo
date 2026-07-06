@@ -11,6 +11,7 @@ import {
   VIEW_DEFINITIONS,
   DEFAULT_SETTINGS,
 } from '../../../../shared/types'
+import { isRedactedSecretValue } from '../../../../shared/settings-secrets'
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
 export function GeneralSettings() {
   const general = useSettingSection('general')
@@ -99,13 +100,19 @@ export function GeneralSettings() {
           <div className="space-y-1.5">
             <input
               type="text"
-              value={general.proxyUrl}
+              value={
+                isRedactedSecretValue(general.proxyUrl) ? '' : general.proxyUrl
+              }
               onChange={(e) =>
                 void updateSettingsSection('general', {
                   proxyUrl: e.target.value,
                 })
               }
-              placeholder={t('settings.proxyPlaceholder')}
+              placeholder={
+                isRedactedSecretValue(general.proxyUrl)
+                  ? '代理地址已配置，输入新值可替换'
+                  : t('settings.proxyPlaceholder')
+              }
               className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
             />
             <p className="text-text-tertiary text-xs">
