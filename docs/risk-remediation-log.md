@@ -1018,3 +1018,44 @@ Renderer review findings to handle in later batches:
 
 - Context menu image download/open paths should be reviewed separately because they use selected image URLs as IPC/download inputs rather than passive image element sources.
 - Entry merge policy should still be reviewed for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.
+
+## 2026-07-07 - Context menu media action hardening
+
+### Review inputs
+
+- Deferred renderer review identified context-menu image/media actions as a separate sink because they send selected entry media URLs to clipboard and download IPC paths rather than passive `<img>` rendering.
+- Local call-chain review confirmed `downloadUrlToFile()` already enforces `assertNetworkFetchUrl()` in the main process, including redirect validation, but the renderer still enabled save/copy actions for unsafe stored entry media URLs.
+
+### Fixed in this batch
+
+- `inferEntryImageUrl()` now filters photo previews, photo URLs, and `entry.imageUrl` through the shared stored-media URL policy before exposing them to context-menu actions.
+- `inferEntryMediaUrl()` now filters video URLs and video previews through the same policy before falling back to the safe image inference path.
+- Context-menu save/copy media actions now become disabled when entries only contain unsafe local, private, credentialed, unsupported-scheme, malformed, or empty media URLs.
+- Added pure regression coverage for safe preview preference, unsafe preview fallback, unsafe entry image blocking, safe video preference, and unsafe video fallback.
+
+### Impact analysis
+
+- `inferEntryImageUrl`: HIGH risk. Direct callers are `inferEntryMediaUrl` and `useEntryContextActions`; affected processes include `EntryList` and `WideViewContent`.
+- `inferEntryMediaUrl`: HIGH risk. Direct caller is `useEntryContextActions`; affected processes include `EntryList` and `WideViewContent`.
+- `useEntryContextActions`: HIGH risk. Direct caller is `EntryContextMenuWrapper`; affected processes include `EntryList`, `WideViewContent`, and `HomePage`.
+- Pre-commit `detect_changes --scope staged` reported LOW risk across 3 files, 2 symbols, and 0 affected processes.
+
+### Verification
+
+- `pnpm test -- src/renderer/src/components/ui/ContextMenu.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 156 passed test files, 903 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/components/ui/ContextMenu.tsx src/renderer/src/components/ui/ContextMenu.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Entry merge policy should still be reviewed for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.
+- External-open policy still treats private IP HTTP(S) links as suspicious rather than blocked; that remains separate from download/fetch hardening.
+- Image viewer and overlay gallery save/open affordances should derive from the same sanitized selected image URLs as rendering.
+- Download fetch policy still has a DNS rebinding gap between preflight DNS resolution and Electron session fetch connection time.

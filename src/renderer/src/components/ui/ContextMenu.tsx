@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { openExternalUrlSafe } from '../../services/external-url'
+import { isAllowedStoredMediaUrl } from '../../../../shared/media-url-policy'
 import {
   Eye,
   EyeOff,
@@ -33,26 +34,28 @@ export interface ContextMenuAction {
   hidden?: boolean
 }
 
-function inferEntryImageUrl(entry: Entry): string {
-  const mediaCandidate = (entry.media || []).find(
-    (item) =>
-      item.type === 'photo' && (item.previewUrl?.trim() || item.url?.trim()),
-  )
-  return (
-    mediaCandidate?.previewUrl?.trim() ||
-    mediaCandidate?.url?.trim() ||
-    entry.imageUrl?.trim() ||
-    ''
-  )
+function getAllowedContextMediaUrl(rawUrl: string | undefined): string {
+  const url = (rawUrl || '').trim()
+  if (!url) return ''
+  return isAllowedStoredMediaUrl(url) ? url : ''
 }
 
-function inferEntryMediaUrl(entry: Entry): string {
-  const videoCandidate = (entry.media || []).find(
-    (item) =>
-      item.type === 'video' && (item.url?.trim() || item.previewUrl?.trim()),
-  )
-  if (videoCandidate) {
-    return videoCandidate.url?.trim() || videoCandidate.previewUrl?.trim() || ''
+export function inferEntryImageUrl(entry: Entry): string {
+  for (const item of entry.media || []) {
+    if (item.type !== 'photo') continue
+    const previewUrl = getAllowedContextMediaUrl(item.previewUrl)
+    const mediaUrl = getAllowedContextMediaUrl(item.url)
+    if (previewUrl || mediaUrl) return previewUrl || mediaUrl
+  }
+  return getAllowedContextMediaUrl(entry.imageUrl)
+}
+
+export function inferEntryMediaUrl(entry: Entry): string {
+  for (const item of entry.media || []) {
+    if (item.type !== 'video') continue
+    const mediaUrl = getAllowedContextMediaUrl(item.url)
+    const previewUrl = getAllowedContextMediaUrl(item.previewUrl)
+    if (mediaUrl || previewUrl) return mediaUrl || previewUrl
   }
   return inferEntryImageUrl(entry)
 }
