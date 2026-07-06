@@ -617,3 +617,49 @@ Renderer review findings to handle in later batches:
 - Discovery preview/direct URL probes still flow through permissive feed parser behavior until public/private feed policy modes are designed.
 - Feed parser policy modes should preserve local RSSHub, LAN, dev, and intranet compatibility while allowing stricter public discovery paths.
 - Renderer media-source loading still needs a central policy for private/loopback media URLs.
+
+## 2026-07-07 - Feed avatar fetch hardening
+
+### Review inputs
+
+- Feed enrichment review sub-agent found that feed avatar enrichment fetched site pages and avatar images directly without the shared network URL policy, redirect revalidation, or body-size limits.
+- Local review found the same risk pattern in Instagram profile avatar fetches and Bilibili avatar API fetches inside `feed-avatar.ts`.
+- Feed title resolver review sub-agent confirmed a separate title-enrichment fetch path with direct Electron fetches, no network policy, no redirect cap, and unbounded body reads; that path is deferred below.
+
+### Fixed in this batch
+
+- Feed avatar enrichment now routes site, Instagram, Bilibili, and image fetches through a local guarded helper backed by `assertNetworkFetchUrl()`.
+- Avatar enrichment fetches now use `redirect: 'manual'`, follow at most 5 redirects, and re-run network policy checks on each redirect target before fetching it.
+- Site/profile HTML reads are capped at 2 MiB.
+- Avatar image reads are capped at 2 MiB before inlining as data URIs.
+- Bilibili API JSON reads are capped at 512 KiB instead of using unbounded `response.json()`.
+- Bilibili face URLs are classified with `assertNetworkFetchUrl()` before being returned.
+- Added regression coverage for loopback site URLs, redirects to loopback, and oversized avatar images.
+
+### Impact analysis
+
+- `fetchSiteAvatar`: CRITICAL risk before the fix. Direct upstream caller: `resolveFeedAvatar`; affected processes include `registerDiscoverHandlers`, `runRefreshSingleFeed`, `processFeed`, `subscribeFeed`, `registerFeedHandlers`, `registerIpcHandlers`, Agent feed-tool `execute`, and `onReady`.
+- `tryConvertImageUrlToDataUri`: CRITICAL risk before the fix. Direct upstream callers are `fetchSiteAvatar` and `fetchInstagramAvatar`; affected processes include `registerDiscoverHandlers`, `processFeed`, `runRefreshSingleFeed`, `subscribeFeed`, `registerFeedHandlers`, and Agent feed-tool `execute`.
+- `fetchInstagramAvatar` and `fetchBilibiliAvatar`: CRITICAL risk before the fix. Each is called by `resolveFeedAvatar` and reaches the same feed subscription, refresh, discovery preview, feed handler, Agent feed-tool, and startup registration paths.
+- `resolveFeedAvatar`: CRITICAL risk by upstream impact, with direct callers in discovery handlers, feed processing, discovery preview, feed refresh, and subscription flows.
+- Pre-commit `detect_changes --scope compare --base-ref origin/main` reported LOW risk across 3 files, 9 symbols, and 0 affected execution flows. The changed production behavior is limited to blocking unsafe avatar enrichment fetches and bounding enrichment response bodies while preserving existing fallback behavior.
+
+### Verification
+
+- `pnpm format:check`
+  - Result: passed.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/feed/feed-avatar.ts src/main/services/feed/feed-avatar.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm test -- src/main/services/feed/feed-avatar.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 150 passed test files, 850 passed tests, 13 skipped tests.
+
+### Deferred findings
+
+- Feed title enrichment should add guarded fetch helpers for `fetchText()` and `fetchJson()`, manual redirect revalidation, timeouts, and response byte limits.
+- Feed title fallback may need narrower caller conditions so arbitrary deferred subscription URLs are not fetched only to improve display titles.
+- Feed parser policy modes should preserve local RSSHub, LAN, dev, and intranet compatibility while allowing stricter public discovery paths.
+- Renderer media-source loading still needs a central policy for private/loopback media URLs.

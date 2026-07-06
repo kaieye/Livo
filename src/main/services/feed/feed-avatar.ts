@@ -1,3 +1,86 @@
+import { assertNetworkFetchUrl } from '../system/network-url-policy'
+
+const MAX_AVATAR_REDIRECTS = 5
+const MAX_AVATAR_HTML_BYTES = 2 * 1024 * 1024
+const MAX_AVATAR_IMAGE_BYTES = 2 * 1024 * 1024
+const MAX_AVATAR_JSON_BYTES = 512 * 1024
+
+async function fetchAvatarResource(
+  url: string,
+  init: RequestInit,
+  redirectsRemaining = MAX_AVATAR_REDIRECTS,
+): Promise<Response | undefined> {
+  try {
+    const safeUrl = await assertNetworkFetchUrl(url)
+    const response = await fetch(safeUrl, {
+      ...init,
+      redirect: 'manual',
+    })
+
+    if (response.status >= 300 && response.status < 400) {
+      if (redirectsRemaining <= 0) return undefined
+      const location = response.headers.get('location')
+      if (!location) return response
+      const redirectUrl = new URL(location, safeUrl).href
+      return fetchAvatarResource(redirectUrl, init, redirectsRemaining - 1)
+    }
+
+    return response
+  } catch {
+    return undefined
+  }
+}
+
+async function readResponseBytes(
+  response: Response,
+  maxBytes: number,
+): Promise<Buffer | undefined> {
+  const contentLength = Number.parseInt(
+    response.headers.get('content-length') || '',
+    10,
+  )
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    return undefined
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    const buffer = Buffer.from(await response.arrayBuffer())
+    return buffer.length > maxBytes ? undefined : buffer
+  }
+
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+      total += value.byteLength
+      if (total > maxBytes) {
+        await reader.cancel()
+        return undefined
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  return Buffer.concat(
+    chunks.map((chunk) => Buffer.from(chunk)),
+    total,
+  )
+}
+
+async function readResponseText(
+  response: Response,
+  maxBytes: number,
+): Promise<string | undefined> {
+  const bytes = await readResponseBytes(response, maxBytes)
+  return bytes?.toString('utf8')
+}
+
 function extractBilibiliUid(feedUrl: string): string | null {
   try {
     const u = new URL(feedUrl)
@@ -145,7 +228,7 @@ function extractSiteAvatarFromHtml(
 async function fetchSiteAvatar(siteUrl?: string): Promise<string | undefined> {
   if (!siteUrl || !/^https?:\/\//i.test(siteUrl)) return undefined
   try {
-    const res = await fetch(siteUrl, {
+    const res = await fetchAvatarResource(siteUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0',
         Accept:
@@ -153,10 +236,11 @@ async function fetchSiteAvatar(siteUrl?: string): Promise<string | undefined> {
       },
       signal: AbortSignal.timeout(8000),
     })
-    if (!res.ok) return undefined
+    if (!res?.ok) return undefined
     const contentType = (res.headers.get('content-type') || '').toLowerCase()
     if (contentType && !contentType.includes('text/html')) return undefined
-    const html = await res.text()
+    const html = await readResponseText(res, MAX_AVATAR_HTML_BYTES)
+    if (!html) return undefined
     const avatarUrl = extractSiteAvatarFromHtml(html, siteUrl)
     if (!avatarUrl) return undefined
     return (
@@ -175,7 +259,7 @@ async function tryConvertImageUrlToDataUri(
 ): Promise<string | undefined> {
   if (!/^https?:\/\//i.test(imageUrl)) return undefined
   try {
-    const res = await fetch(imageUrl, {
+    const res = await fetchAvatarResource(imageUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0',
         Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
@@ -184,11 +268,11 @@ async function tryConvertImageUrlToDataUri(
       },
       signal: AbortSignal.timeout(8000),
     })
-    if (!res.ok) return undefined
+    if (!res?.ok) return undefined
     const contentType = (res.headers.get('content-type') || '').toLowerCase()
     if (contentType && !contentType.startsWith('image/')) return undefined
-    const arrayBuffer = await res.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const buffer = await readResponseBytes(res, MAX_AVATAR_IMAGE_BYTES)
+    if (!buffer) return undefined
     if (buffer.length < 64) return undefined
     const ext = imageUrl.split('.').pop()?.split('?')[0]?.toLowerCase()
     const mime = contentType.startsWith('image/')
@@ -215,7 +299,7 @@ async function fetchInstagramAvatar(
   if (!clean) return undefined
   const profileUrl = `https://www.instagram.com/${encodeURIComponent(clean)}/`
   try {
-    const res = await fetch(profileUrl, {
+    const res = await fetchAvatarResource(profileUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0',
         Accept:
@@ -223,8 +307,9 @@ async function fetchInstagramAvatar(
       },
       signal: AbortSignal.timeout(8000),
     })
-    if (!res.ok) return undefined
-    const html = await res.text()
+    if (!res?.ok) return undefined
+    const html = await readResponseText(res, MAX_AVATAR_HTML_BYTES)
+    if (!html) return undefined
     const og =
       html.match(
         /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
@@ -259,7 +344,7 @@ async function fetchBilibiliAvatar(uid: string): Promise<string | undefined> {
 
   for (const url of endpoints) {
     try {
-      const res = await fetch(url, {
+      const res = await fetchAvatarResource(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0',
           Accept: 'application/json, text/plain, */*',
@@ -268,9 +353,12 @@ async function fetchBilibiliAvatar(uid: string): Promise<string | undefined> {
         },
         signal: AbortSignal.timeout(10000),
       })
-      if (!res.ok) continue
+      if (!res?.ok) continue
 
-      const json = (await res.json()) as {
+      const text = await readResponseText(res, MAX_AVATAR_JSON_BYTES)
+      if (!text) continue
+
+      const json = JSON.parse(text) as {
         code?: number
         data?: {
           card?: { face?: string }
@@ -280,7 +368,13 @@ async function fetchBilibiliAvatar(uid: string): Promise<string | undefined> {
       if (json.code !== 0) continue
 
       const face = json.data?.card?.face || json.data?.face
-      if (face && /^https?:\/\//i.test(face)) return face
+      if (face && /^https?:\/\//i.test(face)) {
+        try {
+          return await assertNetworkFetchUrl(face)
+        } catch {
+          continue
+        }
+      }
     } catch {
       // Ignore single-endpoint failure.
     }
