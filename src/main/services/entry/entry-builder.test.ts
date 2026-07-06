@@ -96,4 +96,30 @@ describe('entry builder', () => {
       type: 'audio',
     })
   })
+
+  it('does not persist unsafe media or use blocked audio as content fallback', async () => {
+    const [entry] = await buildEntriesFromParsedItems(
+      'feed-1',
+      [
+        {
+          title: 'Episode 3',
+          link: 'https://podcast.example.com/episode-3',
+          enclosure: {
+            url: 'http://127.0.0.1/admin.mp3',
+            type: 'audio/mpeg',
+          },
+          'media:thumbnail': {
+            $: { url: 'http://169.254.169.254/latest/meta-data' },
+          },
+        },
+      ],
+      undefined,
+      FeedViewType.Articles,
+      1_700_000_000_000,
+    )
+
+    expect(entry.content).toBe('')
+    expect(entry.imageUrl).toBe('')
+    expect(entry.media).toEqual([])
+  })
 })

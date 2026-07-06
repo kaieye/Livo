@@ -795,3 +795,48 @@ Renderer review findings to handle in later batches:
 - Feed ingestion should filter private/loopback media URLs before storing `Entry.media` and `Entry.imageUrl`.
 - Image rendering sinks outside sanitized article HTML still need safe media-src fallbacks for old cached entries.
 - External-open policy still treats private IPs as suspicious rather than blocked; that should be reviewed separately from passive media loading.
+
+## 2026-07-07 - Feed media persistence hardening
+
+### Review inputs
+
+- Feed media ingestion sub-agent reviewed `feed-utils`, entry building, entry persistence, and merge paths.
+- The review found that feed-controlled media URLs could be stored in `Entry.media` and `Entry.imageUrl` from RSS enclosures, Atom enclosures, Media RSS nodes, HTML media tags, posters, iTunes images, and thumbnails without a storage-time URL policy.
+- The review also confirmed that `normalizeKnownMediaUrl()` is only a URL normalizer and must not be treated as a security policy, especially for mirror URLs that unwrap nested `url=` or `o=` targets.
+
+### Fixed in this batch
+
+- Added a shared stored-media URL policy in `src/shared/media-url-policy.ts`.
+- The shared policy blocks unsupported schemes, malformed and relative URLs, credentialed URLs, localhost, loopback, link-local, RFC1918 IPv4, IPv6 loopback/ULA/link-local, and IPv4-mapped private/loopback literals.
+- `extractMedia()` now filters extracted media before returning it, so unsafe feed-controlled URLs do not become persisted `Entry.media` values.
+- `deriveImageUrl()` now skips unsafe image candidates and falls through to later safe candidates instead of persisting blocked primary images.
+- Mirror URLs that unwrap to blocked nested targets are dropped; mirror URLs that unwrap to public media are preserved with the public media URL as the primary URL and the mirror URL as the preview fallback.
+- Renderer playback policy now re-exports the shared stored-media policy under the existing playback names, keeping renderer imports stable while sharing the same passive media boundary.
+- Added regression coverage for unsafe feed media extraction, mirror-unwrapped private targets, safe fallback image selection, blocked audio fallback content, and the shared media URL policy.
+
+### Impact analysis
+
+- `extractMedia`: CRITICAL risk. Direct upstream callers are `buildSingleEntry` and `collectParsedItemImageKeys`; affected processes include `processFeed`, `runRefreshSingleFeed`, `subscribeFeed`, `registerFeedHandlers`, and Agent feed-tool `execute`.
+- `deriveImageUrl`: CRITICAL risk. Direct upstream callers are `buildSingleEntry` and `collectParsedItemImageKeys`; affected processes include `processFeed`, `runRefreshSingleFeed`, `subscribeFeed`, `registerFeedHandlers`, and Agent feed-tool `execute`.
+- `isAllowedPlaybackMediaUrl`: CRITICAL risk if changed semantically because it gates renderer playback paths across entry, article, social, video page, and discovery preview flows. This batch preserves the existing renderer API and moves the same policy to shared code.
+- `classifyExternalUrl`: CRITICAL risk across URL-opening, fetch, renderer, and web flows. This batch reuses it without changing its behavior.
+- Pre-commit `detect_changes --scope staged` reported LOW risk across 8 files, 7 symbols, and 0 affected execution flows.
+
+### Verification
+
+- `pnpm test -- src/main/services/feed/feed-utils.test.ts src/main/services/entry/entry-builder.test.ts src/shared/media-url-policy.test.ts src/renderer/src/lib/media-source-policy.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 154 passed test files, 885 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/feed/feed-utils.ts src/main/services/feed/feed-utils.test.ts src/main/services/entry/entry-builder.test.ts src/shared/media-url-policy.ts src/shared/media-url-policy.test.ts src/renderer/src/lib/media-source-policy.ts src/renderer/src/lib/media-source-policy.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Entry merge policy should be reviewed separately for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.
+- Image rendering sinks outside sanitized article HTML still need safe media-src fallbacks for old cached entries.
+- External-open policy still treats private IPs as suspicious rather than blocked; that should be reviewed separately from passive media loading.

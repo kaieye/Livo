@@ -98,6 +98,98 @@ describe('feed media extraction', () => {
     ])
     expect(deriveImageUrl(item)).toBe('https://cdn.example.com/hero.webp')
   })
+
+  it('drops unsafe media URLs while preserving public candidates', () => {
+    const item = {
+      enclosure: {
+        url: 'http://localhost/episode.mp3',
+        type: 'audio/mpeg',
+      },
+      'media:content': [
+        {
+          $: {
+            url: 'https://user:pass@cdn.example.com/secret.jpg',
+            type: 'image/jpeg',
+          },
+        },
+        {
+          $: {
+            url: 'https://cdn.example.com/public.jpg',
+            type: 'image/jpeg',
+          },
+        },
+      ],
+      content:
+        '<img src="http://127.0.0.1/private.jpg"><video src="http://[::1]/v.mp4" poster="https://cdn.example.com/poster.jpg"></video>',
+    }
+
+    expect(extractMedia(item)).toEqual([
+      {
+        url: 'https://cdn.example.com/public.jpg',
+        type: 'photo',
+        width: undefined,
+        height: undefined,
+        previewUrl: undefined,
+      },
+    ])
+    expect(deriveImageUrl(item)).toBe('https://cdn.example.com/public.jpg')
+  })
+
+  it('drops mirror URLs that unwrap to private media targets', () => {
+    const unsafeMirror = `https://media.pixnoy.com/get?url=${encodeURIComponent(
+      'http://127.0.0.1/private.jpg',
+    )}`
+    const safeMirror = `https://media.pixnoy.com/get?url=${encodeURIComponent(
+      'https://cdn.example.com/public.jpg?sig=1',
+    )}`
+    const item = {
+      'media:content': [
+        {
+          $: {
+            url: unsafeMirror,
+            type: 'image/jpeg',
+          },
+        },
+        {
+          $: {
+            url: safeMirror,
+            type: 'image/jpeg',
+          },
+        },
+      ],
+    }
+
+    expect(extractMedia(item)).toEqual([
+      {
+        url: 'https://cdn.example.com/public.jpg?sig=1',
+        type: 'photo',
+        width: undefined,
+        height: undefined,
+        previewUrl: safeMirror,
+      },
+    ])
+    expect(deriveImageUrl(item)).toBe(
+      'https://cdn.example.com/public.jpg?sig=1',
+    )
+  })
+
+  it('skips unsafe primary image sources before falling back to safe ones', () => {
+    const item = {
+      enclosure: {
+        url: 'file:///tmp/cover.jpg',
+        type: 'image/jpeg',
+      },
+      itunes: {
+        image: 'data:image/png;base64,aaaa',
+      },
+      'media:thumbnail': [
+        { $: { url: 'http://169.254.169.254/latest/meta-data' } },
+        { $: { url: 'https://cdn.example.com/thumb.jpg' } },
+      ],
+    }
+
+    expect(deriveImageUrl(item)).toBe('https://cdn.example.com/thumb.jpg')
+  })
 })
 
 describe('getFeedImageUrl', () => {

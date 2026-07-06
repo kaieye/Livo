@@ -3,6 +3,7 @@
  * Extracts media, images, content, and author avatars from parsed RSS items.
  */
 import type { MediaItem } from '../../../shared/types/index'
+import { isAllowedStoredMediaUrl } from '../../../shared/media-url-policy'
 import { isMirrorMediaUrl } from '../../../shared/url-detect'
 
 type MediaAttrs = {
@@ -349,6 +350,34 @@ function isLikelyAudioUrl(url: string): boolean {
 
 function isLikelyVideoUrl(url: string): boolean {
   return /\.(mp4|m4v|webm|mov|m3u8)(?:[?#]|$)/i.test(url.toLowerCase())
+}
+
+function normalizeStoredMediaUrl(rawUrl: string | undefined): string {
+  const decoded = decodeHTMLEntities((rawUrl || '').trim())
+  if (!decoded) return ''
+  const normalized = normalizeKnownMediaUrl(decoded) || decoded
+  return isAllowedStoredMediaUrl(normalized) ? normalized : ''
+}
+
+function normalizeStoredPreviewUrl(rawUrl: string | undefined): string {
+  const decoded = decodeHTMLEntities((rawUrl || '').trim())
+  if (!decoded) return ''
+
+  const normalized = normalizeKnownMediaUrl(decoded)
+  if (normalized && !isAllowedStoredMediaUrl(normalized)) return ''
+
+  return isAllowedStoredMediaUrl(decoded) ? decoded : ''
+}
+
+function normalizeStoredMediaItem(item: MediaItem): MediaItem | null {
+  const url = normalizeStoredMediaUrl(item.url)
+  if (!url) return null
+  const previewUrl = normalizeStoredPreviewUrl(item.previewUrl)
+  return {
+    ...item,
+    url,
+    previewUrl: previewUrl || undefined,
+  }
 }
 
 function isDecorativeInstagramAssetUrl(url: string): boolean {
@@ -753,17 +782,21 @@ export function extractMedia(
     }
   }
 
+  const safeMedia = media
+    .map(normalizeStoredMediaItem)
+    .filter((item): item is MediaItem => item !== null)
+
   // Extract duration for video/audio items from itunes:duration or media:content duration
   const durationSeconds = parseDuration(item)
   if (durationSeconds && durationSeconds > 0) {
     // Apply to the first video or audio media item that lacks a duration
-    const target = media.find(
+    const target = safeMedia.find(
       (m) => (m.type === 'video' || m.type === 'audio') && !m.duration,
     )
     if (target) target.duration = durationSeconds
   }
 
-  return media.length > 0 ? media : undefined
+  return safeMedia.length > 0 ? safeMedia : undefined
 }
 
 /** Derive primary imageUrl from enclosure, itunes:image, media:thumbnail, or YouTube link */
@@ -773,7 +806,8 @@ export function deriveImageUrl(item: Record<string, unknown>): string {
     | undefined
   if (enclosure?.url && enclosure.type?.startsWith('image/')) {
     if (isDecorativeInstagramAssetUrl(enclosure.url)) return ''
-    return normalizeKnownMediaUrl(enclosure.url) || enclosure.url
+    const url = normalizeStoredMediaUrl(enclosure.url)
+    if (url) return url
   }
 
   for (const link of collectAtomEnclosureLinks(item)) {
@@ -789,7 +823,8 @@ export function deriveImageUrl(item: Record<string, unknown>): string {
       continue
     }
     if (isDecorativeInstagramAssetUrl(link.href)) continue
-    return normalizeKnownMediaUrl(link.href) || link.href
+    const url = normalizeStoredMediaUrl(link.href)
+    if (url) return url
   }
 
   // media:content with image type
@@ -801,28 +836,34 @@ export function deriveImageUrl(item: Record<string, unknown>): string {
       (attrs.type?.startsWith('image/') || attrs.medium === 'image')
     ) {
       if (isDecorativeInstagramAssetUrl(attrs.url)) continue
-      return normalizeKnownMediaUrl(attrs.url) || attrs.url
+      const url = normalizeStoredMediaUrl(attrs.url)
+      if (url) return url
     }
   }
   for (const mc of mediaContentItems) {
     const attrs = readMediaAttrs(mc)
     if (attrs?.url && !attrs.type && !attrs.medium) {
       if (isDecorativeInstagramAssetUrl(attrs.url)) continue
-      return normalizeKnownMediaUrl(attrs.url) || attrs.url
+      const url = normalizeStoredMediaUrl(attrs.url)
+      if (url) return url
     }
   }
 
   const itunes = readItunesItemData(item)
   if (itunes?.image) {
-    if (!isDecorativeInstagramAssetUrl(itunes.image))
-      return normalizeKnownMediaUrl(itunes.image) || itunes.image
+    if (!isDecorativeInstagramAssetUrl(itunes.image)) {
+      const url = normalizeStoredMediaUrl(itunes.image)
+      if (url) return url
+    }
   }
 
   const thumbnailItems = collectMediaThumbnailNodes(item)
   for (const thumbNode of thumbnailItems) {
     const thumbAttrs = readMediaAttrs(thumbNode)
-    if (thumbAttrs?.url)
-      return normalizeKnownMediaUrl(thumbAttrs.url) || thumbAttrs.url
+    if (thumbAttrs?.url) {
+      const url = normalizeStoredMediaUrl(thumbAttrs.url)
+      if (url) return url
+    }
   }
 
   // Fallback from HTML content for feeds that only provide lazy image tags.
@@ -841,8 +882,10 @@ export function deriveImageUrl(item: Record<string, unknown>): string {
         normalizedTagUrl &&
         !isTrackingPixel(normalizedTagUrl) &&
         !isDecorativeInstagramAssetUrl(normalizedTagUrl)
-      )
-        return normalizedTagUrl
+      ) {
+        const url = normalizeStoredMediaUrl(normalizedTagUrl)
+        if (url) return url
+      }
     }
 
     const sourceTags = content.match(/<source[^>]*>/gi) || []
@@ -853,8 +896,10 @@ export function deriveImageUrl(item: Record<string, unknown>): string {
         normalizedTagUrl &&
         !isTrackingPixel(normalizedTagUrl) &&
         !isDecorativeInstagramAssetUrl(normalizedTagUrl)
-      )
-        return normalizedTagUrl
+      ) {
+        const url = normalizeStoredMediaUrl(normalizedTagUrl)
+        if (url) return url
+      }
     }
 
     const hrefMatches = [...content.matchAll(/<a[^>]+href=["']([^"']+)["']/gi)]
@@ -864,8 +909,10 @@ export function deriveImageUrl(item: Record<string, unknown>): string {
         decodedHref &&
         isLikelyImageUrl(decodedHref) &&
         !isDecorativeInstagramAssetUrl(decodedHref)
-      )
-        return decodedHref
+      ) {
+        const url = normalizeStoredMediaUrl(decodedHref)
+        if (url) return url
+      }
     }
   }
 
@@ -873,11 +920,17 @@ export function deriveImageUrl(item: Record<string, unknown>): string {
   const ytMatch = link.match(
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]+)/,
   )
-  if (ytMatch) return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`
+  if (ytMatch) {
+    return normalizeStoredMediaUrl(
+      `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`,
+    )
+  }
 
   const tedMatch = link.match(/ted\.com\/talks\/([a-zA-Z0-9_]+)/)
   if (tedMatch) {
-    return `https://pi.tedcdn.com/r/talkstar-photos.s3.amazonaws.com/uploads/talk/${tedMatch[1]}.jpg?w=480`
+    return normalizeStoredMediaUrl(
+      `https://pi.tedcdn.com/r/talkstar-photos.s3.amazonaws.com/uploads/talk/${tedMatch[1]}.jpg?w=480`,
+    )
   }
 
   return ''
