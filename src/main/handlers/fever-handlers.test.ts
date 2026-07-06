@@ -101,6 +101,67 @@ describe('registerFeverHandlers', () => {
     expect(mocks.insertFeverAccount).not.toHaveBeenCalled()
   })
 
+  it('does not expose stored Fever API keys when listing accounts', async () => {
+    mocks.getFeverAccounts.mockReturnValue([
+      {
+        id: 'account-1',
+        baseUrl: 'https://rss.example.com',
+        username: 'alice',
+        apiKey: 'stored-api-password',
+        enabled: true,
+        autoSync: true,
+        syncIntervalMin: 30,
+        createdAt: 1000,
+      },
+    ])
+    const { registerFeverHandlers } = await import('./fever-handlers')
+    registerFeverHandlers()
+
+    const listAccounts = getRegisteredHandler(IPC.FEVER_ACCOUNTS_LIST)
+    const accounts = unwrapIpcEnvelope(await listAccounts({})) as Array<
+      Record<string, unknown>
+    >
+
+    expect(accounts).toEqual([
+      {
+        id: 'account-1',
+        baseUrl: 'https://rss.example.com',
+        username: 'alice',
+        enabled: true,
+        autoSync: true,
+        syncIntervalMin: 30,
+        createdAt: 1000,
+        apiKeyConfigured: true,
+      },
+    ])
+    expect(JSON.stringify(accounts)).not.toContain('stored-api-password')
+  })
+
+  it('reports missing Fever API keys without exposing an empty secret field', async () => {
+    mocks.getFeverAccounts.mockReturnValue([
+      {
+        id: 'account-1',
+        baseUrl: 'https://rss.example.com',
+        username: 'alice',
+        apiKey: '',
+        enabled: true,
+        autoSync: true,
+        syncIntervalMin: 30,
+        createdAt: 1000,
+      },
+    ])
+    const { registerFeverHandlers } = await import('./fever-handlers')
+    registerFeverHandlers()
+
+    const listAccounts = getRegisteredHandler(IPC.FEVER_ACCOUNTS_LIST)
+    const accounts = unwrapIpcEnvelope(await listAccounts({})) as Array<
+      Record<string, unknown>
+    >
+
+    expect(accounts[0]).not.toHaveProperty('apiKey')
+    expect(accounts[0]).toMatchObject({ apiKeyConfigured: false })
+  })
+
   it('creates a Fever account after connection verification succeeds', async () => {
     mocks.verify.mockResolvedValue(true)
     const { registerFeverHandlers } = await import('./fever-handlers')
@@ -121,10 +182,12 @@ describe('registerFeverHandlers', () => {
     expect(account).toMatchObject({
       baseUrl: 'https://rss.example.com',
       username: 'alice',
-      apiKey: 'api-password',
+      apiKeyConfigured: true,
       enabled: true,
       autoSync: true,
     })
+    expect(account).not.toHaveProperty('apiKey')
+    expect(JSON.stringify(account)).not.toContain('api-password')
     expect(mocks.createFeverClient).toHaveBeenCalledWith(
       'https://rss.example.com/api/fever.php',
       'alice',
@@ -134,6 +197,7 @@ describe('registerFeverHandlers', () => {
       expect.objectContaining({
         baseUrl: 'https://rss.example.com',
         username: 'alice',
+        apiKey: 'api-password',
       }),
     )
   })
@@ -158,7 +222,9 @@ describe('registerFeverHandlers', () => {
     expect(account).toMatchObject({
       baseUrl: 'https://rss.example.com/api/greader.php',
       username: 'alice',
+      apiKeyConfigured: true,
     })
+    expect(account).not.toHaveProperty('apiKey')
     expect(mocks.createFeverClient).toHaveBeenCalledWith(
       'https://rss.example.com/api/fever.php',
       'alice',

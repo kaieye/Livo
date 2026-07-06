@@ -13,6 +13,10 @@ export interface FeverAccount {
   createdAt: number
 }
 
+export type FeverAccountView = Omit<FeverAccount, 'apiKey'> & {
+  apiKeyConfigured: boolean
+}
+
 export interface FeverFeedMapping {
   accountId: string
   feverFeedId: number

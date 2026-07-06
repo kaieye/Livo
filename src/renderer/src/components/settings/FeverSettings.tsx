@@ -11,7 +11,7 @@ import {
   ToggleLeft,
   ToggleRight,
 } from 'lucide-react'
-import type { FeverAccount } from '../../../../shared/types'
+import type { FeverAccountView } from '../../../../shared/types'
 import {
   useFeverAccountsQuery,
   useFeverSyncStateQuery,
@@ -182,7 +182,7 @@ function FeverAccountCard({
   account,
   t,
 }: {
-  account: FeverAccount
+  account: FeverAccountView
   t: (key: string) => string
 }) {
   const updateMutation = useFeverUpdateAccountMutation()

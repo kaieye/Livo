@@ -1,5 +1,5 @@
 import { IPC } from '../../shared/types'
-import type { FeverAccount } from '../../shared/types'
+import type { FeverAccount, FeverAccountView } from '../../shared/types'
 import { IpcContractError } from '../../shared/ipc-contracts'
 import { registerChannel } from '../ipc/register-channel'
 import { toHandlerError } from '../ipc/handler-error'
@@ -22,9 +22,17 @@ async function verifyFeverConnection(
   return client.verify()
 }
 
+function toFeverAccountView(account: FeverAccount): FeverAccountView {
+  const { apiKey: _apiKey, ...view } = account
+  return {
+    ...view,
+    apiKeyConfigured: !!account.apiKey,
+  }
+}
+
 export function registerFeverHandlers(): void {
   registerChannel(IPC.FEVER_ACCOUNTS_LIST, () => {
-    return getDb().fever.getFeverAccounts()
+    return getDb().fever.getFeverAccounts().map(toFeverAccountView)
   })
 
   registerChannel(
@@ -32,7 +40,7 @@ export function registerFeverHandlers(): void {
     async (
       _event,
       input: { baseUrl: string; username: string; apiKey: string },
-    ): Promise<FeverAccount> => {
+    ): Promise<FeverAccountView> => {
       const verified = await verifyFeverConnection(
         input.baseUrl,
         input.username,
@@ -56,7 +64,7 @@ export function registerFeverHandlers(): void {
         createdAt: Date.now(),
       }
       getDb().fever.insertFeverAccount(account)
-      return account
+      return toFeverAccountView(account)
     },
   )
 

@@ -1063,6 +1063,10 @@ Renderer review findings to handle in later batches:
   - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
 - `pnpm format:check`
   - Result: passed.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 6 files, 6 symbols, 8 affected processes, HIGH risk.
+  - Changed symbols reported: `registerFeverHandlers`, preload `createAccount`, preload `updateAccount`, preload `api`, `FeverAccountCard`, and shared type-file symbol attribution `FeverFeedMapping`.
+  - Affected execution flows are the expected Fever IPC registration flows under `registerFeverHandlers`.
 
 ### Deferred findings
 
@@ -1674,3 +1678,45 @@ Renderer review findings to handle in later batches:
 - Reader snapshot cached HTML/text fields can still contain embedded secret-bearing URLs in `content`, `summary`, `readabilityContent`, `readabilityExcerpt`, or `aiSummary`; cache-only embedded URL redaction should be a separate snapshot-cache batch.
 - Fever IPC still returns stored account API keys to the renderer; list/create/update responses should return a renderer-safe DTO.
 - AI IPC accepts large prompt/message payloads; shared AI IPC contract limits should be added separately.
+
+## 2026-07-07 - Redact Fever account API keys from renderer IPC
+
+### Review inputs
+
+- Fever account records store `apiKey` in the main-process database for sync and update behavior.
+- `FEVER_ACCOUNTS_LIST` returned full stored account records to the renderer, including raw API keys.
+- `FEVER_ACCOUNTS_CREATE` returned the newly created full account record after verification and insertion.
+- Update input still needs to accept `Partial<FeverAccount>` so existing account edits can preserve the current API key or intentionally replace it.
+
+### Fixed in this batch
+
+- Added `FeverAccountView`, a renderer-safe account DTO without `apiKey` and with `apiKeyConfigured`.
+- `FEVER_ACCOUNTS_LIST` now maps stored `FeverAccount` records to `FeverAccountView` before crossing IPC.
+- `FEVER_ACCOUNTS_CREATE` still verifies and stores the submitted API key, but returns only `FeverAccountView`.
+- Preload and settings UI account list typing now use the renderer-safe view type.
+- Added regression coverage proving list/create responses omit `apiKey`, do not contain the submitted or stored secret, and still report whether an API key is configured.
+
+### Impact analysis
+
+- `registerFeverHandlers`: LOW risk. Affected path is Fever IPC registration through `registerIpcHandlers` and `onReady`.
+- `FeverAccount`: CRITICAL risk. The core persisted type is shared across database and sync behavior, so the batch avoids changing its semantics and adds a separate view DTO instead.
+- `useFeverAccountsQuery`, `useFeverUpdateAccountMutation`, and `FeverAccountCard`: LOW risk. UI impact is limited to account-list rendering and update mutation typing.
+
+### Verification
+
+- `pnpm test -- src/main/handlers/fever-handlers.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 166 passed test files, 969 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/handlers/fever-handlers.ts src/main/handlers/fever-handlers.test.ts src/shared/types/fever.ts src/preload/index.ts src/renderer/src/components/settings/FeverSettings.tsx src/renderer/src/hooks/useFeverAccounts.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- `FEVER_ACCOUNTS_UPDATE` still accepts API key updates by design; a future UI-specific update DTO could narrow renderer write access if account editing grows.
+- Reader snapshot cached HTML/text fields can still contain embedded secret-bearing URLs; cache-only embedded URL redaction remains the next candidate batch.
+- AI IPC accepts large prompt/message payloads; AI-specific IPC payload limits should be added separately.

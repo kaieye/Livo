@@ -45,6 +45,7 @@ import type {
   TaskRunListOptions,
   TaskRunRecord,
   FeverAccount,
+  FeverAccountView,
   FeverSyncState,
   AppHydratePayload,
 } from '../shared/types'
@@ -521,13 +522,14 @@ const api = {
 
   // Fever sync
   fever: {
-    listAccounts: (): Promise<FeverAccount[]> =>
+    listAccounts: (): Promise<FeverAccountView[]> =>
       invokeIpc(IPC.FEVER_ACCOUNTS_LIST),
     createAccount: (input: {
       baseUrl: string
       username: string
       apiKey: string
-    }): Promise<FeverAccount> => invokeIpc(IPC.FEVER_ACCOUNTS_CREATE, input),
+    }): Promise<FeverAccountView> =>
+      invokeIpc(IPC.FEVER_ACCOUNTS_CREATE, input),
     updateAccount: (
       id: string,
       updates: Partial<FeverAccount>,
