@@ -11,6 +11,7 @@ import {
 import type { FeedWithCount, FeedColumnId } from '../../../../shared/types'
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
 import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 import {
   Trash2,
   Search,
@@ -496,162 +497,168 @@ export function FeedsSettings() {
           </div>
         ) : (
           <>
-            {filteredUser.map((feed) => (
-              <div
-                key={feed.id}
-                className={`border-border/30 hover:bg-surface-secondary/50 dark:border-border-dark/30 dark:hover:bg-surface-dark/50 flex items-center gap-0 border-b px-2 py-2 text-sm transition-colors ${
-                  selectedIds.has(feed.id)
-                    ? 'bg-accent/5 dark:bg-accent/10'
-                    : ''
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(feed.id)}
-                  onChange={() => toggleOne(feed.id)}
-                  className="accent-accent mr-2 flex-shrink-0 rounded"
-                />
+            {filteredUser.map((feed) => {
+              const safeFeedImageUrl = getSafeImageSrc(feed.imageUrl)
+              return (
+                <div
+                  key={feed.id}
+                  className={`border-border/30 hover:bg-surface-secondary/50 dark:border-border-dark/30 dark:hover:bg-surface-dark/50 flex items-center gap-0 border-b px-2 py-2 text-sm transition-colors ${
+                    selectedIds.has(feed.id)
+                      ? 'bg-accent/5 dark:bg-accent/10'
+                      : ''
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(feed.id)}
+                    onChange={() => toggleOne(feed.id)}
+                    className="accent-accent mr-2 flex-shrink-0 rounded"
+                  />
 
-                {editingId === feed.id ? (
-                  /* Edit mode */
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <input
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark min-w-0 flex-1 rounded border bg-white px-2 py-0.5 text-sm focus:outline-none focus:ring-1"
-                      placeholder={t('settings.titlePlaceholder')}
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveEdit()
-                        if (e.key === 'Escape') cancelEdit()
-                      }}
-                    />
-                    <input
-                      value={editFolder}
-                      onChange={(e) => setEditFolder(e.target.value)}
-                      className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-24 rounded border bg-white px-2 py-0.5 text-sm focus:outline-none focus:ring-1"
-                      placeholder={t('settings.category')}
-                    />
-                    <select
-                      value={editView}
-                      onChange={(e) =>
-                        setEditView(Number(e.target.value) as FeedViewType)
-                      }
-                      className="dark:border-border-dark dark:bg-surface-dark w-16 rounded border bg-white px-1 py-0.5 text-xs focus:outline-none"
-                    >
-                      {Object.entries(VIEW_DEFINITIONS).map(([k]) => (
-                        <option key={k} value={k}>
-                          {t(
-                            VIEW_TYPE_I18N_KEYS[Number(k)] ||
-                              'viewTypes.articles',
-                          )}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={editMaxEntries}
-                      onChange={(e) =>
-                        setEditMaxEntries(
-                          Math.max(0, Number(e.target.value) || 0),
-                        )
-                      }
-                      className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-16 rounded border bg-white px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1"
-                      placeholder={t('settings.maxEntriesPlaceholder')}
-                      title={t('settings.maxEntriesTip')}
-                    />
-                    <button
-                      onClick={saveEdit}
-                      className="rounded p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                    >
-                      <Check size={14} />
-                    </button>
-                    <button
-                      onClick={cancelEdit}
-                      className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark rounded p-1"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  /* Display mode */
-                  <>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        {feed.imageUrl ? (
-                          <img
-                            src={feed.imageUrl}
-                            className="h-4 w-4 flex-shrink-0 rounded"
-                            alt=""
-                          />
-                        ) : null}
-                        <span className="truncate font-medium">
-                          {feed.title}
-                        </span>
-                        {feed.errorCount > 0 && (
-                          <span
-                            title={t('settings.fetchErrors', {
-                              count: feed.errorCount,
-                            })}
-                          >
-                            <AlertCircle
-                              size={12}
-                              className="flex-shrink-0 text-amber-500"
-                            />
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-text-secondary dark:text-text-dark-secondary mt-0.5 truncate text-xs">
-                        {feed.url}
-                      </div>
+                  {editingId === feed.id ? (
+                    /* Edit mode */
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <input
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark min-w-0 flex-1 rounded border bg-white px-2 py-0.5 text-sm focus:outline-none focus:ring-1"
+                        placeholder={t('settings.titlePlaceholder')}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveEdit()
+                          if (e.key === 'Escape') cancelEdit()
+                        }}
+                      />
+                      <input
+                        value={editFolder}
+                        onChange={(e) => setEditFolder(e.target.value)}
+                        className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-24 rounded border bg-white px-2 py-0.5 text-sm focus:outline-none focus:ring-1"
+                        placeholder={t('settings.category')}
+                      />
+                      <select
+                        value={editView}
+                        onChange={(e) =>
+                          setEditView(Number(e.target.value) as FeedViewType)
+                        }
+                        className="dark:border-border-dark dark:bg-surface-dark w-16 rounded border bg-white px-1 py-0.5 text-xs focus:outline-none"
+                      >
+                        {Object.entries(VIEW_DEFINITIONS).map(([k]) => (
+                          <option key={k} value={k}>
+                            {t(
+                              VIEW_TYPE_I18N_KEYS[Number(k)] ||
+                                'viewTypes.articles',
+                            )}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={editMaxEntries}
+                        onChange={(e) =>
+                          setEditMaxEntries(
+                            Math.max(0, Number(e.target.value) || 0),
+                          )
+                        }
+                        className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-16 rounded border bg-white px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1"
+                        placeholder={t('settings.maxEntriesPlaceholder')}
+                        title={t('settings.maxEntriesTip')}
+                      />
+                      <button
+                        onClick={saveEdit}
+                        className="rounded p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark rounded p-1"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
-                    {visibleColumns.map((colId) =>
-                      renderFeedColumn(colId, feed, false),
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
+                  ) : (
+                    /* Display mode */
+                    <>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          {safeFeedImageUrl ? (
+                            <img
+                              src={safeFeedImageUrl}
+                              className="h-4 w-4 flex-shrink-0 rounded"
+                              alt=""
+                            />
+                          ) : null}
+                          <span className="truncate font-medium">
+                            {feed.title}
+                          </span>
+                          {feed.errorCount > 0 && (
+                            <span
+                              title={t('settings.fetchErrors', {
+                                count: feed.errorCount,
+                              })}
+                            >
+                              <AlertCircle
+                                size={12}
+                                className="flex-shrink-0 text-amber-500"
+                              />
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-text-secondary dark:text-text-dark-secondary mt-0.5 truncate text-xs">
+                          {feed.url}
+                        </div>
+                      </div>
+                      {visibleColumns.map((colId) =>
+                        renderFeedColumn(colId, feed, false),
+                      )}
+                    </>
+                  )}
+                </div>
+              )
+            })}
             {receiveRecommended && filteredRecommended.length > 0 && (
               <div className="mt-2">
                 <div className="border-b border-t bg-amber-50/60 px-2 py-1.5 text-xs font-medium text-amber-600 dark:bg-amber-900/10 dark:text-amber-400">
                   {t('sidebar.recommended')}
                 </div>
-                {filteredRecommended.map((feed) => (
-                  <div
-                    key={feed.id}
-                    className="border-border/30 dark:border-border-dark/30 flex items-center gap-0 border-b bg-amber-50/20 px-2 py-2 text-sm dark:bg-amber-900/5"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={false}
-                      disabled
-                      className="accent-accent mr-2 flex-shrink-0 rounded opacity-40"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        {feed.imageUrl ? (
-                          <img
-                            src={feed.imageUrl}
-                            className="h-4 w-4 flex-shrink-0 rounded"
-                            alt=""
-                          />
-                        ) : null}
-                        <span className="truncate font-medium">
-                          {feed.title}
-                        </span>
+                {filteredRecommended.map((feed) => {
+                  const safeFeedImageUrl = getSafeImageSrc(feed.imageUrl)
+                  return (
+                    <div
+                      key={feed.id}
+                      className="border-border/30 dark:border-border-dark/30 flex items-center gap-0 border-b bg-amber-50/20 px-2 py-2 text-sm dark:bg-amber-900/5"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={false}
+                        disabled
+                        className="accent-accent mr-2 flex-shrink-0 rounded opacity-40"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          {safeFeedImageUrl ? (
+                            <img
+                              src={safeFeedImageUrl}
+                              className="h-4 w-4 flex-shrink-0 rounded"
+                              alt=""
+                            />
+                          ) : null}
+                          <span className="truncate font-medium">
+                            {feed.title}
+                          </span>
+                        </div>
+                        <div className="text-text-secondary dark:text-text-dark-secondary mt-0.5 truncate text-xs">
+                          {feed.url}
+                        </div>
                       </div>
-                      <div className="text-text-secondary dark:text-text-dark-secondary mt-0.5 truncate text-xs">
-                        {feed.url}
-                      </div>
+                      {visibleColumns.map((colId) =>
+                        renderFeedColumn(colId, feed, true),
+                      )}
                     </div>
-                    {visibleColumns.map((colId) =>
-                      renderFeedColumn(colId, feed, true),
-                    )}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </>

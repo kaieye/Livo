@@ -1,4 +1,5 @@
 import { Calendar, Clock, User } from 'lucide-react'
+import { getSafeImageSrc } from '../../../lib/safe-image-source'
 
 export function EntryArticleHeader({
   title,
@@ -15,6 +16,8 @@ export function EntryArticleHeader({
   fullDate: string
   readingTimeLabel?: string
 }) {
+  const safeAuthorAvatarUrl = getSafeImageSrc(authorAvatarUrl)
+
   return (
     <>
       <h1 className="mb-4 text-[1.7rem] font-bold leading-normal">{title}</h1>
@@ -22,9 +25,9 @@ export function EntryArticleHeader({
       <div className="text-text-secondary dark:text-text-dark-secondary mb-8 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium">
         {author && (
           <span className="flex items-center gap-1">
-            {authorAvatarUrl ? (
+            {safeAuthorAvatarUrl ? (
               <img
-                src={authorAvatarUrl}
+                src={safeAuthorAvatarUrl}
                 alt=""
                 className="h-4 w-4 rounded-full object-cover"
                 loading="lazy"

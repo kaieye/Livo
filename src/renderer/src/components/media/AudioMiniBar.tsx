@@ -25,6 +25,7 @@ import {
 import { usePlayerStore } from '../../store/player-store'
 import { SPEED_OPTIONS, formatPlaybackTime } from '../../lib/audio-playback'
 import { useStoreShallow } from '../../store/helpers'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 
 export function AudioMiniBar() {
   const { t } = useTranslation()
@@ -62,14 +63,15 @@ export function AudioMiniBar() {
   const progressPct =
     state.duration > 0 ? (state.currentTime / state.duration) * 100 : 0
   const showQueueControls = state.queueLength > 1
+  const safeCover = getSafeImageSrc(state.cover)
 
   return (
     <div className="animate-in dark:bg-surface-dark-secondary fixed bottom-4 right-4 z-50 w-[340px] overflow-hidden rounded-2xl border bg-white shadow-2xl">
       {/* Track info */}
       <div className="flex items-center gap-3 px-4 pb-1 pt-3">
-        {state.cover ? (
+        {safeCover ? (
           <img
-            src={state.cover}
+            src={safeCover}
             alt=""
             referrerPolicy="no-referrer"
             className="h-10 w-10 flex-shrink-0 rounded-md object-cover"

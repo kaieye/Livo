@@ -30,6 +30,7 @@ import { inferDiscoverFeedViewFromUrl } from '../lib/discover-feed'
 import { VIEW_TYPE_I18N_KEYS } from '../lib/view-type-keys'
 import { splitHtmlIntoParagraphs } from '../lib/entry-text'
 import { getDateLocale } from '../lib/date-locale'
+import { getSafeImageSrc } from '../lib/safe-image-source'
 import { ROUTES } from '../router/route-paths'
 import { useEntryStore } from '../store/entry-store'
 import { useGeneralSettingsShallowSelector } from '../store/settings-store'
@@ -434,7 +435,8 @@ function PreviewEntryRow({
   entry: DiscoverFeedPreviewEntry
   onSelect: (entry: DiscoverFeedPreviewEntry) => void
 }) {
-  const hasImage = !!entry.imageUrl
+  const safeImageUrl = getSafeImageSrc(entry.imageUrl)
+  const hasImage = !!safeImageUrl
   const dateLabel = formatPublishedAt(entry.publishedAt)
 
   return (
@@ -452,7 +454,7 @@ function PreviewEntryRow({
     >
       {hasImage ? (
         <img
-          src={entry.imageUrl}
+          src={safeImageUrl}
           alt=""
           loading="lazy"
           className="h-12 w-12 flex-shrink-0 rounded-lg bg-[var(--color-bg-tertiary)] object-cover"

@@ -935,3 +935,49 @@ Renderer review findings to handle in later batches:
 - Bespoke direct image tags in Discover preview rows, Discover panel rows, Sidebar feed icons, QuickSearch, FeedsSettings, EntryArticleHeader, and AudioMiniBar still need a follow-up pass.
 - Context menu image download/open paths should be reviewed separately because they use selected image URLs as IPC/download inputs rather than passive image element sources.
 - Entry merge policy should still be reviewed for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.
+
+## 2026-07-07 - Renderer direct image tag hardening
+
+### Review inputs
+
+- Renderer image-sink review sub-agent identified direct `<img>` assignments and Discover avatar preloads that did not pass through `CachedImage`, `QueuedImage`, `FeedAvatar`, or media-decision helpers.
+- This batch covers smaller direct image surfaces and leaves Sidebar feed icons plus IPC/download URL usage for separate review.
+
+### Fixed in this batch
+
+- `EntryArticleHeader` now filters `authorAvatarUrl` before rendering the author avatar and falls back to the existing user icon when blocked.
+- `AudioMiniBar` now filters audio cover images before assigning `img.src` and falls back to the existing music icon when blocked.
+- `QuickSearchPanel` now filters feed result images before rendering feed icons.
+- `FeedsSettings` now filters user and recommended feed images before rendering settings rows.
+- Discover preview rows in `DiscoverPreviewPage` and embedded `DiscoverPanel` now filter entry preview images and fall back to the existing RSS placeholder when blocked.
+- `DiscoverResultRow` now filters external avatar candidates before `new Image()` preload, avatar fallback traversal, and rendered avatar `src`. The internally generated Instagram placeholder remains allowed.
+
+### Impact analysis
+
+- `EntryArticleHeader`: HIGH risk. Direct caller is `EntryContent`; affected processes include `EntryContent`, `ArticleDetailPage`, and `DiscoverPreviewPage`.
+- `AudioMiniBar`: LOW risk. GitNexus reported no direct upstream callers or affected processes.
+- `QuickSearchPanel`: LOW risk. GitNexus reported no direct upstream callers or affected processes.
+- `FeedsSettings`: LOW risk. GitNexus reported no direct upstream callers or affected processes.
+- `DiscoverResultRow`: LOW risk. Direct upstream caller is `DiscoverPanel`.
+- `PreviewEntryRow`: LOW risk. Direct upstream caller is `DiscoverPreviewPage`; affected process is `DiscoverPreviewPage`.
+- `PreviewEntryInline`: LOW risk. Direct upstream caller is `DiscoverPanel`.
+- Pre-commit `detect_changes --scope staged` reported MEDIUM risk across 8 files, 11 symbols, and 5 affected execution flows: `FeedsSettings` settings flows plus `QuickSearchPanel → BuildScopeState`.
+
+### Verification
+
+- `pnpm test -- src/renderer/src/lib/safe-image-source.test.ts`
+  - Vitest ran the full configured suite.
+  - Result: 155 passed test files, 898 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/renderer/src/components/entry/entry-content/EntryArticleHeader.tsx src/renderer/src/components/media/AudioMiniBar.tsx src/renderer/src/components/search/QuickSearch.tsx src/renderer/src/components/settings/FeedsSettings.tsx src/renderer/src/pages/DiscoverPreviewPage.tsx src/renderer/src/components/discover/DiscoverPanel.tsx src/renderer/src/components/discover/DiscoverResultRow.tsx`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed.
+
+### Deferred findings
+
+- Sidebar `FeedIcon` still needs a focused pass because it has both direct `<img src={imageUrl}>` and imperative fallback assignment to `img.src = origin`.
+- Context menu image download/open paths should be reviewed separately because they use selected image URLs as IPC/download inputs rather than passive image element sources.
+- Entry merge policy should still be reviewed for defense in depth against unsafe `Entry.media` or `Entry.imageUrl` values constructed outside the normal feed-builder path.

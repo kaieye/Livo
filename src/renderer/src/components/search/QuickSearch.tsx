@@ -35,6 +35,7 @@ import { useOverlayStackItem } from '../../store/overlay-stack-store'
 import { useQuickSearchStore } from '../../store/quick-search-store'
 import { rankFeedsForQuickSearch } from '../../lib/quick-search-ranking'
 import { ROUTES, withEntrySearchParam } from '../../router/route-paths'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 
 // ====== Component ======
 type SearchType = 'all' | 'feed' | 'entry'
@@ -256,6 +257,7 @@ export function QuickSearchPanel() {
                   </div>
                   {feedResults.map((feed, i) => {
                     const globalIndex = i
+                    const safeFeedImageUrl = getSafeImageSrc(feed.imageUrl)
                     return (
                       <button
                         key={feed.id}
@@ -269,9 +271,9 @@ export function QuickSearchPanel() {
                             : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
                         }`}
                       >
-                        {feed.imageUrl ? (
+                        {safeFeedImageUrl ? (
                           <img
-                            src={feed.imageUrl}
+                            src={safeFeedImageUrl}
                             alt=""
                             className="h-6 w-6 rounded object-cover"
                           />

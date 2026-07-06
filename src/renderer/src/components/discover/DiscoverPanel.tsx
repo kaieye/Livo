@@ -41,6 +41,7 @@ import { ImportProgressModal } from '../feed/ImportProgressModal'
 import { OpmlImportProgress } from '../settings/OpmlImportProgress'
 import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
 import { getDateLocale } from '../../lib/date-locale'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 import { useGeneralSettingsShallowSelector } from '../../store/settings-store'
 import {
   AlertTriangle,
@@ -1285,7 +1286,8 @@ function PreviewEntryInline({
   entry: DiscoverFeedPreviewEntry
   onSelect: (entry: DiscoverFeedPreviewEntry) => void
 }) {
-  const hasImage = !!entry.imageUrl
+  const safeImageUrl = getSafeImageSrc(entry.imageUrl)
+  const hasImage = !!safeImageUrl
 
   return (
     <div
@@ -1302,7 +1304,7 @@ function PreviewEntryInline({
     >
       {hasImage ? (
         <img
-          src={entry.imageUrl}
+          src={safeImageUrl}
           alt=""
           loading="lazy"
           className="h-10 w-10 flex-shrink-0 rounded-lg bg-[var(--color-bg-tertiary)] object-cover"

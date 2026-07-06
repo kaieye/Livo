@@ -12,6 +12,7 @@ import {
 import type { DiscoverSearchResult } from '../../lib/discover-search'
 import { buildDiscoverInstagramPlaceholderAvatar } from '../../lib/discover-avatar'
 import { inferDiscoverPlatform } from '../../lib/discover-platform-presentation'
+import { getSafeImageSrc } from '../../lib/safe-image-source'
 import { openExternalUrlSafe } from '../../services/external-url'
 
 /**
@@ -72,6 +73,13 @@ export function DiscoverResultRow({
     () => buildDiscoverAvatarFallbacks(result.image, result.url),
     [result.image, result.url],
   )
+  const safeAvatarCandidates = useMemo(
+    () =>
+      avatarCandidates
+        .map((candidate) => getSafeImageSrc(candidate))
+        .filter((candidate): candidate is string => !!candidate),
+    [avatarCandidates],
+  )
   const placeholderAvatarLabel = useMemo(() => {
     const usernameFromUrl = extractInstagramUsernameFromFeedUrl(result.url)
     return usernameFromUrl || title || result.url
@@ -81,12 +89,12 @@ export function DiscoverResultRow({
     return buildDiscoverInstagramPlaceholderAvatar(placeholderAvatarLabel)
   }, [isInstagram, placeholderAvatarLabel])
   const [avatarSrc, setAvatarSrc] = useState<string>(
-    isInstagram ? instagramPlaceholderAvatar : avatarCandidates[0] || '',
+    isInstagram ? instagramPlaceholderAvatar : safeAvatarCandidates[0] || '',
   )
 
   useEffect(() => {
     if (!isInstagram) {
-      setAvatarSrc(avatarCandidates[0] || '')
+      setAvatarSrc(safeAvatarCandidates[0] || '')
       return
     }
 
@@ -95,7 +103,7 @@ export function DiscoverResultRow({
     setAvatarSrc(instagramPlaceholderAvatar)
 
     const tryLoad = (index: number) => {
-      const candidate = avatarCandidates[index]
+      const candidate = safeAvatarCandidates[index]
       if (!candidate) return
       const loader = new window.Image()
       activeLoader = loader
@@ -119,7 +127,7 @@ export function DiscoverResultRow({
         activeLoader.onerror = null
       }
     }
-  }, [avatarCandidates, instagramPlaceholderAvatar, isInstagram])
+  }, [instagramPlaceholderAvatar, isInstagram, safeAvatarCandidates])
 
   const handleRowKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -155,11 +163,11 @@ export function DiscoverResultRow({
               return
             }
             const current = e.currentTarget.currentSrc || e.currentTarget.src
-            const idx = avatarCandidates.findIndex(
+            const idx = safeAvatarCandidates.findIndex(
               (candidate) => candidate === current,
             )
             const next =
-              idx >= 0 ? avatarCandidates[idx + 1] : avatarCandidates[1]
+              idx >= 0 ? safeAvatarCandidates[idx + 1] : safeAvatarCandidates[1]
             if (next) {
               setAvatarSrc(next)
               return
