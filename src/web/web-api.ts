@@ -78,6 +78,7 @@ import {
 } from '../shared/discover-helpers'
 import { FeedViewType as FVT } from '../shared/types'
 import { mergeSettings, normalizeSettings } from '../shared/settings'
+import { sanitizeSettingsPatch } from '../shared/settings-patch'
 import {
   preserveRedactedSettingsSecrets,
   redactSettingsSecrets,
@@ -927,7 +928,8 @@ async function updateRuntimeSettings(
   updates: Partial<AppSettings>,
 ): Promise<AppSettings> {
   const current = await getRuntimeSettings()
-  const preserved = preserveRedactedSettingsSecrets(current, updates)
+  const sanitized = sanitizeSettingsPatch(updates)
+  const preserved = preserveRedactedSettingsSecrets(current, sanitized)
   runtimeSettings = mergeSettings(current, preserved)
   await saveSettings(runtimeSettings)
   return runtimeSettings

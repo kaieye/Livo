@@ -495,6 +495,29 @@ describe('web settings secret persistence', () => {
     })
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('rejects malformed web settings patches before persistence', async () => {
+    vi.resetModules()
+    const storage = stubSettingsIndexedDB(cloneDefaultSettings())
+    vi.stubGlobal('window', { location: { origin: 'https://web.example' } })
+    const [{ initWebDB }, { createWebAPI }] = await Promise.all([
+      import('./storage'),
+      import('./web-api'),
+    ])
+    await initWebDB()
+    const api = createWebAPI()
+
+    await expect(
+      api.settings.set({
+        general: {
+          theme: 'dark',
+          customCSS: 'x'.repeat(200_001),
+        },
+      } as unknown as Partial<AppSettings>),
+    ).rejects.toThrow('Invalid settings patch')
+
+    expect(storage.putSettings).toHaveLength(0)
+  })
 })
 
 describe('web digest run persistence', () => {

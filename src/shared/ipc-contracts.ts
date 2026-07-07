@@ -12,6 +12,10 @@ import type {
 } from './types'
 import type { ActionRule } from './actions'
 import { ACTION_RULES_MAX_COUNT, sanitizeActionRules } from './actions'
+import {
+  sanitizeSettingsPatch,
+  SettingsPatchValidationError,
+} from './settings-patch'
 import type { AISemanticFilterInput, AIDigestPreset } from './types'
 import { FeedViewType } from './types/feed'
 
@@ -925,6 +929,29 @@ function oneObject<C extends IpcChannel>(
   }
 }
 
+function oneSettingsPatch<C extends IpcChannel>(
+  channel: C,
+  field: string,
+): IpcContract<C> {
+  return {
+    channel,
+    validateArgs: (args) => {
+      assertArity(channel, args, 1)
+      try {
+        return [sanitizeSettingsPatch(args[0])] as unknown as IpcArgs<C>
+      } catch (error) {
+        if (error instanceof SettingsPatchValidationError) {
+          throw new IpcValidationError('Invalid IPC argument', {
+            [field]: 'invalid_settings_patch',
+            ...error.fields,
+          })
+        }
+        throw error
+      }
+    },
+  }
+}
+
 const accountProviders = new Set<AccountProvider>([
   'google',
   'youtube',
@@ -1552,7 +1579,7 @@ export const IPC_CONTRACTS = {
   [IPC.AGENT_MEMORY_LIST]: noArgs(IPC.AGENT_MEMORY_LIST),
   [IPC.AGENT_MEMORY_CLEAR]: noArgs(IPC.AGENT_MEMORY_CLEAR),
   [IPC.SETTINGS_GET]: noArgs(IPC.SETTINGS_GET),
-  [IPC.SETTINGS_SET]: oneObject(IPC.SETTINGS_SET, 'settings'),
+  [IPC.SETTINGS_SET]: oneSettingsPatch(IPC.SETTINGS_SET, 'settings'),
   [IPC.ACTIONS_SYNC]: {
     channel: IPC.ACTIONS_SYNC,
     validateArgs: (args) => {

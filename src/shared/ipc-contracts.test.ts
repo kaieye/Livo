@@ -158,6 +158,46 @@ describe('ipc-contracts', () => {
     }
   })
 
+  it('validates settings:set payloads deeply at the IPC boundary', () => {
+    expect(
+      validateIpcArgs(IPC.SETTINGS_SET, [
+        {
+          ai: {
+            provider: 'custom',
+            apiKeys: { custom: 'sk-live' },
+          },
+          general: { theme: 'dark' },
+        },
+      ]),
+    ).toEqual([
+      {
+        ai: {
+          provider: 'custom',
+          apiKeys: { custom: 'sk-live' },
+        },
+        general: { theme: 'dark' },
+      },
+    ])
+
+    expect(() =>
+      validateIpcArgs(IPC.SETTINGS_SET, [
+        { general: { theme: 'dark', unknown: true } },
+      ]),
+    ).toThrow(IpcValidationError)
+
+    expect(() =>
+      validateIpcArgs(IPC.SETTINGS_SET, [
+        { agent: { runTimeoutSeconds: '45' } },
+      ]),
+    ).toThrow(IpcValidationError)
+
+    expect(() =>
+      validateIpcArgs(IPC.SETTINGS_SET, [
+        JSON.parse('{"ai":{"apiKeys":{"__proto__":"polluted"}}}'),
+      ]),
+    ).toThrow(IpcValidationError)
+  })
+
   it('allows only bounded editable feed update fields', () => {
     const editablePatch = {
       title: 'New title',

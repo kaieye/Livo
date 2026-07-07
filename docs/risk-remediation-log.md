@@ -2264,3 +2264,54 @@ Renderer review findings to handle in later batches:
 - Public-only discovery/feed fetch policy remains separate because it needs a product decision around local RSSHub, LAN, dev, and intranet feed compatibility.
 - Dormant React Query persister cleanup remains separate.
 - Settings schema patch validation remains separate.
+
+## 2026-07-07 - Settings patch schema validation
+
+### Review inputs
+
+- Settings boundary review inspected desktop `settings:set`, Web `settings.set()`, `settingsProvider.update()`, `mergeSettings()`, renderer settings store optimistic updates, and persisted settings normalization.
+- GitNexus query for "settings schema patch validation" pointed to `isPlainObject()` and `mergeSettings()` in `src/shared/settings.ts`, confirming that current protection was concentrated in generic settings normalization rather than IPC/Web boundary validation.
+- Local review found that `SETTINGS_SET` only required a shallow object, so renderer-controlled nested fields, oversized strings, oversized dynamic provider maps, unsafe dynamic keys, invalid enum values, and malformed array items could reach the settings provider before being ignored, normalized, or persisted.
+
+### Fixed in this batch
+
+- Added shared `sanitizeSettingsPatch()` for `Partial<AppSettings>` payloads.
+- Settings patches now reject unknown top-level sections and unknown nested section fields.
+- Settings patches now require strict plain objects for sections and dynamic maps.
+- Settings patches now reject unsafe dynamic map keys such as `__proto__`, `constructor`, `prototype`, empty keys, overlong keys, and control-character keys.
+- AI dynamic maps (`apiKeys`, `baseUrls`, `models`) now enforce max key counts and bounded key/value string lengths.
+- Prompt/custom CSS/proxy/model/language/string fields now have explicit maximum lengths before persistence.
+- Numeric fields must be finite numbers at the boundary; existing `normalizeSettings()` still owns range clamping.
+- Enum fields, booleans, `viewTabs`, `feedColumns`, and `webSearchProviders` now validate shape and allowed values before merging.
+- Desktop `settings:set` now returns a sanitized patch from the IPC contract before handlers run.
+- Web `settings.set()` now reuses the same sanitizer before merging runtime settings and writing IndexedDB.
+- Added regression coverage for shared sanitizer behavior, IPC boundary rejection, main handler side-effect prevention, and Web settings persistence rejection.
+
+### Impact analysis
+
+- `updateRuntimeSettings`: LOW risk. Direct caller: Web `settings.set`; no affected processes reported.
+- `validateIpcArgs`: LOW risk by GitNexus symbol impact. Manual effective risk is MEDIUM because it is the common IPC validation entry point; this batch changes only the `settings:set` branch.
+- `IPC_CONTRACTS`: LOW risk by GitNexus symbol impact. No upstream callers or affected processes reported.
+- `mergeSettings`: HIGH risk if changed. Direct callers include renderer settings store, Web settings runtime, and main `SettingsProvider.update()`; affected processes include Agent settings tools, `onReady`, and `registerIpcHandlers`. This batch deliberately does not change `mergeSettings()` semantics and adds a pre-merge sanitizer instead.
+
+### Verification
+
+- `pnpm test -- src/shared/settings.test.ts src/shared/ipc-contracts.test.ts src/main/handlers/settings-handlers.test.ts src/web/web-api-contract.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 170 passed test files, 1008 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/shared/settings.ts src/shared/settings.test.ts src/shared/ipc-contracts.ts src/shared/ipc-contracts.test.ts src/main/handlers/settings-handlers.test.ts src/web/web-api.ts src/web/web-api-contract.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed after formatting touched settings and Web files.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 8 files, 7 symbols, 0 affected processes, LOW risk.
+  - Changed symbols include `IPC_CONTRACTS`, `updateRuntimeSettings`, and IPC contract constants/helpers; the settings sanitizer lives in the new `settings-patch.ts` module so `mergeSettings()` and `normalizeSettings()` remain untouched.
+
+### Deferred findings
+
+- Renderer settings store still applies optimistic updates before persistence succeeds and should roll back failed settings updates in a separate UI-state batch.
+- Public-only discovery/feed fetch policy remains separate because it needs a product decision around local RSSHub, LAN, dev, and intranet feed compatibility.
+- Dormant React Query persister cleanup remains separate.

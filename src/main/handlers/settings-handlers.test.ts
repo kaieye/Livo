@@ -198,6 +198,29 @@ describe('registerSettingsHandlers', () => {
     expect(existsSync(join(userDataDir, 'data', 'settings.json'))).toBe(false)
   })
 
+  it('rejects malformed nested settings patches before applying side effects', async () => {
+    const { registerSettingsHandlers } = await import('./settings-handlers')
+    registerSettingsHandlers()
+
+    const handler = getRegisteredHandler(IPC.SETTINGS_SET)
+    const result = await handler(
+      {},
+      {
+        general: {
+          theme: 'dark',
+          customCSS: 'x'.repeat(200_001),
+        },
+      },
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'validation_error' },
+    })
+    expect(applyProxySettingsMock).not.toHaveBeenCalled()
+    expect(existsSync(join(userDataDir, 'data', 'settings.json'))).toBe(false)
+  })
+
   it('redacts secrets in settings:get, settings:set, and settings:changed while encrypting persisted values', async () => {
     const { registerSettingsHandlers } = await import('./settings-handlers')
     const { REDACTED_SECRET_VALUE } =

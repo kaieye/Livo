@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { mergeSettings, normalizeSettings } from './settings'
 import {
+  sanitizeSettingsPatch,
+  SettingsPatchValidationError,
+} from './settings-patch'
+import {
   DEFAULT_AGENT_MAX_ROUNDS,
   DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
   DEFAULT_AGENT_MAX_TOKENS,
@@ -200,6 +204,80 @@ describe('settings normalization', () => {
       'https://gw.example.com/v1/chat/completions',
     )
     expect(normalized.ai.models?.deepseek).toBe('deepseek-chat')
+  })
+
+  it('sanitizes valid settings patches while preserving partial shape', () => {
+    expect(
+      sanitizeSettingsPatch({
+        ai: {
+          provider: 'custom',
+          apiKeys: { custom: 'sk-live' },
+          model: 'model-1',
+        },
+        general: {
+          theme: 'dark',
+          viewTabs: [{ id: FeedViewType.Articles, visible: false }],
+        },
+      }),
+    ).toEqual({
+      ai: {
+        provider: 'custom',
+        apiKeys: { custom: 'sk-live' },
+        model: 'model-1',
+      },
+      general: {
+        theme: 'dark',
+        viewTabs: [{ id: FeedViewType.Articles, visible: false }],
+      },
+    })
+  })
+
+  it('rejects unknown settings patch fields', () => {
+    expect(() =>
+      sanitizeSettingsPatch({
+        general: {
+          theme: 'dark',
+          launchCommand: 'rm -rf',
+        },
+      }),
+    ).toThrow(SettingsPatchValidationError)
+  })
+
+  it('rejects malformed settings patch values instead of normalizing them', () => {
+    expect(() =>
+      sanitizeSettingsPatch({
+        agent: { runTimeoutSeconds: '45' },
+      }),
+    ).toThrow(SettingsPatchValidationError)
+
+    expect(() =>
+      sanitizeSettingsPatch({
+        general: {
+          viewTabs: [{ id: 'unknown', visible: true }],
+        },
+      }),
+    ).toThrow(SettingsPatchValidationError)
+  })
+
+  it('bounds dynamic AI setting records and long text fields', () => {
+    expect(() =>
+      sanitizeSettingsPatch({
+        ai: {
+          apiKeys: Object.fromEntries(
+            Array.from({ length: 33 }, (_, index) => [
+              `provider-${index}`,
+              'sk-live',
+            ]),
+          ),
+        },
+      }),
+    ).toThrow(SettingsPatchValidationError)
+
+    expect(() =>
+      sanitizeSettingsPatch({
+        general: { customCSS: 'x'.repeat(200_001) },
+      }),
+    ).toThrow(SettingsPatchValidationError)
   })
 
   it('derives default feed columns from the shared column defaults', () => {
