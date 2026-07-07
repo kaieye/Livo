@@ -11,11 +11,28 @@ import { assertNetworkFetchUrl } from './network-url-policy'
 import { checkForAppUpdates } from './update-check'
 
 const MAX_REDIRECTS = 5
+const MAX_INSTALLER_BYTES = 300 * 1024 * 1024
+const DOWNLOAD_TEMP_SUFFIX = '.download'
+const GITHUB_RELEASE_OWNER = 'kaieye'
+const GITHUB_RELEASE_REPO = 'Livo'
+
+type InstallerKind = 'exe' | 'zip'
 
 function getCurrentInstallPath(): string | null {
   if (process.platform !== 'win32') return null
   if (!app.isPackaged) return null
   return dirname(app.getPath('exe'))
+}
+
+function isInstallerAssetName(fileName: string): boolean {
+  return /^Livo-Setup-.+\.(exe|zip)$/i.test(fileName)
+}
+
+function getInstallerKind(filePath: string): InstallerKind | null {
+  const extension = extname(filePath).toLowerCase()
+  if (extension === '.exe') return 'exe'
+  if (extension === '.zip') return 'zip'
+  return null
 }
 
 function buildInstallerFileName(
@@ -25,9 +42,80 @@ function buildInstallerFileName(
   const safeName = sanitizeSuggestedFileName(
     assetName || `Livo-Setup-${version || 'update'}.zip`,
   )
-  return ['.exe', '.zip'].includes(extname(safeName).toLowerCase())
-    ? safeName
-    : `${safeName}.zip`
+  const fileName = getInstallerKind(safeName) ? safeName : `${safeName}.zip`
+  if (!isInstallerAssetName(fileName)) {
+    throw new Error('更新安装包名称无效')
+  }
+  return fileName
+}
+
+function assertInstallerByteLength(
+  byteLength: number | undefined,
+  message = '更新安装包过大',
+): void {
+  if (typeof byteLength !== 'number') return
+  if (!Number.isFinite(byteLength) || byteLength < 0) {
+    throw new Error('更新安装包大小无效')
+  }
+  if (byteLength > MAX_INSTALLER_BYTES) {
+    throw new Error(message)
+  }
+}
+
+function getResponseContentLength(response: Response): number | undefined {
+  const raw = response.headers.get('content-length')
+  if (!raw) return undefined
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function assertExpectedByteLength(
+  actualBytes: number | undefined,
+  expectedBytes: number | undefined,
+): void {
+  if (typeof actualBytes !== 'number' || typeof expectedBytes !== 'number') {
+    return
+  }
+  if (actualBytes !== expectedBytes) {
+    throw new Error('下载更新失败：安装包大小不匹配')
+  }
+}
+
+function assertInstallerDownloadUrl(url: string, assetName: string): void {
+  try {
+    const parsed = new URL(url)
+    const segments = parsed.pathname
+      .split('/')
+      .filter(Boolean)
+      .map((segment) => decodeURIComponent(segment))
+    const downloadedName = segments[segments.length - 1] || ''
+    const [owner, repo, releases, download] = segments
+
+    if (
+      parsed.protocol !== 'https:' ||
+      parsed.username ||
+      parsed.password ||
+      parsed.hostname.toLowerCase() !== 'github.com' ||
+      owner !== GITHUB_RELEASE_OWNER ||
+      repo !== GITHUB_RELEASE_REPO ||
+      releases !== 'releases' ||
+      download !== 'download' ||
+      downloadedName.toLowerCase() !== assetName.toLowerCase()
+    ) {
+      throw new Error('invalid update download URL')
+    }
+  } catch {
+    throw new Error('更新安装包下载地址无效')
+  }
+}
+
+function assertInstallerAssetMetadata(
+  url: string,
+  assetName: string,
+  expectedBytes: number | undefined,
+): void {
+  assertInstallerByteLength(expectedBytes)
+  assertInstallerDownloadUrl(url, assetName)
 }
 
 async function cleanUpdateDirectory(updateDir: string): Promise<void> {
@@ -44,8 +132,55 @@ async function cleanUpdateDirectory(updateDir: string): Promise<void> {
         (entry) =>
           /^Livo-Setup-.+\.(exe|zip)$/i.test(entry) || entry === 'next',
       )
-      .map((entry) => fs.rm(join(updateDir, entry), { force: true })),
+      .map((entry) =>
+        fs.rm(join(updateDir, entry), {
+          force: true,
+          recursive: entry === 'next',
+        }),
+      ),
   )
+}
+
+async function assertInstallerFileShape(
+  filePath: string,
+  expectedKind?: InstallerKind,
+): Promise<InstallerKind> {
+  const kind = getInstallerKind(filePath)
+  if (!kind || (expectedKind && kind !== expectedKind)) {
+    throw new Error('更新安装包类型无效')
+  }
+
+  const stats = await fs.stat(filePath)
+  assertInstallerByteLength(stats.size)
+  if (stats.size === 0) {
+    throw new Error('更新安装包为空')
+  }
+
+  const handle = await fs.open(filePath, 'r')
+  try {
+    const header = Buffer.alloc(4)
+    const { bytesRead } = await handle.read(header, 0, header.length, 0)
+    if (kind === 'exe') {
+      if (bytesRead < 2 || header[0] !== 0x4d || header[1] !== 0x5a) {
+        throw new Error('更新安装程序格式无效')
+      }
+    } else if (
+      bytesRead < 4 ||
+      header[0] !== 0x50 ||
+      header[1] !== 0x4b ||
+      !(
+        (header[2] === 0x03 && header[3] === 0x04) ||
+        (header[2] === 0x05 && header[3] === 0x06) ||
+        (header[2] === 0x07 && header[3] === 0x08)
+      )
+    ) {
+      throw new Error('更新压缩包格式无效')
+    }
+  } finally {
+    await handle.close()
+  }
+
+  return kind
 }
 
 async function findInstallerExecutable(dir: string): Promise<string | null> {
@@ -64,6 +199,7 @@ async function findInstallerExecutable(dir: string): Promise<string | null> {
 }
 
 async function extractInstallerZip(zipPath: string): Promise<string> {
+  await assertInstallerFileShape(zipPath, 'zip')
   const extractDir = join(dirname(zipPath), 'next')
   await fs.rm(extractDir, { recursive: true, force: true })
   await fs.mkdir(extractDir, { recursive: true })
@@ -93,17 +229,75 @@ async function extractInstallerZip(zipPath: string): Promise<string> {
   if (!installerPath) {
     throw new Error('解压后的更新包中未找到 Livo 安装程序')
   }
+  await assertInstallerFileShape(installerPath, 'exe')
   return installerPath
 }
 
 async function resolveInstallerExecutable(filePath: string): Promise<string> {
-  if (extname(filePath).toLowerCase() !== '.zip') return filePath
+  const kind = await assertInstallerFileShape(filePath)
+  if (kind !== 'zip') return filePath
   return extractInstallerZip(filePath)
+}
+
+async function writeResponseBodyToFile(
+  response: Response,
+  filePath: string,
+  expectedBytes: number | undefined,
+): Promise<void> {
+  const contentLength = getResponseContentLength(response)
+  assertInstallerByteLength(contentLength, '下载更新失败：安装包过大')
+  assertExpectedByteLength(contentLength, expectedBytes)
+
+  const tempPath = `${filePath}${DOWNLOAD_TEMP_SUFFIX}`
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  let totalBytes = 0
+  const handle = await fs.open(tempPath, 'w')
+  let caughtError: unknown
+
+  try {
+    reader = response.body?.getReader()
+    if (!reader) {
+      const buffer = Buffer.from(await response.arrayBuffer())
+      totalBytes = buffer.length
+      assertInstallerByteLength(totalBytes, '下载更新失败：安装包过大')
+      assertExpectedByteLength(totalBytes, expectedBytes)
+      await handle.writeFile(buffer)
+    } else {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        if (!value) continue
+
+        const nextTotal = totalBytes + value.byteLength
+        if (nextTotal > MAX_INSTALLER_BYTES) {
+          await reader.cancel()
+          throw new Error('下载更新失败：安装包过大')
+        }
+
+        await handle.write(Buffer.from(value))
+        totalBytes = nextTotal
+      }
+      assertExpectedByteLength(totalBytes, expectedBytes)
+    }
+  } catch (error) {
+    caughtError = error
+  } finally {
+    reader?.releaseLock()
+    await handle.close()
+  }
+
+  if (caughtError) {
+    await fs.rm(tempPath, { force: true })
+    throw caughtError
+  }
+
+  await fs.rename(tempPath, filePath)
 }
 
 async function fetchInstallerToFile(
   url: string,
   filePath: string,
+  expectedBytes: number | undefined,
   redirectDepth = 0,
 ): Promise<void> {
   if (redirectDepth > MAX_REDIRECTS) {
@@ -127,28 +321,42 @@ async function fetchInstallerToFile(
     const nextUrl = new URL(response.headers.get('location') || '', safeUrl)
       .href
     await assertNetworkFetchUrl(nextUrl)
-    return fetchInstallerToFile(nextUrl, filePath, redirectDepth + 1)
+    return fetchInstallerToFile(
+      nextUrl,
+      filePath,
+      expectedBytes,
+      redirectDepth + 1,
+    )
   }
 
   if (!response.ok) {
     throw new Error(`下载更新失败：HTTP ${response.status}`)
   }
 
-  const data = Buffer.from(await response.arrayBuffer())
-  await fs.writeFile(filePath, data)
+  await writeResponseBodyToFile(response, filePath, expectedBytes)
 }
 
 async function downloadInstaller(
   url: string,
   assetName: string | undefined,
   version: string | undefined,
+  expectedBytes: number | undefined,
 ): Promise<string> {
   const updateDir = join(app.getPath('userData'), 'updates')
+  const fileName = buildInstallerFileName(assetName, version)
+  assertInstallerAssetMetadata(url, fileName, expectedBytes)
+
   await fs.mkdir(updateDir, { recursive: true })
   await cleanUpdateDirectory(updateDir)
 
-  const filePath = join(updateDir, buildInstallerFileName(assetName, version))
-  await fetchInstallerToFile(url, filePath)
+  const filePath = join(updateDir, fileName)
+  try {
+    await fetchInstallerToFile(url, filePath, expectedBytes)
+    await assertInstallerFileShape(filePath)
+  } catch (error) {
+    await fs.rm(filePath, { force: true })
+    throw error
+  }
   return filePath
 }
 
@@ -200,6 +408,7 @@ export async function installAppUpdate(): Promise<AppUpdateInstallResult> {
       updateInfo.installerDownloadUrl,
       updateInfo.installerAssetName,
       updateInfo.latestVersion,
+      updateInfo.installerSize,
     )
     const installerExecutablePath =
       await resolveInstallerExecutable(installerPath)

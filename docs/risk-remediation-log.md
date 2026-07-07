@@ -2211,3 +2211,56 @@ Renderer review findings to handle in later batches:
 ### Deferred findings
 
 - Public-only discovery/feed fetch policy, update installer verification, dormant React Query persister cleanup, and settings schema patch validation remain separate findings.
+
+## 2026-07-07 - Update installer verification
+
+### Review inputs
+
+- Update installer review inspected `installAppUpdate()`, installer asset selection, download redirects, local update directory cleanup, ZIP extraction, and silent installer launch.
+- GitNexus query for "update installer verification" identified `startSilentInstaller()`, `installAppUpdate()`, and `registerUpdaterHandlers()` as the relevant update path.
+- Local review found that installer downloads already used network URL policy and manual redirect handling, but still read the full response into memory, did not enforce installer asset metadata, did not validate downloaded file shape, and could fail cleanup when a previous `next` extraction directory existed.
+
+### Fixed in this batch
+
+- Update installation now accepts only `Livo-Setup-*.exe` or `Livo-Setup-*.zip` release assets.
+- Installer download URLs must be HTTPS GitHub release asset URLs under `kaieye/Livo/releases/download/...` and must match the selected asset name before any network request is made.
+- GitHub-provided installer size metadata is rejected if invalid or over 300 MiB.
+- Installer responses are streamed to a `.download` temporary file instead of being loaded with unbounded `arrayBuffer()` memory use.
+- Response `Content-Length`, streamed byte count, and GitHub asset size metadata are checked for oversize and mismatch before the installer can be launched.
+- Downloaded `.exe` files must have an `MZ` executable header, and downloaded `.zip` files must have a ZIP header before extraction.
+- Extracted ZIP installers are revalidated as `.exe` files before launch.
+- Failed or partial downloads are removed, and stale `updates/next` extraction directories are cleaned recursively before a new update download.
+- Added focused coverage for successful bounded install, non-GitHub URL rejection, oversized response rejection, size-mismatch cleanup, invalid EXE rejection, and stale extraction directory cleanup.
+
+### Impact analysis
+
+- `fetchInstallerToFile`: LOW risk. Direct caller: `downloadInstaller`; affected process: `registerAppHandlers`.
+- `downloadInstaller`: LOW risk. Direct caller: `installAppUpdate`; affected processes: `registerAppHandlers` and `onReady`.
+- `installAppUpdate`: LOW risk. Direct caller: `registerAppHandlers`; affected processes: `registerAppHandlers` and `onReady`.
+- `resolveInstallerExecutable`: LOW risk. Direct caller: `installAppUpdate`; affected processes: `registerAppHandlers` and `onReady`.
+- `buildInstallerFileName`: LOW risk. Direct caller: `downloadInstaller`; affected process: `registerAppHandlers`.
+- `extractInstallerZip`: LOW risk. Direct caller: `resolveInstallerExecutable`; affected process: `registerAppHandlers`.
+- `startSilentInstaller`: LOW risk. Direct caller: `installAppUpdate`; affected processes: `registerAppHandlers` and `onReady`.
+- `cleanUpdateDirectory`: LOW risk. Direct caller: `downloadInstaller`; affected process: `registerAppHandlers`.
+
+### Verification
+
+- `pnpm test -- src/main/services/system/update-install.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 170 passed test files, 1001 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/main/services/system/update-install.ts src/main/services/system/update-install.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed after formatting `AGENTS.md`, `CLAUDE.md`, and `src/main/services/system/update-install.test.ts`.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Result: 5 files, 12 symbols, 0 affected processes, LOW risk.
+  - Changed symbols are limited to GitNexus metadata and `update-install.ts` installer lifecycle helpers.
+
+### Deferred findings
+
+- Public-only discovery/feed fetch policy remains separate because it needs a product decision around local RSSHub, LAN, dev, and intranet feed compatibility.
+- Dormant React Query persister cleanup remains separate.
+- Settings schema patch validation remains separate.
