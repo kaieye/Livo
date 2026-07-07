@@ -3,12 +3,13 @@
 // Desktop 端用 localStorage 替代 Harmony 的 Preferences，保留同样的接口语义：
 // 最多保留 MAX_SESSIONS 条会话，按 updatedAt 倒序返回。
 
-import { sanitizePersistedUrl } from '../../../shared/persisted-url-policy'
+import {
+  sanitizeEmbeddedPersistedUrls,
+  sanitizePersistedUrl,
+} from '../../../shared/persisted-url-policy'
 
 const CHAT_SESSIONS_KEY = 'livo-chat-sessions'
 const MAX_SESSIONS = 50
-const EMBEDDED_HTTP_URL_PATTERN = /\bhttps?:\/\/[^\s"'<>]+/gi
-const TRAILING_URL_PUNCTUATION_PATTERN = /[),.;:!?]+$/
 
 export interface StoredChatMessage {
   id: string
@@ -38,22 +39,6 @@ export interface ChatSession {
   updatedAt: number
 }
 
-function sanitizeEmbeddedUrlToken(urlToken: string): string {
-  const trailing = urlToken.match(TRAILING_URL_PUNCTUATION_PATTERN)?.[0] ?? ''
-  const coreUrl = trailing ? urlToken.slice(0, -trailing.length) : urlToken
-  const usesHtmlAmpersands = coreUrl.includes('&amp;')
-  const normalizedUrl = usesHtmlAmpersands
-    ? coreUrl.replaceAll('&amp;', '&')
-    : coreUrl
-  const sanitized = sanitizePersistedUrl(normalizedUrl)
-
-  return `${usesHtmlAmpersands ? sanitized.replaceAll('&', '&amp;') : sanitized}${trailing}`
-}
-
-function sanitizeEmbeddedUrlsForChatHistory(value: string): string {
-  return value.replace(EMBEDDED_HTTP_URL_PATTERN, sanitizeEmbeddedUrlToken)
-}
-
 function sanitizeCitationForChatHistory(
   citation: AIChatCitation,
 ): AIChatCitation {
@@ -61,7 +46,7 @@ function sanitizeCitationForChatHistory(
     ...citation,
     url: citation.url ? sanitizePersistedUrl(citation.url) : citation.url,
     snippet: citation.snippet
-      ? sanitizeEmbeddedUrlsForChatHistory(citation.snippet)
+      ? sanitizeEmbeddedPersistedUrls(citation.snippet)
       : citation.snippet,
   }
 }
@@ -71,7 +56,7 @@ function sanitizeMessageForChatHistory(
 ): StoredChatMessage {
   return {
     ...message,
-    content: sanitizeEmbeddedUrlsForChatHistory(message.content),
+    content: sanitizeEmbeddedPersistedUrls(message.content),
     citations: message.citations?.map(sanitizeCitationForChatHistory),
   }
 }
@@ -79,7 +64,7 @@ function sanitizeMessageForChatHistory(
 function sanitizeSessionForChatHistory(session: ChatSession): ChatSession {
   return {
     ...session,
-    title: sanitizeEmbeddedUrlsForChatHistory(session.title),
+    title: sanitizeEmbeddedPersistedUrls(session.title),
     messages: session.messages.map(sanitizeMessageForChatHistory),
   }
 }

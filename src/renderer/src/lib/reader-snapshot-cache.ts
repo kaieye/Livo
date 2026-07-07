@@ -5,13 +5,14 @@ import type {
   ReaderSnapshot,
   ReaderSnapshotRequest,
 } from '../../../shared/types'
-import { sanitizePersistedUrl } from '../../../shared/persisted-url-policy'
+import {
+  sanitizeEmbeddedPersistedUrls,
+  sanitizePersistedUrl,
+} from '../../../shared/persisted-url-policy'
 
 const STORAGE_KEY = 'livo:reader-snapshot-cache:v2'
 const CACHE_VERSION = 2
 const MAX_CACHE_ENTRIES = 8
-const EMBEDDED_HTTP_URL_PATTERN = /\bhttps?:\/\/[^\s"'<>]+/gi
-const TRAILING_URL_PUNCTUATION_PATTERN = /[),.;:!?]+$/
 
 interface PersistedSnapshotCacheEntry {
   cachedAt: number
@@ -130,22 +131,6 @@ function sanitizeMediaForSnapshotCache(media: MediaItem): MediaItem {
   }
 }
 
-function sanitizeEmbeddedUrlToken(urlToken: string): string {
-  const trailing = urlToken.match(TRAILING_URL_PUNCTUATION_PATTERN)?.[0] ?? ''
-  const coreUrl = trailing ? urlToken.slice(0, -trailing.length) : urlToken
-  const usesHtmlAmpersands = coreUrl.includes('&amp;')
-  const normalizedUrl = usesHtmlAmpersands
-    ? coreUrl.replaceAll('&amp;', '&')
-    : coreUrl
-  const sanitized = sanitizePersistedUrl(normalizedUrl)
-
-  return `${usesHtmlAmpersands ? sanitized.replaceAll('&', '&amp;') : sanitized}${trailing}`
-}
-
-function sanitizeEmbeddedUrlsForSnapshotCache(value: string): string {
-  return value.replace(EMBEDDED_HTTP_URL_PATTERN, sanitizeEmbeddedUrlToken)
-}
-
 function sanitizeEntryForSnapshotCache(
   entry: ReaderSnapshotEntry,
 ): ReaderSnapshotEntry {
@@ -153,19 +138,19 @@ function sanitizeEntryForSnapshotCache(
     ...entry,
     url: sanitizePersistedUrl(entry.url),
     content: entry.content
-      ? sanitizeEmbeddedUrlsForSnapshotCache(entry.content)
+      ? sanitizeEmbeddedPersistedUrls(entry.content)
       : entry.content,
     summary: entry.summary
-      ? sanitizeEmbeddedUrlsForSnapshotCache(entry.summary)
+      ? sanitizeEmbeddedPersistedUrls(entry.summary)
       : entry.summary,
     readabilityContent: entry.readabilityContent
-      ? sanitizeEmbeddedUrlsForSnapshotCache(entry.readabilityContent)
+      ? sanitizeEmbeddedPersistedUrls(entry.readabilityContent)
       : entry.readabilityContent,
     readabilityExcerpt: entry.readabilityExcerpt
-      ? sanitizeEmbeddedUrlsForSnapshotCache(entry.readabilityExcerpt)
+      ? sanitizeEmbeddedPersistedUrls(entry.readabilityExcerpt)
       : entry.readabilityExcerpt,
     aiSummary: entry.aiSummary
-      ? sanitizeEmbeddedUrlsForSnapshotCache(entry.aiSummary)
+      ? sanitizeEmbeddedPersistedUrls(entry.aiSummary)
       : entry.aiSummary,
     authorAvatar: entry.authorAvatar
       ? sanitizePersistedUrl(entry.authorAvatar)

@@ -12,7 +12,10 @@ import {
   type RendererEventChannel,
 } from '../shared/renderer-events'
 import { classifyExternalUrl } from '../shared/url-policy'
-import { sanitizePersistedUrl } from '../shared/persisted-url-policy'
+import {
+  sanitizeEmbeddedPersistedUrls,
+  sanitizePersistedUrl,
+} from '../shared/persisted-url-policy'
 import type {
   Feed,
   Entry,
@@ -946,18 +949,45 @@ function getWebDigestWindow(
   return { windowStartAt: start.getTime(), windowEndAt: now }
 }
 
+function sanitizeWebDigestRun(run: AIDigestRun): AIDigestRun {
+  return {
+    ...run,
+    content: run.content
+      ? sanitizeEmbeddedPersistedUrls(run.content)
+      : run.content,
+    error: run.error ? sanitizeEmbeddedPersistedUrls(run.error) : run.error,
+  }
+}
+
+function sanitizeWebDigestRuns(runs: AIDigestRun[]): AIDigestRun[] {
+  return runs.map(sanitizeWebDigestRun).slice(0, 100)
+}
+
 function readWebDigestRuns(): AIDigestRun[] {
   try {
     const raw = localStorage.getItem(WEB_DIGEST_RUNS_KEY)
     const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? (parsed as AIDigestRun[]) : []
+    if (!Array.isArray(parsed)) return []
+    const sanitized = sanitizeWebDigestRuns(parsed as AIDigestRun[])
+    const sanitizedRaw = JSON.stringify(sanitized)
+    if (raw !== sanitizedRaw) {
+      try {
+        localStorage.setItem(WEB_DIGEST_RUNS_KEY, sanitizedRaw)
+      } catch {
+        /* best-effort legacy digest migration */
+      }
+    }
+    return sanitized
   } catch {
     return []
   }
 }
 
 function writeWebDigestRuns(runs: AIDigestRun[]): void {
-  localStorage.setItem(WEB_DIGEST_RUNS_KEY, JSON.stringify(runs.slice(0, 100)))
+  localStorage.setItem(
+    WEB_DIGEST_RUNS_KEY,
+    JSON.stringify(sanitizeWebDigestRuns(runs)),
+  )
 }
 
 function saveWebDigestRun(run: AIDigestRun): AIDigestRun {
@@ -2306,18 +2336,19 @@ export function createWebAPI(): ElectronAPI {
               ...run,
               status: 'completed',
               sourceEntryIds: selected.map((candidate) => candidate.id),
-              content: result.content,
+              content: sanitizeEmbeddedPersistedUrls(result.content),
               updatedAt: Date.now(),
             })
             return { success: true, run: completed, candidates: selected }
           } catch (error) {
+            const errorMessage = sanitizeEmbeddedPersistedUrls(String(error))
             const failed = saveWebDigestRun({
               ...run,
               status: 'failed',
-              error: String(error),
+              error: errorMessage,
               updatedAt: Date.now(),
             })
-            return { success: false, error: String(error), run: failed }
+            return { success: false, error: errorMessage, run: failed }
           }
         },
       },

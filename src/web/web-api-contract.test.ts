@@ -68,6 +68,21 @@ function stubSettingsIndexedDB(initialSettings?: AppSettings) {
   return { putSettings, settingsStore }
 }
 
+function stubLocalStorage(initial: Record<string, string> = {}) {
+  const values = new Map(Object.entries(initial))
+  const localStorage = {
+    getItem: vi.fn((key: string) => values.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      values.set(key, value)
+    }),
+    removeItem: vi.fn((key: string) => {
+      values.delete(key)
+    }),
+  }
+  vi.stubGlobal('localStorage', localStorage)
+  return { localStorage, values }
+}
+
 const ELECTRON_API_SHAPE = {
   serverUrl: 'string',
   feeds: {
@@ -479,5 +494,46 @@ describe('web settings secret persistence', () => {
       error: expect.stringContaining('AI API Key'),
     })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('web digest run persistence', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('redacts embedded URL secrets from legacy digest runs and rewrites storage', async () => {
+    const rawRuns = [
+      {
+        id: 'digest-1',
+        preset: 'today',
+        title: 'Digest',
+        status: 'failed',
+        windowStartAt: 1,
+        windowEndAt: 2,
+        sourceEntryIds: [],
+        candidateCount: 1,
+        content:
+          'Source https://user:pass@example.com/a?access_token=raw&ok=1.',
+        error: 'Error https://cdn.example.com/e?X-Amz-Signature=raw&width=640!',
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ]
+    const { values } = stubLocalStorage({
+      'livo-ai-digest-runs': JSON.stringify(rawRuns),
+    })
+    const api = createWebAPI()
+
+    const runs = await api.ai.digest.listRuns(10)
+    const rewritten = values.get('livo-ai-digest-runs') || ''
+
+    expect(JSON.stringify(runs)).not.toContain('raw')
+    expect(JSON.stringify(runs)).not.toContain('user:pass')
+    expect(runs[0].content).toBe('Source https://example.com/a?ok=1.')
+    expect(runs[0].error).toBe('Error https://cdn.example.com/e?width=640!')
+    expect(rewritten).not.toContain('raw')
+    expect(rewritten).not.toContain('user:pass')
+    expect(JSON.parse(rewritten)).toMatchObject(runs)
   })
 })

@@ -2164,3 +2164,50 @@ Renderer review findings to handle in later batches:
 ### Deferred findings
 
 - Web digest-run text redaction, public-only discovery/feed fetch policy, update installer verification, and dormant React Query persister cleanup remain separate findings.
+
+## 2026-07-07 - Redact web digest run text URLs
+
+### Review inputs
+
+- Persistence review found Web AI digest run history persisted generated `content` and failure `error` text in localStorage without redacting embedded credentialed or signed URLs.
+- Subagent review recommended extracting the duplicate embedded URL-token sanitizer used by chat history and reader snapshot caches, then applying the same policy at the Web digest run read/write boundary.
+- Existing `sanitizePersistedUrl()` behavior remains unchanged in this batch; the new helper only applies that policy to URL tokens embedded in larger text fields.
+
+### Fixed in this batch
+
+- Added shared `sanitizeEmbeddedPersistedUrls()` for text fields that may contain persisted HTTP(S) URL tokens.
+- Replaced duplicated embedded URL sanitizer helpers in chat history and reader snapshot cache code with the shared helper.
+- Web digest run reads now sanitize legacy persisted `content` and `error` fields, cap the list at 100 rows, and best-effort rewrite sanitized legacy rows back to localStorage.
+- Web digest run writes now persist only sanitized/capped rows.
+- Web digest generation now stores sanitized success content and sanitized failure messages, and returns the sanitized failure message to callers.
+- Added regression coverage for embedded credentials, secret query parameters, trailing punctuation, HTML ampersands, and legacy Web digest run migration.
+
+### Impact analysis
+
+- `readWebDigestRuns`: LOW risk in pre-edit GitNexus impact analysis.
+- `writeWebDigestRuns`: LOW risk in pre-edit GitNexus impact analysis.
+- `saveWebDigestRun`: LOW risk in pre-edit GitNexus impact analysis.
+- `sanitizeEmbeddedUrlsForChatHistory`: LOW risk in pre-edit GitNexus impact analysis.
+- `sanitizeEmbeddedUrlsForSnapshotCache`: LOW risk in pre-edit GitNexus impact analysis.
+- `sanitizePersistedUrl()`: not modified; reused as the underlying URL redaction primitive.
+
+### Verification
+
+- `pnpm test -- src/shared/persisted-url-policy.test.ts src/renderer/src/store/chat-history-store.test.ts src/renderer/src/lib/reader-snapshot-cache.test.ts src/web/web-api-contract.test.ts`
+  - Vitest ran the configured suite.
+  - Result: 169 passed test files, 996 passed tests, 13 skipped tests.
+- `pnpm typecheck`
+  - Result: passed.
+- `pnpm lint -- src/shared/persisted-url-policy.ts src/shared/persisted-url-policy.test.ts src/renderer/src/store/chat-history-store.ts src/renderer/src/lib/reader-snapshot-cache.ts src/web/web-api.ts src/web/web-api-contract.test.ts`
+  - Result: 0 errors.
+  - Existing unrelated warnings remain in `DiscoverPanel.tsx` and `DiscoverPreviewPage.tsx`.
+- `pnpm format:check`
+  - Result: passed after formatting `src/web/web-api.ts`, `src/web/web-api-contract.test.ts`, and the uncommitted GitNexus metadata churn in `AGENTS.md`/`CLAUDE.md`.
+- `node .gitnexus/run.cjs detect_changes --scope staged`
+  - Initial code-only staged result: 6 files, 22 symbols, 11 affected processes, HIGH risk.
+  - Final staged result after adding this log: 7 files, 22 symbols, 11 affected processes, HIGH risk.
+  - The high-risk classification came from adding the shared helper in `persisted-url-policy.ts`; GitNexus also attributed `isSecretQueryParam` to affected renderer/feed flows even though this batch did not change its logic or the `sanitizePersistedUrl()` behavior.
+
+### Deferred findings
+
+- Public-only discovery/feed fetch policy, update installer verification, dormant React Query persister cleanup, and settings schema patch validation remain separate findings.

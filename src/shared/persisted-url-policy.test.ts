@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizePersistedUrl } from './persisted-url-policy'
+import {
+  sanitizeEmbeddedPersistedUrls,
+  sanitizePersistedUrl,
+} from './persisted-url-policy'
 
 describe('sanitizePersistedUrl', () => {
   it('removes URL userinfo before persistence', () => {
@@ -46,5 +49,29 @@ describe('sanitizePersistedUrl', () => {
 
   it('returns trimmed malformed values unchanged', () => {
     expect(sanitizePersistedUrl('  not a url  ')).toBe('not a url')
+  })
+})
+
+describe('sanitizeEmbeddedPersistedUrls', () => {
+  it('removes credentials and secret params from embedded URL tokens', () => {
+    expect(
+      sanitizeEmbeddedPersistedUrls(
+        'Read https://user:pass@example.com/a?access_token=raw&ok=1 now',
+      ),
+    ).toBe('Read https://example.com/a?ok=1 now')
+  })
+
+  it('preserves non-secret params, trailing punctuation, and html ampersands', () => {
+    expect(
+      sanitizeEmbeddedPersistedUrls(
+        'See https://cdn.example.com/a.jpg?token=raw&amp;width=640, then continue.',
+      ),
+    ).toBe('See https://cdn.example.com/a.jpg?width=640, then continue.')
+
+    expect(
+      sanitizeEmbeddedPersistedUrls(
+        'Keep https://cdn.example.com/a.jpg?ig_cache_key=abc&amp;width=640!',
+      ),
+    ).toBe('Keep https://cdn.example.com/a.jpg?ig_cache_key=abc&amp;width=640!')
   })
 })
