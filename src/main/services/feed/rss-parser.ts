@@ -98,7 +98,7 @@ const TWITTER_RSSHUB_FALLBACKS = [
   'https://rsshub.rssforever.com',
 ]
 const RSSHUB_FALLBACK_ROUTE_PREFIX =
-  /^\/(?:bilibili|twitter|youtube|instagram|github|weibo|zhihu|xiaoyuzhou)\//i
+  /^\/(?:bilibili|twitter|youtube|instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox|github|weibo|zhihu|xiaoyuzhou)\//i
 const TWITTER_NITTER_FALLBACKS = [
   'https://nitter.net',
   'https://nitter.poast.org',
@@ -1191,14 +1191,10 @@ export async function fetchAndParseFeed(
     // Do not throw here: fall through to generic RSS fetch/fallback logic below.
   }
 
-  // For Instagram routes, try official route variants across fallback instances.
-  // Skip for mirror routes (picnob, pixnoy, etc.) which work without auth on their specific instance.
-  const isMirrorRoute = /\/(?:picnob(?:\.info)?|pixnoy|piokok|pixwox)\//i.test(
-    feedUrl,
-  )
-  const instagramUser = isMirrorRoute
-    ? null
-    : extractInstagramUsernameFromFeedUrl(feedUrl)
+  // For Instagram and mirror routes, try official + mirror route variants across
+  // fallback instances. Public RSSHub mirror routes are uneven, so a picnob route
+  // should still be allowed to recover via instagram/pixnoy/piokok/pixwox.
+  const instagramUser = extractInstagramUsernameFromFeedUrl(feedUrl)
   if (instagramUser) {
     const candidates: string[] = []
     const pushUnique = (u: string) => {
