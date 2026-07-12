@@ -5,6 +5,11 @@ vi.mock('../ipc/register-channel', () => ({ registerChannel: vi.fn() }))
 vi.mock('../services/backend/backend-config', () => ({
   getBackendBaseUrl: () => 'http://127.0.0.1:8787',
 }))
+vi.mock('../services/auth/session-store', () => ({
+  sessionStore: {
+    getValidToken: vi.fn(() => 'livo-token'),
+  },
+}))
 
 import {
   buildCookieString,

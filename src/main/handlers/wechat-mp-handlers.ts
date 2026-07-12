@@ -3,6 +3,7 @@ import { registerChannel } from '../ipc/register-channel'
 import { IPC } from '../../shared/ipc-contracts'
 import { getBackendBaseUrl } from '../services/backend/backend-config'
 import { isLoginWindowUrlAllowed } from '../services/auth/login-window-policy'
+import { sessionStore } from '../services/auth/session-store'
 
 const WX_MP_ORIGIN = 'https://mp.weixin.qq.com'
 const WX_MP_LOGIN_URL = `${WX_MP_ORIGIN}/`
@@ -92,9 +93,17 @@ async function saveCredentialsToServer(
   cookies: string,
 ): Promise<void> {
   const serverUrl = getBackendBaseUrl()
+  const authToken = sessionStore.getValidToken()
+  if (!authToken) {
+    throw new Error('请先登录 Livo 账号后再保存微信公众号授权')
+  }
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  headers.Authorization = `Bearer ${authToken}`
   const res = await fetch(`${serverUrl}/api/wechat-rss/token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ token, cookies }),
   })
   if (!res.ok) {
