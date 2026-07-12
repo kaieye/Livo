@@ -10,12 +10,14 @@ import {
   buildHomeFeedRefreshTarget,
   buildHomeFeedScopeDescriptor,
   resolveScopedEntriesForRender,
+  type HomeFeedLoadOptions,
 } from '../lib/home-feed-scope'
 import { buildCachedEntryReadingSurfaceScopeModel } from '../lib/entry-reading-surface-model'
 import { LRUCache } from '../lib/lru-cache'
 import { buildListCacheKey, getCachedListResult } from '../lib/entry-cache'
 import { recordStartupBlockEvent } from '../lib/startup-block-diagnostics'
 import { useAppStore } from '../store/app-store'
+import type { ReaderSnapshot } from '../../../shared/types'
 
 const SOCIAL_LIST_SCROLL_GUARD_PX = 120
 const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
@@ -40,6 +42,39 @@ function waitForAppHydrationOrTimeout(timeoutMs: number): Promise<void> {
     })
     const timeout = window.setTimeout(finish, timeoutMs)
   })
+}
+
+interface LoadHomeFeedSnapshotInput {
+  options: HomeFeedLoadOptions
+  hydrateSnapshotCache: (options: HomeFeedLoadOptions) => ReaderSnapshot | null
+  loadSnapshot: (options: HomeFeedLoadOptions) => Promise<ReaderSnapshot | null>
+  applySnapshotFeeds: (feeds: ReaderSnapshot['feeds']) => void
+  waitForHydration: () => Promise<void>
+  onCacheRead?: (snapshot: ReaderSnapshot | null, durationMs: number) => void
+  onSnapshotRead?: (snapshot: ReaderSnapshot | null, durationMs: number) => void
+}
+
+export async function loadHomeFeedSnapshot({
+  options,
+  hydrateSnapshotCache,
+  loadSnapshot,
+  applySnapshotFeeds,
+  waitForHydration,
+  onCacheRead,
+  onSnapshotRead,
+}: LoadHomeFeedSnapshotInput): Promise<void> {
+  const cacheStart = performance.now()
+  const cachedSnapshot = hydrateSnapshotCache(options)
+  onCacheRead?.(cachedSnapshot, performance.now() - cacheStart)
+  if (cachedSnapshot) {
+    applySnapshotFeeds(cachedSnapshot.feeds)
+  }
+
+  await waitForHydration()
+  const snapshotStart = performance.now()
+  const snapshot = await loadSnapshot(options)
+  onSnapshotRead?.(snapshot, performance.now() - snapshotStart)
+  if (snapshot) applySnapshotFeeds(snapshot.feeds)
 }
 
 export interface HomeFeedCoordinatorState {
@@ -241,28 +276,28 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
   const viewFeedIds = scopeDescriptor.viewFeedIds
 
   const loadCurrentSnapshot = useCallback(async () => {
-    const cacheStart = performance.now()
-    const cachedSnapshot = hydrateSnapshotCache(currentLoadOptions)
-    recordStartupBlockEvent(
-      'HomeFeedCoordinator.snapshotCache',
-      `hit=${cachedSnapshot ? 1 : 0} limit=${currentLoadOptions.limit ?? 'default'}`,
-      performance.now() - cacheStart,
-    )
-    if (cachedSnapshot) {
-      applySnapshotFeeds(cachedSnapshot.feeds)
-      // Don't fetch IPC on startup - refresh triggered by user or auto-refresh
-      return
-    }
-    await waitForAppHydrationOrTimeout(STARTUP_SNAPSHOT_IPC_DELAY_MS)
-    // Cache miss: fetch
-    const snapshotStart = performance.now()
-    const snapshot = await loadSnapshot(currentLoadOptions)
-    recordStartupBlockEvent(
-      'HomeFeedCoordinator.snapshotIpc',
-      `hit=${snapshot ? 1 : 0} limit=${currentLoadOptions.limit ?? 'default'}`,
-      performance.now() - snapshotStart,
-    )
-    if (snapshot) applySnapshotFeeds(snapshot.feeds)
+    await loadHomeFeedSnapshot({
+      options: currentLoadOptions,
+      hydrateSnapshotCache,
+      loadSnapshot,
+      applySnapshotFeeds,
+      waitForHydration: () =>
+        waitForAppHydrationOrTimeout(STARTUP_SNAPSHOT_IPC_DELAY_MS),
+      onCacheRead: (snapshot, durationMs) => {
+        recordStartupBlockEvent(
+          'HomeFeedCoordinator.snapshotCache',
+          `hit=${snapshot ? 1 : 0} limit=${currentLoadOptions.limit ?? 'default'}`,
+          durationMs,
+        )
+      },
+      onSnapshotRead: (snapshot, durationMs) => {
+        recordStartupBlockEvent(
+          'HomeFeedCoordinator.snapshotIpc',
+          `hit=${snapshot ? 1 : 0} limit=${currentLoadOptions.limit ?? 'default'}`,
+          durationMs,
+        )
+      },
+    })
   }, [
     applySnapshotFeeds,
     currentLoadOptions,
