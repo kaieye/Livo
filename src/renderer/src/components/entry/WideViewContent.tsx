@@ -1471,7 +1471,7 @@ function VideoModal({
 // Wide overlay: slides up on top of the timeline,
 // shows AuthorHeader + full content + all media individually.
 
-function SocialOverlay({
+export function SocialOverlay({
   entry,
   feed,
   onClose,

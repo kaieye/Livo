@@ -35,3 +35,15 @@ export function resolveEffectiveView(input: {
   const feedView = input.selectedFeed?.view ?? null
   return isWideLayoutView(feedView) ? feedView : null
 }
+
+export function shouldUseSocialDetailOverlay(input: {
+  activeView: FeedViewType | null
+  selectedFeedId: string | null
+  selectedEntryFeedView?: FeedViewType | null
+}): boolean {
+  return (
+    input.activeView === null &&
+    input.selectedFeedId === null &&
+    input.selectedEntryFeedView === FeedViewType.SocialMedia
+  )
+}

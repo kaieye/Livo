@@ -18,6 +18,7 @@ import { buildEntryWarmupRequests } from '../../lib/entry-warmup'
 import {
   isWideLayoutView,
   resolveEffectiveView,
+  shouldUseSocialDetailOverlay,
 } from '../../lib/feed-view-layout'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
@@ -40,6 +41,12 @@ const DigestContent = lazy(() =>
 const WideViewContent = lazy(() =>
   import('../entry/WideViewContent').then((m) => ({
     default: m.WideViewContent,
+  })),
+)
+
+const SocialOverlay = lazy(() =>
+  import('../entry/WideViewContent').then((m) => ({
+    default: m.SocialOverlay,
   })),
 )
 
@@ -152,7 +159,8 @@ export function Layout() {
   const { prefetchEntries } = useStoreShallow(useEntryStore, (s) => ({
     prefetchEntries: s.prefetchEntries,
   }))
-  const selectedEntryId = useEntryStore((s) => s.selectedEntry?.id ?? null)
+  const selectedEntry = useEntryStore((s) => s.selectedEntry)
+  const selectedEntryId = selectedEntry?.id ?? null
   const isContentFocusHighlighted = useLayoutFocusTarget(
     'content',
     contentFocusRef,
@@ -215,14 +223,37 @@ export function Layout() {
 
   // Views that use a 2-column layout (sidebar + wide content).
   const isWideView = isWideLayoutView(effectiveView)
+  const selectedEntryFeed = selectedEntry
+    ? feeds.find((feed) => feed.id === selectedEntry.feedId)
+    : undefined
+  const showSocialDetailOverlay =
+    !isDigestRoute &&
+    !isDiscoverOpen &&
+    shouldUseSocialDetailOverlay({
+      activeView,
+      selectedFeedId,
+      selectedEntryFeedView: selectedEntryFeed?.view,
+    })
 
   useEffect(() => {
-    if (isDigestRoute || isDiscoverOpen || isWideView || !selectedEntryId) {
+    if (
+      isDigestRoute ||
+      isDiscoverOpen ||
+      isWideView ||
+      showSocialDetailOverlay ||
+      !selectedEntryId
+    ) {
       setShouldRenderEntryContent(false)
       return
     }
     setShouldRenderEntryContent(true)
-  }, [isDigestRoute, isDiscoverOpen, isWideView, selectedEntryId])
+  }, [
+    isDigestRoute,
+    isDiscoverOpen,
+    isWideView,
+    selectedEntryId,
+    showSocialDetailOverlay,
+  ])
 
   const [sidebarWidth, setSidebarWidth] = useState(() => loadWidths().sidebar)
   const [entryListWidth, setEntryListWidth] = useState(
@@ -289,7 +320,7 @@ export function Layout() {
       <div
         ref={contentFocusRef}
         tabIndex={-1}
-        className={`flex min-w-0 flex-1 outline-none transition-shadow duration-300 ${
+        className={`relative flex min-w-0 flex-1 outline-none transition-shadow duration-300 ${
           isContentFocusHighlighted
             ? 'shadow-[inset_0_0_0_2px_rgb(var(--color-accent-rgb)/0.45)]'
             : ''
@@ -320,7 +351,7 @@ export function Layout() {
                 onMouseDown={(e) => handleMouseDown('entryList', e)}
               />
               <Profiler id="ContentPane" onRender={recordStartupReactProfiler}>
-                <div className="flex min-w-0 flex-1">
+                <div className="relative flex min-w-0 flex-1 overflow-hidden">
                   {!selectedEntryId ? (
                     <EntryEmptyState />
                   ) : shouldRenderEntryContent ? (
@@ -329,6 +360,17 @@ export function Layout() {
                     </Suspense>
                   ) : (
                     <ContentPaneFallback />
+                  )}
+                  {showSocialDetailOverlay && selectedEntry && (
+                    <Suspense fallback={null}>
+                      <SocialOverlay
+                        entry={selectedEntry}
+                        feed={selectedEntryFeed}
+                        onClose={() => {
+                          void useEntryStore.getState().selectEntry(null)
+                        }}
+                      />
+                    </Suspense>
                   )}
                 </div>
               </Profiler>

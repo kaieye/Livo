@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { FeedViewType } from '../../../shared/types'
-import { isWideLayoutView, resolveEffectiveView } from './feed-view-layout'
+import {
+  isWideLayoutView,
+  resolveEffectiveView,
+  shouldUseSocialDetailOverlay,
+} from './feed-view-layout'
 
 describe('isWideLayoutView', () => {
   it('将 Articles 视为窄布局', () => {
@@ -78,5 +82,44 @@ describe('resolveEffectiveView', () => {
     expect(
       resolveEffectiveView({ activeView: null, selectedFeed: { view: null } }),
     ).toBeNull()
+  })
+})
+
+describe('shouldUseSocialDetailOverlay', () => {
+  it('在全部聚合列表中为社交条目启用推文详情覆盖层', () => {
+    expect(
+      shouldUseSocialDetailOverlay({
+        activeView: null,
+        selectedFeedId: null,
+        selectedEntryFeedView: FeedViewType.SocialMedia,
+      }),
+    ).toBe(true)
+  })
+
+  it('不接管推文栏目或已选中特定订阅源的现有布局', () => {
+    expect(
+      shouldUseSocialDetailOverlay({
+        activeView: FeedViewType.SocialMedia,
+        selectedFeedId: null,
+        selectedEntryFeedView: FeedViewType.SocialMedia,
+      }),
+    ).toBe(false)
+    expect(
+      shouldUseSocialDetailOverlay({
+        activeView: null,
+        selectedFeedId: 'feed-x',
+        selectedEntryFeedView: FeedViewType.SocialMedia,
+      }),
+    ).toBe(false)
+  })
+
+  it('在全部聚合列表中保留普通文章详情', () => {
+    expect(
+      shouldUseSocialDetailOverlay({
+        activeView: null,
+        selectedFeedId: null,
+        selectedEntryFeedView: FeedViewType.Articles,
+      }),
+    ).toBe(false)
   })
 })
