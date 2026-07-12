@@ -46,7 +46,11 @@ import {
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
 import { resolvePreferredEntryVideo } from '../../lib/entry-video-source'
-import { resolveEntryBrowserOpenUrl } from '../../lib/social-entry-utils'
+import { resolveEntryDetailPresentation } from '../../lib/entry-detail-presentation'
+import {
+  cleanSocialPlainText,
+  resolveEntryBrowserOpenUrl,
+} from '../../lib/social-entry-utils'
 import { ROUTES } from '../../router/route-paths'
 import { Maximize2 } from 'lucide-react'
 import { useAISummary } from '../../hooks/useAISummary'
@@ -54,6 +58,8 @@ import { useAITranslation } from '../../hooks/useAITranslation'
 import { AISummaryPanel } from './AISummaryPanel'
 import { EntryAIToolbar } from './EntryAIToolbar'
 import { InlineTaskStatus } from './InlineTaskStatus'
+import { SocialDetailView } from './SocialDetailView'
+import { resolveSocialAuthorName } from './entry-list/utils/entry-social'
 import { AudioPlaybackPanel } from './entry-content/AudioPlaybackPanel'
 import { EntryArticleHeader } from './entry-content/EntryArticleHeader'
 import { EntryBodyContent } from './entry-content/EntryBodyContent'
@@ -159,6 +165,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
   const [isFetchingReadable, setIsFetchingReadable] = useState(false)
   const [readabilityError, setReadabilityError] = useState<string | null>(null)
   const [embeddedPageUrl, setEmbeddedPageUrl] = useState<string | null>(null)
+  const [socialAvatarImageFailed, setSocialAvatarImageFailed] = useState(false)
   const [articleMenu, setArticleMenu] = useState<{
     visible: boolean
     x: number
@@ -207,6 +214,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
       setIsFetchingReadable(false)
       setReadabilityError(null)
       setEmbeddedPageUrl(null)
+      setSocialAvatarImageFailed(false)
 
       // Restore saved reading progress or reset to top
       const savedProgress = selectedEntry?.readProgress
@@ -506,6 +514,30 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
   )
   const authorAvatarUrl =
     selectedEntry?.authorAvatar || currentFeed?.imageUrl || ''
+  const detailPresentation = resolveEntryDetailPresentation({
+    entryFeedView: currentFeed?.view,
+  })
+  const socialAuthorName = useMemo(
+    () =>
+      resolveSocialAuthorName({
+        entryAuthor: selectedEntry?.author,
+        entryUrl: selectedEntry?.url,
+        feedTitle: currentFeed?.title,
+        feedUrl: currentFeed?.url,
+        feedSiteUrl: currentFeed?.siteUrl,
+      }),
+    [
+      currentFeed?.siteUrl,
+      currentFeed?.title,
+      currentFeed?.url,
+      selectedEntry?.author,
+      selectedEntry?.url,
+    ],
+  )
+  const socialPlainContent = useMemo(
+    () => cleanSocialPlainText(articleContent),
+    [articleContent],
+  )
   const shouldShowFeaturedImage = useMemo(() => {
     if (!selectedEntry?.imageUrl || videoMedia) return false
     if ((currentFeed?.view ?? FeedViewType.Articles) !== FeedViewType.Articles)
@@ -861,22 +893,24 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
             <MessageSquare size={16} />
           </ToolbarButton>
 
-          <ToolbarButton
-            onClick={handleReadability}
-            disabled={isFetchingReadable || !selectedEntry.url}
-            active={isReadabilityMode}
-            title={
-              isReadabilityMode
-                ? t('entry.readabilityBack')
-                : t('entry.readability')
-            }
-          >
-            {isFetchingReadable ? (
-              <Loader2 size={16} className="text-accent animate-spin" />
-            ) : (
-              <BookType size={16} />
-            )}
-          </ToolbarButton>
+          {detailPresentation === 'article' && (
+            <ToolbarButton
+              onClick={handleReadability}
+              disabled={isFetchingReadable || !selectedEntry.url}
+              active={isReadabilityMode}
+              title={
+                isReadabilityMode
+                  ? t('entry.readabilityBack')
+                  : t('entry.readability')
+              }
+            >
+              {isFetchingReadable ? (
+                <Loader2 size={16} className="text-accent animate-spin" />
+              ) : (
+                <BookType size={16} />
+              )}
+            </ToolbarButton>
+          )}
 
           {audioMedia && (
             <ToolbarButton
@@ -998,102 +1032,124 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
               ...contentWidthStyle,
             }}
           >
-            <EntryArticleHeader
-              title={selectedEntry.title}
-              author={selectedEntry.author}
-              authorAvatarUrl={authorAvatarUrl}
-              timeAgo={timeAgo}
-              fullDate={fullDate}
-              readingTimeLabel={
-                readingTime > 0
-                  ? t('entry.readingTime', { minutes: readingTime })
-                  : undefined
-              }
-            />
-
-            <InlineTaskStatus
-              fulltext={fulltextTaskState}
-              aiSummary={aiSummaryTaskState}
-              onRetryFulltext={handleReadability}
-              onRetrySummary={handleSummarize}
-              onOpenAISettings={handleOpenAISettings}
-            />
-
-            {/* AI Summary */}
-            <AISummaryPanel
-              summary={summary}
-              error={error}
-              isLoading={isSummarizing}
-              onRetry={handleSummarize}
-            />
-
-            {/* Featured image */}
-            {shouldShowFeaturedImage && selectedEntry.imageUrl && (
-              <EntryFeaturedImage
-                imageUrl={selectedEntry.imageUrl}
-                title={t('imageViewer.pageTitle')}
-                onOpen={() => navigate(ROUTES.image(selectedEntry.id))}
+            {detailPresentation === 'social' ? (
+              <SocialDetailView
+                entryId={selectedEntry.id}
+                paragraphs={paragraphs}
+                fullContent={articleContent}
+                plainContent={socialPlainContent}
+                avatarUrl={authorAvatarUrl}
+                avatarImageFailed={socialAvatarImageFailed}
+                avatarLetter={socialAuthorName.charAt(0).toUpperCase() || '?'}
+                authorName={socialAuthorName}
+                media={selectedEntry.media}
+                timeAgo={timeAgo}
+                onAvatarError={() => setSocialAvatarImageFailed(true)}
+                showTranslation={showTranslation}
+                translatedParagraphs={translatedParagraphs}
+                isTranslating={isTranslating}
+                isSummarizing={isSummarizing}
+                showSummary={!!summary}
+                summary={summary}
+                fontSize={general.fontSize}
               />
-            )}
-
-            {/* Video player — prioritized like Folo-dev MediaLayout */}
-            {!hideVideo && videoMedia && (
-              <div className="group/video relative -mx-2 mb-8">
-                <VideoPlayer
-                  url={videoMedia.url}
-                  poster={selectedEntry.imageUrl}
+            ) : (
+              <>
+                <EntryArticleHeader
                   title={selectedEntry.title}
-                  onOpenBilibiliInPage={handleOpenBilibiliInPage}
+                  author={selectedEntry.author}
+                  authorAvatarUrl={authorAvatarUrl}
+                  timeAgo={timeAgo}
+                  fullDate={fullDate}
+                  readingTimeLabel={
+                    readingTime > 0
+                      ? t('entry.readingTime', { minutes: readingTime })
+                      : undefined
+                  }
                 />
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    navigate(ROUTES.video(selectedEntry.id))
-                  }}
-                  title={t('videoPlayer.openFullscreen')}
-                  aria-label={t('videoPlayer.openFullscreen')}
-                  className="absolute right-3 top-3 z-10 rounded-full bg-black/55 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/75 group-hover/video:opacity-100"
-                >
-                  <Maximize2 size={14} />
-                </button>
-              </div>
-            )}
 
-            {audioMedia && (
-              <AudioPlaybackPanel
-                title={selectedEntry.title}
-                duration={audioMedia.duration}
-                playLabel={t('entry.playAudio')}
-                onPlay={handlePlayAudio}
-                audioUrl={audioMedia.url}
-                listenProgress={selectedEntry.listenProgress}
-              />
-            )}
+                <InlineTaskStatus
+                  fulltext={fulltextTaskState}
+                  aiSummary={aiSummaryTaskState}
+                  onRetryFulltext={handleReadability}
+                  onRetrySummary={handleSummarize}
+                  onOpenAISettings={handleOpenAISettings}
+                />
 
-            <EntryBodyContent
-              isReadabilityMode={isReadabilityMode}
-              readableContent={readableContent}
-              sanitizedReadable={sanitizedReadable}
-              articleContent={articleContent}
-              showTranslation={showTranslation}
-              paragraphs={paragraphs}
-              translatedParagraphs={translatedParagraphs}
-              isTranslating={isTranslating}
-              errorMap={errorMap}
-              onRetrySegment={retrySegment}
-              sanitizedContent={sanitizedContent}
-              fontSize={general.fontSize}
-              lineHeight={general.contentLineHeight}
-              fontFamily={general.contentFontFamily}
-              hasAudio={!!audioMedia}
-              showEntryDetailFallback={showEntryDetailFallback}
-              fallbackTitle={selectedEntry.title}
-              isFetchingReadable={isFetchingReadable}
-              entryUrl={selectedEntry.url}
-              onExitReadability={() => setIsReadabilityMode(false)}
-              onFetchReadable={handleReadability}
-            />
+                <AISummaryPanel
+                  summary={summary}
+                  error={error}
+                  isLoading={isSummarizing}
+                  onRetry={handleSummarize}
+                />
+
+                {shouldShowFeaturedImage && selectedEntry.imageUrl && (
+                  <EntryFeaturedImage
+                    imageUrl={selectedEntry.imageUrl}
+                    title={t('imageViewer.pageTitle')}
+                    onOpen={() => navigate(ROUTES.image(selectedEntry.id))}
+                  />
+                )}
+
+                {!hideVideo && videoMedia && (
+                  <div className="group/video relative -mx-2 mb-8">
+                    <VideoPlayer
+                      url={videoMedia.url}
+                      poster={selectedEntry.imageUrl}
+                      title={selectedEntry.title}
+                      onOpenBilibiliInPage={handleOpenBilibiliInPage}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        navigate(ROUTES.video(selectedEntry.id))
+                      }}
+                      title={t('videoPlayer.openFullscreen')}
+                      aria-label={t('videoPlayer.openFullscreen')}
+                      className="absolute right-3 top-3 z-10 rounded-full bg-black/55 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/75 group-hover/video:opacity-100"
+                    >
+                      <Maximize2 size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {audioMedia && (
+                  <AudioPlaybackPanel
+                    title={selectedEntry.title}
+                    duration={audioMedia.duration}
+                    playLabel={t('entry.playAudio')}
+                    onPlay={handlePlayAudio}
+                    audioUrl={audioMedia.url}
+                    listenProgress={selectedEntry.listenProgress}
+                  />
+                )}
+
+                <EntryBodyContent
+                  isReadabilityMode={isReadabilityMode}
+                  readableContent={readableContent}
+                  sanitizedReadable={sanitizedReadable}
+                  articleContent={articleContent}
+                  showTranslation={showTranslation}
+                  paragraphs={paragraphs}
+                  translatedParagraphs={translatedParagraphs}
+                  isTranslating={isTranslating}
+                  errorMap={errorMap}
+                  onRetrySegment={retrySegment}
+                  sanitizedContent={sanitizedContent}
+                  fontSize={general.fontSize}
+                  lineHeight={general.contentLineHeight}
+                  fontFamily={general.contentFontFamily}
+                  hasAudio={!!audioMedia}
+                  showEntryDetailFallback={showEntryDetailFallback}
+                  fallbackTitle={selectedEntry.title}
+                  isFetchingReadable={isFetchingReadable}
+                  entryUrl={selectedEntry.url}
+                  onExitReadability={() => setIsReadabilityMode(false)}
+                  onFetchReadable={handleReadability}
+                />
+              </>
+            )}
 
             <EntryEndNavigation
               hasPrev={hasPrev}
