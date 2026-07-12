@@ -38,6 +38,11 @@ export async function searchWechatMp(
   query: string,
   options: { limit?: number; offset?: number } = {},
 ): Promise<SearchWechatMpResponse> {
+  const token = await getValidSessionToken()
+  if (!token) {
+    throw new Error('Please sign in before searching WeChat MP feeds')
+  }
+
   const params = new URLSearchParams({
     query: query.trim(),
   })
@@ -54,6 +59,7 @@ export async function searchWechatMp(
       method: 'GET',
       headers: {
         Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
       },
     },
   )
