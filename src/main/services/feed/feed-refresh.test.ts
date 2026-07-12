@@ -167,6 +167,22 @@ describe('filterForeignEntries', () => {
       ),
     ).toEqual([ownEntry])
   })
+
+  it('keeps WeChat MP article links from backend proxy feeds', () => {
+    const entries = [
+      makeEntry('https://mp.weixin.qq.com/s/Tn4165SvP7HSGCRmG8ljlQ'),
+      makeEntry('https://mp.weixin.qq.com/s/eI-teOXIxORTZL3zlKH47Q'),
+    ]
+
+    expect(
+      filterForeignEntries(
+        entries,
+        undefined,
+        'https://api.livospace.cn/api/wechat-rss/feed/MP_WXS_2396676120.xml',
+        'http://127.0.0.1:8787/api/wechat-rss/feed/MP_WXS_2396676120.xml',
+      ),
+    ).toEqual(entries)
+  })
 })
 
 describe('refreshAllFeeds', () => {

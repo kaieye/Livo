@@ -28,6 +28,18 @@ import {
   isTwitterUserFeedUrl,
 } from '../feed/feed-route-policy'
 
+function isWechatMpFeedUrl(feedUrl: string | undefined): boolean {
+  if (!feedUrl) return false
+  try {
+    const parsed = new URL(feedUrl)
+    return /^\/(?:api\/wechat-rss\/)?feed\/MP_WXS_[^/?#]+\.xml$/i.test(
+      parsed.pathname,
+    )
+  } catch {
+    return false
+  }
+}
+
 export interface EntryIngestionInput {
   feed: Feed
   items: Array<Record<string, any>>
@@ -70,7 +82,8 @@ export function filterForeignEntries(
   if (
     isTwitterUserFeedUrl(feedUrl) ||
     isInstagramUserFeedUrl(feedUrl) ||
-    isBilibiliUserFeedUrl(feedUrl)
+    isBilibiliUserFeedUrl(feedUrl) ||
+    isWechatMpFeedUrl(feedUrl)
   ) {
     return entries
   }
