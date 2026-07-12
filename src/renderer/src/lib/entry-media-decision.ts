@@ -303,6 +303,35 @@ export function buildMediaFallbackCandidates(
   return unique
 }
 
+interface CardImageFallbackState {
+  signature: string
+  candidates: string[]
+  nextIndex: number
+}
+
+const cardImageFallbackStateByImage = new WeakMap<
+  HTMLImageElement,
+  CardImageFallbackState
+>()
+
+function advanceToNextCardImageFallback(
+  img: HTMLImageElement,
+  state: CardImageFallbackState,
+  onExhausted?: (img: HTMLImageElement) => void,
+): void {
+  const nextUrl = state.candidates[state.nextIndex]
+  if (nextUrl) {
+    img.dataset.fallbackIndex = String(state.nextIndex)
+    state.nextIndex += 1
+    img.src = withCacheBust(nextUrl)
+    return
+  }
+
+  cardImageFallbackStateByImage.delete(img)
+  delete img.dataset.fallbackIndex
+  onExhausted?.(img)
+}
+
 export function advanceCardImageFallback(
   e: SyntheticEvent<HTMLImageElement>,
   seedUrl: string,
@@ -311,6 +340,14 @@ export function advanceCardImageFallback(
 ): void {
   const img = e.currentTarget
   const normalizedSeed = decodeMediaUrl(seedUrl || '')
+  const normalizedPreview = decodeMediaUrl(previewUrl || '')
+  const signature = `${normalizeImageCacheKey(normalizedSeed)}\n${normalizeImageCacheKey(normalizedPreview)}`
+  const existingState = cardImageFallbackStateByImage.get(img)
+  if (existingState?.signature === signature) {
+    advanceToNextCardImageFallback(img, existingState, onExhausted)
+    return
+  }
+
   const originFromMirror =
     extractPixnoyOriginUrl(seedUrl) || extractPixnoyOriginUrl(normalizedSeed)
   const candidates = buildMediaFallbackCandidates(
@@ -333,8 +370,7 @@ export function advanceCardImageFallback(
     }
   }
   if (previewUrl) {
-    const decodedPreview = decodeMediaUrl(previewUrl)
-    for (const pUrl of [previewUrl, decodedPreview]) {
+    for (const pUrl of [previewUrl, normalizedPreview]) {
       const safePreviewUrl = getSafeImageSrc(pUrl)
       if (safePreviewUrl) {
         const pKey = normalizeImageCacheKey(safePreviewUrl)
@@ -367,16 +403,16 @@ export function advanceCardImageFallback(
     }
   }
   const currentKey = normalizeImageCacheKey(img.currentSrc || img.src || '')
-  const currentIdx = candidates.findIndex(
+  const currentIndex = candidates.findIndex(
     (candidate) => normalizeImageCacheKey(candidate) === currentKey,
   )
-  const nextIdx = currentIdx >= 0 ? currentIdx + 1 : 1
-  if (nextIdx < candidates.length) {
-    img.dataset.fallbackIndex = String(nextIdx)
-    img.src = withCacheBust(candidates[nextIdx])
-    return
+  const state = {
+    signature,
+    candidates,
+    nextIndex: currentIndex >= 0 ? currentIndex + 1 : 1,
   }
-  onExhausted?.(img)
+  cardImageFallbackStateByImage.set(img, state)
+  advanceToNextCardImageFallback(img, state, onExhausted)
 }
 
 export function getRememberedMediaSrc(

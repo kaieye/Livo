@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry } from '../../../shared/types'
 import {
+  advanceCardImageFallback,
   buildMediaFallbackCandidates,
   dedupeGalleryPhotoVariants,
   findRelatedSocialEntryFallback,
@@ -93,6 +94,37 @@ describe('entry-media-decision', () => {
     expect(candidates).toContain('https://cdn.example.com/public.jpg')
     expect(candidates).not.toContain('http://127.0.0.1/private.jpg')
     expect(candidates).not.toContain('https://user:pass@example.com/secret.jpg')
+  })
+
+  it('图片 fallback 候选耗尽后停止重试', () => {
+    let currentSrc = 'https://cdn.example.com/photo.jpg'
+    const assignedSources: string[] = []
+    const image = {
+      dataset: {} as DOMStringMap,
+      get currentSrc() {
+        return currentSrc
+      },
+      get src() {
+        return currentSrc
+      },
+      set src(value: string) {
+        currentSrc = value
+        assignedSources.push(value)
+      },
+    } as HTMLImageElement
+    const onExhausted = vi.fn()
+
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      advanceCardImageFallback(
+        { currentTarget: image } as React.SyntheticEvent<HTMLImageElement>,
+        'https://cdn.example.com/photo.jpg',
+        onExhausted,
+      )
+      if (onExhausted.mock.calls.length > 0) break
+    }
+
+    expect(onExhausted).toHaveBeenCalledTimes(1)
+    expect(assignedSources.length).toBeLessThanOrEqual(3)
   })
 
   it('为网格卡片优先选择 photo preview，并在没有图片时派生 YouTube 缩略图', () => {
