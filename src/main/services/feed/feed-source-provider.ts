@@ -1,11 +1,17 @@
 import type RssParser from 'rss-parser'
+import { session } from 'electron'
 import type { Feed } from '../../../shared/types/index'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import { settingsProvider } from '../system/settings-provider'
 import { fetchAndParseFeed, type FetchFeedOptions } from './rss-parser'
 import { isAbortError, throwIfAborted } from '../../utils/abort-signal'
 import { normalizeFeedUrl } from './rsshub-url'
-import { rewriteWechatMpFeedUrlToBackendProxy } from './wechat-mp-feed-url'
+import {
+  isWechatMpBackendFeedUrl,
+  rewriteWechatMpFeedUrlToBackendProxy,
+  toWechatMpFreshBackendUrl,
+} from './wechat-mp-feed-url'
+import { sessionStore } from '../auth/session-store'
 import {
   getAggregatorSnapshot,
   pruneAggregatorSnapshots,
@@ -106,6 +112,7 @@ async function fetchDirectPayload(
 ): Promise<AggregatedFeedPayload> {
   throwIfAborted(options?.signal)
   const normalizedUrl = getNormalizedFeedUrl(feed)
+  await refreshWechatMpFeedBeforeRead(normalizedUrl, options?.signal)
   const fetchOptions: FetchFeedOptions | undefined = options?.force
     ? undefined
     : {
@@ -146,6 +153,36 @@ async function fetchDirectPayload(
       cacheHit: false,
       freshnessMs: 0,
     },
+  }
+}
+
+async function refreshWechatMpFeedBeforeRead(
+  normalizedUrl: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (!isWechatMpBackendFeedUrl(normalizedUrl)) return
+
+  const token = sessionStore.getValidToken()
+  if (!token) {
+    throw new Error('Please sign in before refreshing WeChat MP feeds')
+  }
+
+  const freshUrl = toWechatMpFreshBackendUrl(normalizedUrl)
+  if (!freshUrl) return
+
+  const response = await session.defaultSession.fetch(freshUrl, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/rss+xml, application/xml, text/xml',
+      Authorization: `Bearer ${token}`,
+    },
+    signal,
+  })
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(
+      `WeChat MP feed refresh failed: ${response.status}${text ? ` ${text}` : ''}`,
+    )
   }
 }
 
