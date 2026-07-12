@@ -22,6 +22,7 @@ export function useDeepLinkEntry(
   const storeEntries = useEntryStore((s) => s.entries)
   const selectedEntry = useEntryStore((s) => s.selectedEntry)
   const selectEntry = useEntryStore((s) => s.selectEntry)
+  const selectedEntryId = selectedEntry?.id
 
   const [state, setState] = useState<DeepLinkEntryState>('idle')
 
@@ -37,16 +38,16 @@ export function useDeepLinkEntry(
       return
     }
 
-    if (inStoreEntry) {
+    // The target is already selected (including discover previews). Avoid
+    // re-selecting cached detail because that creates a fresh object each time.
+    if (selectedEntryId === entryId) {
       setState('idle')
-      void selectEntry(inStoreEntry)
       return
     }
 
-    // If the entry was pre-populated into selectedEntry by a discover preview,
-    // skip the DB fetch — the entry already has the correct id.
-    if (selectedEntry && selectedEntry.id === entryId) {
+    if (inStoreEntry) {
       setState('idle')
+      void selectEntry(inStoreEntry)
       return
     }
 
@@ -71,7 +72,7 @@ export function useDeepLinkEntry(
     return () => {
       cancelled = true
     }
-  }, [entryId, inStoreEntry, selectEntry, selectedEntry])
+  }, [entryId, inStoreEntry, selectEntry, selectedEntryId])
 
   const activeEntry =
     selectedEntry && selectedEntry.id === entryId ? selectedEntry : null
