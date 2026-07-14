@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useSettingsStore } from '../../store/settings-store'
 import { useUpdateStore } from '../../store/update-store'
 
 export function UpdatePrompt() {
@@ -13,7 +12,6 @@ export function UpdatePrompt() {
   const downloadProgress = useUpdateStore((state) => state.downloadProgress)
 
   const latestVersion = info?.latestVersion || ''
-  const canInstallUpdate = info?.canInstall === true
   const isVisible = useMemo(() => {
     return !!(
       info &&
@@ -37,9 +35,7 @@ export function UpdatePrompt() {
               ? `正在下载更新 ${Math.round(downloadProgress ?? 0)}%…`
               : updateStatus === 'installing'
                 ? '更新已下载，正在重启并完成安装…'
-                : canInstallUpdate
-                  ? `当前版本 ${info.currentVersion}，点击即可下载并自动安装。`
-                  : `当前版本 ${info.currentVersion}，可以查看发行说明并手动更新。`}
+                : `当前版本 ${info.currentVersion}，点击即可下载并在原安装位置完成更新。`}
           </div>
           {updateStatus === 'downloading' && (
             <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary mt-2 h-1.5 overflow-hidden rounded-full">
@@ -61,32 +57,19 @@ export function UpdatePrompt() {
           >
             稍后
           </button>
-          {canInstallUpdate ? (
-            <button
-              onClick={() => void installUpdate()}
-              disabled={isInstallingUpdate}
-              className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-60"
-            >
-              {updateStatus === 'downloading'
-                ? `下载中 ${Math.round(downloadProgress ?? 0)}%`
-                : updateStatus === 'installing'
-                  ? '正在重启…'
-                  : isInstallingUpdate
-                    ? '正在更新…'
-                    : '立即更新'}
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                const settingsStore = useSettingsStore.getState()
-                settingsStore.setActiveTab('about')
-                settingsStore.setOpen(true)
-              }}
-              className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90"
-            >
-              查看更新
-            </button>
-          )}
+          <button
+            onClick={() => void installUpdate()}
+            disabled={isInstallingUpdate}
+            className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-60"
+          >
+            {updateStatus === 'downloading'
+              ? `下载中 ${Math.round(downloadProgress ?? 0)}%`
+              : updateStatus === 'installing'
+                ? '正在重启…'
+                : isInstallingUpdate
+                  ? '正在更新…'
+                  : '立即更新'}
+          </button>
         </div>
       </div>
     </div>

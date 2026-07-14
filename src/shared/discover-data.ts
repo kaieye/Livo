@@ -3626,7 +3626,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'David Sinclair - X',
-    url: 'rsshub://twitter/user/davidasinclair',
+    url: 'https://nitter.net/davidasinclair/rss',
     siteUrl: 'https://twitter',
     description: '哈佛医学院教授 David Sinclair 的 X 动态，专注长寿科学',
     category: 'social',
@@ -3634,7 +3634,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Elon Musk - X',
-    url: 'rsshub://twitter/user/elonmusk',
+    url: 'https://nitter.net/elonmusk/rss',
     siteUrl: 'https://twitter',
     description: '特斯拉与 SpaceX CEO Elon Musk 的 X 动态',
     category: 'social',
@@ -3642,7 +3642,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'James Clear - X',
-    url: 'rsshub://twitter/user/JamesClear',
+    url: 'https://nitter.net/JamesClear/rss',
     siteUrl: 'https://twitter',
     description: '《原子习惯》作者 James Clear 的 X 动态',
     category: 'social',
@@ -3906,7 +3906,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '宝玉 - X',
-    url: 'rsshub://twitter/user/dotey',
+    url: 'https://nitter.net/dotey/rss',
     siteUrl: 'https://twitter',
     description: '宝玉的 X 动态，专注 AI 与软件工程知识分享',
     category: 'social',
@@ -3970,7 +3970,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'OpenAI - X',
-    url: 'rsshub://twitter/user/openai',
+    url: 'https://nitter.net/openai/rss',
     siteUrl: 'https://x.com/openai',
     description: 'OpenAI 官方 X 账号，第一时间发布产品与研究动态',
     category: 'social',
@@ -3978,7 +3978,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'GitHub - X',
-    url: 'rsshub://twitter/user/github',
+    url: 'https://nitter.net/github/rss',
     siteUrl: 'https://x.com/github',
     description: 'GitHub 官方 X 账号，分享开发者工具与社区动态',
     category: 'social',
@@ -3986,7 +3986,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'verge - X',
-    url: 'rsshub://twitter/user/verge',
+    url: 'https://nitter.net/verge/rss',
     siteUrl: 'https://x.com/verge',
     description: 'The Verge 官方 X 账号，科技媒体资讯动态',
     category: 'social',
@@ -3994,7 +3994,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Figma - X',
-    url: 'rsshub://twitter/user/figma',
+    url: 'https://nitter.net/figma/rss',
     siteUrl: 'https://x.com/figma',
     description: 'Figma 官方 X 账号，设计工具与社区动态',
     category: 'social',
@@ -4002,7 +4002,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'MiniMax (official) - X',
-    url: 'rsshub://twitter/user/minimax_ai',
+    url: 'https://nitter.net/minimax_ai/rss',
     siteUrl: 'https://x.com/minimax_ai',
     description: 'MiniMax AI 官方 X 账号，国内领先多模态大模型动态',
     category: 'social',
@@ -4010,7 +4010,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Z.ai - X',
-    url: 'rsshub://twitter/user/zai_org',
+    url: 'https://nitter.net/zai_org/rss',
     siteUrl: 'https://x.com/zai_org',
     description: 'Z.ai 官方 X 账号，追踪 AI 产品与技术最新动态',
     category: 'social',
@@ -4018,7 +4018,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'DAN KOE',
-    url: 'rsshub://twitter/user/thedankoe',
+    url: 'https://nitter.net/thedankoe/rss',
     siteUrl: 'https://x.com/thedankoe',
     description: '数字创业者 Dan Koe，分享个人成长与创意写作理念',
     category: 'social',
@@ -4026,7 +4026,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'DeepSeek',
-    url: 'rsshub://twitter/user/deepseek_ai',
+    url: 'https://nitter.net/deepseek_ai/rss',
     siteUrl: 'https://x.com/deepseek_ai',
     description: 'DeepSeek 官方 X 账号，国产顶级大语言模型动态',
     category: 'social',
@@ -4034,7 +4034,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Andrej Karpathy',
-    url: 'rsshub://twitter/user/karpathy',
+    url: 'https://nitter.net/karpathy/rss',
     siteUrl: 'https://x.com/karpathy',
     description: '前 OpenAI 研究员 Andrej Karpathy 的 AI 洞察',
     category: 'social',
@@ -4042,7 +4042,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Greg Brockman',
-    url: 'rsshub://twitter/user/gdb',
+    url: 'https://nitter.net/gdb/rss',
     siteUrl: 'https://x.com/gdb',
     description: 'OpenAI 联合创始人 Greg Brockman 的 AI 与创业动态',
     category: 'social',
@@ -4050,7 +4050,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Sam Altman',
-    url: 'rsshub://twitter/user/sama',
+    url: 'https://nitter.net/sama/rss',
     siteUrl: 'https://x.com/sama',
     description: 'OpenAI CEO Sam Altman 的 X 动态与 AI 行业观点',
     category: 'social',
@@ -4058,7 +4058,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Balaji - X',
-    url: 'rsshub://twitter/user/balajis',
+    url: 'https://nitter.net/balajis/rss',
     siteUrl: 'https://twitter',
     description: 'Balaji Srinivasan 的 X 动态，科技与加密货币思想领袖',
     category: 'social',
