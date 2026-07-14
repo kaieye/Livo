@@ -110,7 +110,7 @@
   /* Top spacer above the sidebar view tabs. Web/Linux have a native (or no)
      title bar, so only a small gap is needed. macOS + Windows render a custom
      hidden title bar, so reserve the drag-strip height — on macOS this keeps
-     the tabs clear of the system traffic lights (positioned at y:16). */
+     the tabs clear of the system traffic lights (positioned at y:12). */
   .sidebar-titlebar-spacer {
     height: 0.5rem;
   }

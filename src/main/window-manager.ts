@@ -209,7 +209,7 @@ export class WindowManager {
       ...(process.platform === 'darwin'
         ? {
             titleBarStyle: 'hiddenInset' as const,
-            trafficLightPosition: { x: 16, y: 16 },
+            trafficLightPosition: { x: 16, y: 12 },
           }
         : process.platform === 'win32'
           ? { titleBarStyle: 'hidden' as const }
