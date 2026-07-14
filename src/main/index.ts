@@ -1,13 +1,10 @@
 import { app } from 'electron'
+import { configureAppIdentity } from './app-identity'
 
-const e2eUserDataPath = process.env['LIVO_E2E_USER_DATA']
-if (e2eUserDataPath) {
-  app.setPath('userData', e2eUserDataPath)
-}
+const { isDev } = configureAppIdentity(app, process.env['LIVO_E2E_USER_DATA'])
 
 const { createAppManager } = await import('./app-manager')
 
-const isDev = !app.isPackaged
 const appManager = createAppManager({ isDev })
 appManager.handleInitialArgv(process.argv)
 
