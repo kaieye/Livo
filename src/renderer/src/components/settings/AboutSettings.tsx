@@ -196,19 +196,33 @@ export function AboutSettings() {
             )}
             {updateInfo.hasUpdate && (
               <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => void installUpdate()}
-                  disabled={isInstallingUpdate}
-                  className="bg-accent rounded-lg px-3 py-2 text-sm text-white transition-colors hover:opacity-90 disabled:opacity-60"
-                >
-                  {updateStatus === 'downloading'
-                    ? `下载中 ${Math.round(downloadProgress ?? 0)}%`
-                    : updateStatus === 'installing'
-                      ? '正在重启安装…'
-                      : isInstallingUpdate
-                        ? t('settings.installingUpdate')
-                        : t('settings.installUpdate')}
-                </button>
+                {updateInfo.canInstall && updateStatus !== 'error' && (
+                  <button
+                    onClick={() => void installUpdate()}
+                    disabled={isInstallingUpdate}
+                    className="bg-accent rounded-lg px-3 py-2 text-sm text-white transition-colors hover:opacity-90 disabled:opacity-60"
+                  >
+                    {updateStatus === 'downloading'
+                      ? `下载中 ${Math.round(downloadProgress ?? 0)}%`
+                      : updateStatus === 'installing'
+                        ? '正在重启安装…'
+                        : isInstallingUpdate
+                          ? t('settings.installingUpdate')
+                          : t('settings.installUpdate')}
+                  </button>
+                )}
+                {updateInfo.releaseUrl && (
+                  <button
+                    onClick={() =>
+                      void openExternalUrlSafe(updateInfo.releaseUrl!)
+                    }
+                    className="rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-white/70 dark:hover:bg-black/10"
+                  >
+                    {updateInfo.canInstall && updateStatus !== 'error'
+                      ? t('settings.openReleasePage')
+                      : '下载 DMG 手动更新'}
+                  </button>
+                )}
               </div>
             )}
             {updateStatus === 'downloading' && (

@@ -8,10 +8,16 @@ import type {
 import { __internal } from './system/update-check-internal'
 import { checkForAppUpdates as checkWindowsUpdates } from './system/update-check'
 import { installAppUpdate as installWindowsUpdate } from './system/update-install'
+import { canInstallMacUpdateInPlace } from './system/mac-update-capability'
 
 const { autoUpdater } = updaterPkg
 const RELEASES_URL = 'https://github.com/kaieye/Livo/releases/latest'
 const MAC_UPDATE_CHECK_MAX_ATTEMPTS = 3
+const MAC_INSTALL_HANDOFF_TIMEOUT_MS = 30_000
+const MAC_MANUAL_INSTALL_ERROR =
+  '当前 macOS 安装包不支持应用内覆盖安装，请下载 DMG 手动更新'
+const MAC_INSTALL_HANDOFF_ERROR =
+  '更新已下载，但 macOS 未能启动安装程序，请下载 DMG 手动更新'
 
 const TRANSIENT_UPDATE_ERROR_CODES = [
   'ERR_CONNECTION_CLOSED',
@@ -76,8 +82,21 @@ function releaseNotesText(notes: unknown): string | undefined {
   return text || undefined
 }
 
+function updateErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (
+    message.includes('SQRLCodeSignatureErrorDomain') ||
+    (message.includes('Code signature at URL') &&
+      message.includes('did not pass validation'))
+  ) {
+    return MAC_MANUAL_INSTALL_ERROR
+  }
+  return message
+}
+
 export class UpdaterService {
   private window: BrowserWindow | null = null
+  private installHandoffTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(isDev: boolean) {
     if (isDev) {
@@ -109,9 +128,29 @@ export class UpdaterService {
     })
 
     autoUpdater.on('error', (error) => {
-      this.sendToWindow('updater:error', error.message)
-      this.sendUpdateState({ status: 'error', error: error.message })
+      this.clearInstallHandoffTimer()
+      const message = updateErrorMessage(error)
+      this.sendToWindow('updater:error', message)
+      this.sendUpdateState({ status: 'error', error: message })
     })
+  }
+
+  private clearInstallHandoffTimer(): void {
+    if (!this.installHandoffTimer) return
+    clearTimeout(this.installHandoffTimer)
+    this.installHandoffTimer = null
+  }
+
+  private startInstallHandoffTimer(): void {
+    this.clearInstallHandoffTimer()
+    this.installHandoffTimer = setTimeout(() => {
+      this.installHandoffTimer = null
+      this.sendUpdateState({
+        status: 'error',
+        error: MAC_INSTALL_HANDOFF_ERROR,
+      })
+    }, MAC_INSTALL_HANDOFF_TIMEOUT_MS)
+    this.installHandoffTimer.unref?.()
   }
 
   // autoUpdater 的事件可能在窗口销毁后（如退出过程中）触发，
@@ -166,7 +205,7 @@ export class UpdaterService {
         __internal.compareVersions(latestVersion, currentVersion) > 0
       const info: AppUpdateInfo = {
         hasUpdate,
-        canInstall: hasUpdate,
+        canInstall: hasUpdate && canInstallMacUpdateInPlace(),
         platform,
         currentVersion,
         latestVersion,
@@ -208,18 +247,23 @@ export class UpdaterService {
 
     try {
       const info = await this.checkForAppUpdates()
-      if (!info.hasUpdate || !info.canInstall) {
+      if (!info.hasUpdate) {
         return { success: false, error: '当前没有可安装的新版本' }
+      }
+      if (!info.canInstall) {
+        return { success: false, error: MAC_MANUAL_INSTALL_ERROR }
       }
 
       this.sendUpdateState({ status: 'downloading', percent: 0 })
       await autoUpdater.downloadUpdate()
       this.sendUpdateState({ status: 'downloaded', percent: 100 })
       this.sendUpdateState({ status: 'installing' })
+      this.startInstallHandoffTimer()
       autoUpdater.quitAndInstall(false, true)
       return { success: true }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      this.clearInstallHandoffTimer()
+      const message = updateErrorMessage(error)
       this.sendUpdateState({ status: 'error', error: message })
       return { success: false, error: message }
     }

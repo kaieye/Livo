@@ -28,7 +28,10 @@ function clampProgress(percent: number | undefined): number | null {
   return Math.max(0, Math.min(100, percent))
 }
 
-export const useUpdateStore = create<UpdateState>((set) => ({
+const MAC_MANUAL_INSTALL_ERROR =
+  '当前 macOS 安装包不支持应用内覆盖安装，请下载 DMG 手动更新'
+
+export const useUpdateStore = create<UpdateState>((set, get) => ({
   currentVersion: '',
   info: null,
   isChecking: false,
@@ -118,6 +121,15 @@ export const useUpdateStore = create<UpdateState>((set) => ({
   },
   installUpdate: async () => {
     if (!window.api?.app?.installUpdate) return null
+    if (get().info?.canInstall === false) {
+      set({
+        isInstallingUpdate: false,
+        updateStatus: 'error',
+        downloadProgress: null,
+        installError: MAC_MANUAL_INSTALL_ERROR,
+      })
+      return { success: false, error: MAC_MANUAL_INSTALL_ERROR }
+    }
     set({
       isInstallingUpdate: true,
       installError: null,

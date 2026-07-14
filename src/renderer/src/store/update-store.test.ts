@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useUpdateStore } from './update-store'
 
 describe('useUpdateStore update events', () => {
@@ -52,6 +52,34 @@ describe('useUpdateStore update events', () => {
     expect(useUpdateStore.getState().info).toMatchObject({
       canInstall: true,
       platform: 'darwin',
+    })
+  })
+
+  it('refuses to call the installer when the current build cannot update in place', async () => {
+    const installUpdate = vi.fn()
+    ;(globalThis as unknown as { window: { api: unknown } }).window = {
+      api: { app: { installUpdate } },
+    }
+    useUpdateStore.setState({
+      info: {
+        hasUpdate: true,
+        canInstall: false,
+        platform: 'darwin',
+        currentVersion: '1.0.0',
+        latestVersion: '1.2.0',
+      },
+    })
+
+    await expect(useUpdateStore.getState().installUpdate()).resolves.toEqual({
+      success: false,
+      error: '当前 macOS 安装包不支持应用内覆盖安装，请下载 DMG 手动更新',
+    })
+    expect(installUpdate).not.toHaveBeenCalled()
+    expect(useUpdateStore.getState()).toMatchObject({
+      isInstallingUpdate: false,
+      updateStatus: 'error',
+      installError:
+        '当前 macOS 安装包不支持应用内覆盖安装，请下载 DMG 手动更新',
     })
   })
 })

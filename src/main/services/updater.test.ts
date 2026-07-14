@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
     getVersion: vi.fn(() => '1.0.0'),
     checkForAppUpdates: vi.fn(),
     installAppUpdate: vi.fn(),
+    canInstallMacUpdateInPlace: vi.fn(() => true),
   }
 })
 
@@ -47,6 +48,10 @@ vi.mock('./system/update-install', () => ({
   installAppUpdate: mocks.installAppUpdate,
 }))
 
+vi.mock('./system/mac-update-capability', () => ({
+  canInstallMacUpdateInPlace: mocks.canInstallMacUpdateInPlace,
+}))
+
 import { UpdaterService } from './updater'
 
 const originalPlatform = process.platform
@@ -64,6 +69,7 @@ describe('UpdaterService', () => {
     mocks.handlers.clear()
     mocks.isPackaged = true
     mocks.getVersion.mockReturnValue('1.0.0')
+    mocks.canInstallMacUpdateInPlace.mockReturnValue(true)
     mocks.autoUpdater.checkForUpdates.mockReset()
     mocks.autoUpdater.on.mockImplementation(
       (event: string, handler: (...args: unknown[]) => void) => {
@@ -129,6 +135,103 @@ describe('UpdaterService', () => {
     expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1)
     expect(mocks.autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
     expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledWith(false, true)
+  })
+
+  it('does not advertise or start in-place updates for an ad-hoc macOS build', async () => {
+    setPlatform('darwin')
+    mocks.canInstallMacUpdateInPlace.mockReturnValue(false)
+    mocks.autoUpdater.checkForUpdates.mockResolvedValue({
+      updateInfo: { version: '1.2.0' },
+    })
+
+    const service = new UpdaterService(false)
+
+    await expect(service.checkForAppUpdates()).resolves.toMatchObject({
+      hasUpdate: true,
+      canInstall: false,
+      platform: 'darwin',
+    })
+    await expect(service.installAppUpdate()).resolves.toEqual({
+      success: false,
+      error: '当前 macOS 安装包不支持应用内覆盖安装，请下载 DMG 手动更新',
+    })
+    expect(mocks.autoUpdater.downloadUpdate).not.toHaveBeenCalled()
+    expect(mocks.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it('reports an error if macOS does not leave the app after installation handoff', async () => {
+    vi.useFakeTimers()
+    try {
+      setPlatform('darwin')
+      mocks.autoUpdater.checkForUpdates.mockResolvedValue({
+        updateInfo: { version: '1.2.0' },
+      })
+      mocks.autoUpdater.downloadUpdate.mockResolvedValue([
+        '/tmp/Livo-1.2.0-mac-arm64.zip',
+      ])
+      const send = vi.fn()
+      const service = new UpdaterService(false)
+      service.setWindow({
+        isDestroyed: () => false,
+        webContents: { send },
+      } as never)
+
+      await expect(service.installAppUpdate()).resolves.toEqual({
+        success: true,
+      })
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(send).toHaveBeenCalledWith('app:update-state', {
+        status: 'error',
+        error: '更新已下载，但 macOS 未能启动安装程序，请下载 DMG 手动更新',
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('maps Squirrel signature failures to manual installation and cancels the handoff timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      setPlatform('darwin')
+      mocks.autoUpdater.checkForUpdates.mockResolvedValue({
+        updateInfo: { version: '1.2.0' },
+      })
+      mocks.autoUpdater.downloadUpdate.mockResolvedValue([
+        '/tmp/Livo-1.2.0-mac-arm64.zip',
+      ])
+      const send = vi.fn()
+      const service = new UpdaterService(false)
+      service.setWindow({
+        isDestroyed: () => false,
+        webContents: { send },
+      } as never)
+
+      await expect(service.installAppUpdate()).resolves.toEqual({
+        success: true,
+      })
+      mocks.handlers.get('error')?.(
+        new Error(
+          'Code signature at URL file:///tmp/Livo.app/ did not pass validation (SQRLCodeSignatureErrorDomain)',
+        ),
+      )
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(send).toHaveBeenCalledWith(
+        'updater:error',
+        '当前 macOS 安装包不支持应用内覆盖安装，请下载 DMG 手动更新',
+      )
+      expect(send).toHaveBeenCalledWith('app:update-state', {
+        status: 'error',
+        error: '当前 macOS 安装包不支持应用内覆盖安装，请下载 DMG 手动更新',
+      })
+      expect(send).not.toHaveBeenCalledWith('app:update-state', {
+        status: 'error',
+        error: '更新已下载，但 macOS 未能启动安装程序，请下载 DMG 手动更新',
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
   it('keeps the custom Windows installer path installable when packaged', async () => {
     setPlatform('win32')

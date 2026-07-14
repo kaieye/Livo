@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { openExternalUrlSafe } from '../../services/external-url'
 import { useUpdateStore } from '../../store/update-store'
 
 export function UpdatePrompt() {
@@ -12,6 +13,8 @@ export function UpdatePrompt() {
   const downloadProgress = useUpdateStore((state) => state.downloadProgress)
 
   const latestVersion = info?.latestVersion || ''
+  const canInstallUpdate = info?.canInstall === true
+  const shouldOfferManualUpdate = !canInstallUpdate || updateStatus === 'error'
   const isVisible = useMemo(() => {
     return !!(
       info &&
@@ -35,7 +38,9 @@ export function UpdatePrompt() {
               ? `正在下载更新 ${Math.round(downloadProgress ?? 0)}%…`
               : updateStatus === 'installing'
                 ? '更新已下载，正在重启并完成安装…'
-                : `当前版本 ${info.currentVersion}，点击即可下载并在原安装位置完成更新。`}
+                : canInstallUpdate
+                  ? `当前版本 ${info.currentVersion}，点击即可下载并自动安装。`
+                  : `当前版本 ${info.currentVersion}，此安装包需下载 DMG 手动更新。`}
           </div>
           {updateStatus === 'downloading' && (
             <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary mt-2 h-1.5 overflow-hidden rounded-full">
@@ -57,19 +62,28 @@ export function UpdatePrompt() {
           >
             稍后
           </button>
-          <button
-            onClick={() => void installUpdate()}
-            disabled={isInstallingUpdate}
-            className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-60"
-          >
-            {updateStatus === 'downloading'
-              ? `下载中 ${Math.round(downloadProgress ?? 0)}%`
-              : updateStatus === 'installing'
-                ? '正在重启…'
-                : isInstallingUpdate
-                  ? '正在更新…'
-                  : '立即更新'}
-          </button>
+          {shouldOfferManualUpdate && info.releaseUrl ? (
+            <button
+              onClick={() => void openExternalUrlSafe(info.releaseUrl!)}
+              className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90"
+            >
+              下载 DMG
+            </button>
+          ) : (
+            <button
+              onClick={() => void installUpdate()}
+              disabled={isInstallingUpdate}
+              className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {updateStatus === 'downloading'
+                ? `下载中 ${Math.round(downloadProgress ?? 0)}%`
+                : updateStatus === 'installing'
+                  ? '正在重启…'
+                  : isInstallingUpdate
+                    ? '正在更新…'
+                    : '立即更新'}
+            </button>
+          )}
         </div>
       </div>
     </div>
