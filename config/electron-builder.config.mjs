@@ -5,6 +5,7 @@ import {
 
 const buildCommit = getGitCommitHash()
 const buildTime = getBuildTimestamp()
+const isMacRelease = process.env.LIVO_MAC_RELEASE === 'true'
 
 export default {
   appId: 'com.livospace.cn',
@@ -12,6 +13,7 @@ export default {
   copyright: 'Copyright © 2026 Livo',
   artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
   asar: true,
+  forceCodeSigning: isMacRelease,
   asarUnpack: ['node_modules/better-sqlite3/build/Release/better_sqlite3.node'],
   // electron-builder resolves hook string paths via path.resolve() against the
   // project root (cwd), not this config file — so keep './', unlike the import above.
@@ -62,7 +64,10 @@ export default {
     target: ['dmg'],
     category: 'public.app-category.news',
     icon: 'resources/yuanjiao-Livo.icns',
-    identity: null,
+    hardenedRuntime: true,
+    entitlements: 'build/entitlements.mac.plist',
+    entitlementsInherit: 'build/entitlements.mac.inherit.plist',
+    notarize: isMacRelease,
   },
   linux: {
     target: ['AppImage'],
