@@ -64,6 +64,7 @@ describe('UpdaterService', () => {
     mocks.handlers.clear()
     mocks.isPackaged = true
     mocks.getVersion.mockReturnValue('1.0.0')
+    mocks.autoUpdater.checkForUpdates.mockReset()
     mocks.autoUpdater.on.mockImplementation(
       (event: string, handler: (...args: unknown[]) => void) => {
         mocks.handlers.set(event, handler)
@@ -148,6 +149,56 @@ describe('UpdaterService', () => {
     })
     expect(mocks.checkForAppUpdates).toHaveBeenCalledWith(true)
   })
+  it('retries transient macOS update connection failures', async () => {
+    setPlatform('darwin')
+    mocks.autoUpdater.checkForUpdates
+      .mockRejectedValueOnce(new Error('net::ERR_CONNECTION_CLOSED'))
+      .mockResolvedValueOnce({
+        updateInfo: { version: '1.2.0' },
+      })
+
+    const service = new UpdaterService(false)
+
+    await expect(service.checkForAppUpdates()).resolves.toMatchObject({
+      hasUpdate: true,
+      latestVersion: '1.2.0',
+      platform: 'darwin',
+    })
+    expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops retrying macOS update checks after three transient failures', async () => {
+    setPlatform('darwin')
+    mocks.autoUpdater.checkForUpdates.mockRejectedValue(
+      new Error('net::ERR_CONNECTION_CLOSED'),
+    )
+
+    const service = new UpdaterService(false)
+
+    await expect(service.checkForAppUpdates()).resolves.toMatchObject({
+      hasUpdate: false,
+      error: 'net::ERR_CONNECTION_CLOSED',
+      platform: 'darwin',
+    })
+    expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not retry non-transient macOS update failures', async () => {
+    setPlatform('darwin')
+    mocks.autoUpdater.checkForUpdates.mockRejectedValue(
+      new Error('Unable to find latest version on GitHub'),
+    )
+
+    const service = new UpdaterService(false)
+
+    await expect(service.checkForAppUpdates()).resolves.toMatchObject({
+      hasUpdate: false,
+      error: 'Unable to find latest version on GitHub',
+      platform: 'darwin',
+    })
+    expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1)
+  })
+
   it('maps a packaged macOS update into an installable app update', async () => {
     setPlatform('darwin')
     mocks.autoUpdater.checkForUpdates.mockResolvedValue({

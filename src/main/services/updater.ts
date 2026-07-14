@@ -11,6 +11,48 @@ import { installAppUpdate as installWindowsUpdate } from './system/update-instal
 
 const { autoUpdater } = updaterPkg
 const RELEASES_URL = 'https://github.com/kaieye/Livo/releases/latest'
+const MAC_UPDATE_CHECK_MAX_ATTEMPTS = 3
+
+const TRANSIENT_UPDATE_ERROR_CODES = [
+  'ERR_CONNECTION_CLOSED',
+  'ERR_CONNECTION_RESET',
+  'ERR_NETWORK_CHANGED',
+  'ERR_PROXY_CONNECTION_FAILED',
+  'ERR_TIMED_OUT',
+  'ERR_TUNNEL_CONNECTION_FAILED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+] as const
+
+function isTransientUpdateCheckError(error: unknown): boolean {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code || '')
+      : ''
+  const message = error instanceof Error ? error.message : String(error)
+  return TRANSIENT_UPDATE_ERROR_CODES.some(
+    (candidate) => code.includes(candidate) || message.includes(candidate),
+  )
+}
+
+async function checkMacUpdatesWithRetry() {
+  for (
+    let attempt = 1;
+    attempt <= MAC_UPDATE_CHECK_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
+    try {
+      return await autoUpdater.checkForUpdates()
+    } catch (error) {
+      const shouldRetry =
+        attempt < MAC_UPDATE_CHECK_MAX_ATTEMPTS &&
+        isTransientUpdateCheckError(error)
+      if (!shouldRetry) throw error
+    }
+  }
+
+  return null
+}
 
 function platformName(): AppUpdateInfo['platform'] {
   if (process.platform === 'win32' || process.platform === 'darwin') {
@@ -116,7 +158,7 @@ export class UpdaterService {
     }
 
     try {
-      const result = await autoUpdater.checkForUpdates()
+      const result = await checkMacUpdatesWithRetry()
       const updateInfo = result?.updateInfo
       const latestVersion = updateInfo?.version
       const hasUpdate =
@@ -185,7 +227,7 @@ export class UpdaterService {
 
   async checkForUpdates() {
     try {
-      return await autoUpdater.checkForUpdates()
+      return await checkMacUpdatesWithRetry()
     } catch {
       return null
     }
