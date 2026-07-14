@@ -406,8 +406,8 @@ const api = {
       clearedBytes: number
       error?: string
     }> => invokeIpc(IPC.APP_CLEAR_CACHE),
-    checkForUpdates: (): Promise<AppUpdateInfo> =>
-      invokeIpc(IPC.APP_CHECK_FOR_UPDATES),
+    checkForUpdates: (force = false): Promise<AppUpdateInfo> =>
+      invokeIpc(IPC.APP_CHECK_FOR_UPDATES, force),
     installUpdate: (): Promise<AppUpdateInstallResult> =>
       invokeIpc(IPC.APP_INSTALL_UPDATE),
     saveTextFile: (options: SaveTextFileOptions): Promise<SaveTextFileResult> =>

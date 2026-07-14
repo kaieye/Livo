@@ -54,6 +54,8 @@ export interface AppCommandPayload {
 
 export interface AppUpdateInfo {
   hasUpdate: boolean
+  canInstall?: boolean
+  platform?: 'win32' | 'darwin' | 'other'
   currentVersion: string
   latestVersion?: string
   releaseUrl?: string
@@ -67,6 +69,25 @@ export interface AppUpdateInfo {
 
 export interface AppUpdateInstallResult {
   success: boolean
+  error?: string
+}
+
+export type AppUpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'installing'
+  | 'error'
+
+export interface AppUpdateState {
+  status: AppUpdateStatus
+  info?: AppUpdateInfo
+  percent?: number
+  transferred?: number
+  total?: number
+  bytesPerSecond?: number
   error?: string
 }
 

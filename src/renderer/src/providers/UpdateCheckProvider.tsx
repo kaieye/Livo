@@ -9,6 +9,9 @@ export function UpdateCheckProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let intervalId: number | null = null
     let cancelled = false
+    const unsubscribeUpdateState = window.api.on('app:update-state', (state) =>
+      useUpdateStore.getState().applyUpdateState(state),
+    )
 
     void window.api.app
       .getVersion()
@@ -28,6 +31,7 @@ export function UpdateCheckProvider({ children }: PropsWithChildren) {
 
     return () => {
       cancelled = true
+      unsubscribeUpdateState()
       window.clearTimeout(startupTimer)
       if (intervalId !== null) {
         window.clearInterval(intervalId)

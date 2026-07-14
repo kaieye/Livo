@@ -93,10 +93,41 @@ describe('registerAppHandlers', () => {
     registerChannelMock.mockReset()
   })
 
+  it('routes update IPC through the platform-aware updater service', async () => {
+    const updater = {
+      checkForAppUpdates: vi.fn(async () => ({
+        hasUpdate: true,
+        canInstall: true,
+        platform: 'darwin',
+        currentVersion: '1.0.0',
+        latestVersion: '1.2.0',
+      })),
+      installAppUpdate: vi.fn(async () => ({ success: true })),
+    }
+    registerAppHandlers(
+      { safeOpenExternal: vi.fn() } as unknown as WindowManager,
+      updater as never,
+    )
+
+    await expect(
+      getRegisteredHandler(IPC.APP_CHECK_FOR_UPDATES)(undefined, true),
+    ).resolves.toMatchObject({ canInstall: true, platform: 'darwin' })
+    await expect(
+      getRegisteredHandler(IPC.APP_INSTALL_UPDATE)(),
+    ).resolves.toEqual({ success: true })
+    expect(updater.checkForAppUpdates).toHaveBeenCalledWith(true)
+    expect(updater.installAppUpdate).toHaveBeenCalledTimes(1)
+  })
   it('redacts settings secrets from app hydration', async () => {
-    registerAppHandlers({
-      safeOpenExternal: vi.fn(),
-    } as unknown as WindowManager)
+    registerAppHandlers(
+      {
+        safeOpenExternal: vi.fn(),
+      } as unknown as WindowManager,
+      {
+        checkForAppUpdates: vi.fn(),
+        installAppUpdate: vi.fn(),
+      } as never,
+    )
 
     const result = await getRegisteredHandler(IPC.APP_HYDRATE)()
 

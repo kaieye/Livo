@@ -9,9 +9,11 @@ export function UpdatePrompt() {
   const installUpdate = useUpdateStore((state) => state.installUpdate)
   const isInstallingUpdate = useUpdateStore((state) => state.isInstallingUpdate)
   const installError = useUpdateStore((state) => state.installError)
+  const updateStatus = useUpdateStore((state) => state.updateStatus)
+  const downloadProgress = useUpdateStore((state) => state.downloadProgress)
 
   const latestVersion = info?.latestVersion || ''
-  const canInstallUpdate = !!info?.installerDownloadUrl
+  const canInstallUpdate = info?.canInstall === true
   const isVisible = useMemo(() => {
     return !!(
       info &&
@@ -31,10 +33,22 @@ export function UpdatePrompt() {
             检测到新版本 {latestVersion}
           </div>
           <div className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
-            {canInstallUpdate
-              ? `当前版本 ${info.currentVersion}，可以静默安装更新。`
-              : `当前版本 ${info.currentVersion}，可以查看发行说明并手动更新。`}
+            {updateStatus === 'downloading'
+              ? `正在下载更新 ${Math.round(downloadProgress ?? 0)}%…`
+              : updateStatus === 'installing'
+                ? '更新已下载，正在重启并完成安装…'
+                : canInstallUpdate
+                  ? `当前版本 ${info.currentVersion}，点击即可下载并自动安装。`
+                  : `当前版本 ${info.currentVersion}，可以查看发行说明并手动更新。`}
           </div>
+          {updateStatus === 'downloading' && (
+            <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary mt-2 h-1.5 overflow-hidden rounded-full">
+              <div
+                className="bg-accent h-full rounded-full transition-[width]"
+                style={{ width: `${downloadProgress ?? 0}%` }}
+              />
+            </div>
+          )}
           {installError && (
             <div className="mt-1 text-xs text-red-500">{installError}</div>
           )}
@@ -53,7 +67,13 @@ export function UpdatePrompt() {
               disabled={isInstallingUpdate}
               className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-60"
             >
-              {isInstallingUpdate ? '正在更新…' : '立即更新'}
+              {updateStatus === 'downloading'
+                ? `下载中 ${Math.round(downloadProgress ?? 0)}%`
+                : updateStatus === 'installing'
+                  ? '正在重启…'
+                  : isInstallingUpdate
+                    ? '正在更新…'
+                    : '立即更新'}
             </button>
           ) : (
             <button

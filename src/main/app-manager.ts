@@ -40,7 +40,6 @@ import {
 import { applyProxySettings } from './services/system/proxy'
 import { WindowManager } from './window-manager'
 import { registerAppMenu } from './menu'
-import { checkForAppUpdates } from './services/system/update-check'
 import { AppTray } from './services/system/tray'
 import { recoverOrphanBilibiliDynamicFeeds } from './services/bilibili/bilibili-orphan-recovery'
 import { startCacheMaintenance } from './services/system/cache-maintenance'
@@ -122,7 +121,7 @@ export class AppManager {
 
     // 提前注册 IPC，窗口加载后可以立刻调用启动接口。
     this.registerIpcHandlers()
-    registerAppHandlers(this.windowManager)
+    registerAppHandlers(this.windowManager, this.updater)
     registerUpdaterHandlers(this.updater)
     registerWebSocketHandlers(this.websocket)
     registerNotificationHandlers()
@@ -313,7 +312,7 @@ export class AppManager {
         void openDirectory(getLogDirectory())
       },
       checkForUpdates: () => {
-        void checkForAppUpdates(true)
+        void this.updater.checkForAppUpdates(true)
         this.windowManager.sendAppCommand({
           type: 'open-settings',
           tab: 'about',

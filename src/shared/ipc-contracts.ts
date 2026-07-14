@@ -439,7 +439,7 @@ export type IpcArgsByChannel = {
   [IPC.APP_OPEN_CACHE_DIRECTORY]: []
   [IPC.APP_OPEN_LOGS_DIRECTORY]: []
   [IPC.APP_CLEAR_CACHE]: []
-  [IPC.APP_CHECK_FOR_UPDATES]: []
+  [IPC.APP_CHECK_FOR_UPDATES]: [force?: boolean]
   [IPC.APP_INSTALL_UPDATE]: []
   [IPC.APP_SAVE_TEXT_FILE]: [options: SaveTextFileOptions]
   [IPC.APP_DOWNLOAD_URL]: [options: DownloadUrlOptions]
@@ -1769,7 +1769,14 @@ export const IPC_CONTRACTS = {
   [IPC.APP_OPEN_CACHE_DIRECTORY]: noArgs(IPC.APP_OPEN_CACHE_DIRECTORY),
   [IPC.APP_OPEN_LOGS_DIRECTORY]: noArgs(IPC.APP_OPEN_LOGS_DIRECTORY),
   [IPC.APP_CLEAR_CACHE]: noArgs(IPC.APP_CLEAR_CACHE),
-  [IPC.APP_CHECK_FOR_UPDATES]: noArgs(IPC.APP_CHECK_FOR_UPDATES),
+  [IPC.APP_CHECK_FOR_UPDATES]: {
+    channel: IPC.APP_CHECK_FOR_UPDATES,
+    validateArgs: (args) => {
+      assertArity(IPC.APP_CHECK_FOR_UPDATES, args, 0, 1)
+      assertOptionalBoolean(args[0], 'force')
+      return args as IpcArgs<typeof IPC.APP_CHECK_FOR_UPDATES>
+    },
+  },
   [IPC.APP_INSTALL_UPDATE]: noArgs(IPC.APP_INSTALL_UPDATE),
   [IPC.APP_SAVE_TEXT_FILE]: {
     channel: IPC.APP_SAVE_TEXT_FILE,

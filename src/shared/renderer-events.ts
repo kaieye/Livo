@@ -3,6 +3,7 @@ import type {
   AgentToolExecutionEvent,
   AppCommandPayload,
   AppSettings,
+  AppUpdateState,
   FeedWithCount,
   TaskRunRecord,
 } from './types'
@@ -85,6 +86,7 @@ export interface RealtimeNotificationPayload {
 export interface RendererEventPayloadByChannel {
   'app:command': [payload: AppCommandPayload]
   'app:deep-link': [payload: DeepLinkAction]
+  'app:update-state': [payload: AppUpdateState]
   'feeds:updated': [payload: FeedsUpdatedPayload]
   'feeds:refresh-progress': [payload: FeedRefreshProgressPayload]
   'import:progress': [payload: ImportProgressPayload]
@@ -124,6 +126,7 @@ export type RendererEventCallback<C extends RendererEventChannel> = (
 export const RENDERER_EVENT_CHANNELS = [
   'app:command',
   'app:deep-link',
+  'app:update-state',
   'feeds:updated',
   'feeds:refresh-progress',
   'import:progress',

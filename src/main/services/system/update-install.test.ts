@@ -100,9 +100,15 @@ describe('installAppUpdate', () => {
       if (name === 'exe') return exePath
       return userDataPath
     })
-    mocks.spawn.mockReturnValue({
-      once: vi.fn(),
-      unref: vi.fn(),
+    mocks.spawn.mockImplementation(() => {
+      const child = {
+        once: vi.fn((event: string, listener: (error?: Error) => void) => {
+          if (event === 'spawn') queueMicrotask(() => listener())
+          return child
+        }),
+        unref: vi.fn(),
+      }
+      return child
     })
   })
 
@@ -149,6 +155,63 @@ describe('installAppUpdate', () => {
 
     vi.advanceTimersByTime(250)
     expect(mocks.quit).toHaveBeenCalled()
+  })
+
+  it('reports Windows download progress and installation handoff', async () => {
+    const body = Buffer.concat([Buffer.from('MZ'), Buffer.alloc(78, 1)])
+    mockUpdateInfo({ installerSize: body.length })
+    mocks.fetch.mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: { 'content-length': String(body.length) },
+      }),
+    )
+    const onState = vi.fn()
+
+    await expect(installAppUpdate(onState)).resolves.toEqual({ success: true })
+
+    expect(onState).toHaveBeenCalledWith({
+      status: 'downloading',
+      percent: 100,
+      transferred: body.length,
+      total: body.length,
+    })
+    expect(onState).toHaveBeenCalledWith({ status: 'installing' })
+  })
+  it('keeps Livo running and reports an error when the installer cannot start', async () => {
+    const body = Buffer.concat([Buffer.from('MZ'), Buffer.alloc(78, 1)])
+    mockUpdateInfo({ installerSize: body.length })
+    mocks.fetch.mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: { 'content-length': String(body.length) },
+      }),
+    )
+    mocks.spawn.mockImplementationOnce(() => {
+      const child = {
+        once: vi.fn((event: string, listener: (error?: Error) => void) => {
+          if (event === 'error') {
+            queueMicrotask(() => listener(new Error('spawn failed')))
+          }
+          return child
+        }),
+        unref: vi.fn(),
+      }
+      return child
+    })
+    const onState = vi.fn()
+
+    await expect(installAppUpdate(onState)).resolves.toEqual({
+      success: false,
+      error: 'spawn failed',
+    })
+
+    vi.advanceTimersByTime(250)
+    expect(mocks.quit).not.toHaveBeenCalled()
+    expect(onState).toHaveBeenLastCalledWith({
+      status: 'error',
+      error: 'spawn failed',
+    })
   })
 
   it('rejects installer downloads outside the GitHub release path', async () => {

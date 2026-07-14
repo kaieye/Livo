@@ -61,7 +61,7 @@ export default {
     executableName: 'Livo',
   },
   mac: {
-    target: ['dmg'],
+    target: ['dmg', 'zip'],
     category: 'public.app-category.news',
     icon: 'resources/yuanjiao-Livo.icns',
     hardenedRuntime: true,

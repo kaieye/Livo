@@ -16,13 +16,12 @@ import {
   getUserDataDirectoryPath,
   openDirectory,
 } from '../services/system/app-shell'
-import { checkForAppUpdates } from '../services/system/update-check'
-import { installAppUpdate } from '../services/system/update-install'
 import { downloadUrlToFile, saveTextFile } from '../services/system/download'
 import { settingsProvider } from '../services/system/settings-provider'
 import { getDb, whenDbReady } from '../database'
 import { sessionStore } from '../services/auth/session-store'
 import type { WindowManager } from '../window-manager'
+import type { UpdaterService } from '../services/updater'
 
 function logStartupTiming(label: string, startedAt: number): void {
   logInfo(`[startup] ${label}`, {
@@ -30,7 +29,10 @@ function logStartupTiming(label: string, startedAt: number): void {
   })
 }
 
-export function registerAppHandlers(windowManager: WindowManager): void {
+export function registerAppHandlers(
+  windowManager: WindowManager,
+  updater: Pick<UpdaterService, 'checkForAppUpdates' | 'installAppUpdate'>,
+): void {
   registerChannel(IPC.APP_GET_VERSION, () => app.getVersion())
   registerChannel(IPC.APP_OPEN_EXTERNAL, (_event, url: string) => {
     return windowManager.safeOpenExternal(url)
@@ -68,11 +70,11 @@ export function registerAppHandlers(windowManager: WindowManager): void {
   registerChannel(IPC.APP_CLEAR_CACHE, async () => {
     return clearApplicationCache()
   })
-  registerChannel(IPC.APP_CHECK_FOR_UPDATES, async () => {
-    return checkForAppUpdates()
+  registerChannel(IPC.APP_CHECK_FOR_UPDATES, async (_event, force = false) => {
+    return updater.checkForAppUpdates(force)
   })
   registerChannel(IPC.APP_INSTALL_UPDATE, async () => {
-    return installAppUpdate()
+    return updater.installAppUpdate()
   })
   registerChannel(IPC.APP_SAVE_TEXT_FILE, async (_event, options) => {
     return saveTextFile(options)

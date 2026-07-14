@@ -71,6 +71,8 @@ export function AboutSettings() {
   const checkingUpdates = useUpdateStore((state) => state.isChecking)
   const isInstallingUpdate = useUpdateStore((state) => state.isInstallingUpdate)
   const installError = useUpdateStore((state) => state.installError)
+  const updateStatus = useUpdateStore((state) => state.updateStatus)
+  const downloadProgress = useUpdateStore((state) => state.downloadProgress)
   const lastCheckedAt = useUpdateStore((state) => state.lastCheckedAt)
   const checkForUpdates = useUpdateStore((state) => state.checkForUpdates)
   const installUpdate = useUpdateStore((state) => state.installUpdate)
@@ -194,15 +196,19 @@ export function AboutSettings() {
             )}
             {updateInfo.hasUpdate && (
               <div className="flex flex-wrap gap-2">
-                {updateInfo.installerDownloadUrl && (
+                {updateInfo.canInstall && (
                   <button
                     onClick={() => void installUpdate()}
                     disabled={isInstallingUpdate}
                     className="bg-accent rounded-lg px-3 py-2 text-sm text-white transition-colors hover:opacity-90 disabled:opacity-60"
                   >
-                    {isInstallingUpdate
-                      ? t('settings.installingUpdate')
-                      : t('settings.installUpdate')}
+                    {updateStatus === 'downloading'
+                      ? `下载中 ${Math.round(downloadProgress ?? 0)}%`
+                      : updateStatus === 'installing'
+                        ? '正在重启安装…'
+                        : isInstallingUpdate
+                          ? t('settings.installingUpdate')
+                          : t('settings.installUpdate')}
                   </button>
                 )}
                 {updateInfo.releaseUrl && (
@@ -215,6 +221,14 @@ export function AboutSettings() {
                     {t('settings.openReleasePage')}
                   </button>
                 )}
+              </div>
+            )}
+            {updateStatus === 'downloading' && (
+              <div className="bg-surface-tertiary dark:bg-surface-dark-secondary h-1.5 overflow-hidden rounded-full">
+                <div
+                  className="bg-accent h-full rounded-full transition-[width]"
+                  style={{ width: `${downloadProgress ?? 0}%` }}
+                />
               </div>
             )}
             {installError && (

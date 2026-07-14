@@ -4,7 +4,10 @@ import { basename, dirname, extname, join } from 'node:path'
 
 import { app, session } from 'electron'
 
-import type { AppUpdateInstallResult } from '../../../shared/types/index'
+import type {
+  AppUpdateInstallResult,
+  AppUpdateState,
+} from '../../../shared/types/index'
 import { sanitizeSuggestedFileName } from './download'
 import { logInfo, logWarn } from './logger'
 import { assertNetworkFetchUrl } from './network-url-policy'
@@ -17,6 +20,7 @@ const GITHUB_RELEASE_OWNER = 'kaieye'
 const GITHUB_RELEASE_REPO = 'Livo'
 
 type InstallerKind = 'exe' | 'zip'
+type UpdateStateCallback = (state: AppUpdateState) => void
 
 function getCurrentInstallPath(): string | null {
   if (process.platform !== 'win32') return null
@@ -243,10 +247,25 @@ async function writeResponseBodyToFile(
   response: Response,
   filePath: string,
   expectedBytes: number | undefined,
+  onState: UpdateStateCallback,
 ): Promise<void> {
   const contentLength = getResponseContentLength(response)
   assertInstallerByteLength(contentLength, '下载更新失败：安装包过大')
   assertExpectedByteLength(contentLength, expectedBytes)
+
+  const progressTotal = contentLength ?? expectedBytes
+  const reportProgress = (transferred: number): void => {
+    onState({
+      status: 'downloading',
+      percent:
+        typeof progressTotal === 'number' && progressTotal > 0
+          ? Math.min(100, (transferred / progressTotal) * 100)
+          : undefined,
+      transferred,
+      total: progressTotal,
+    })
+  }
+  reportProgress(0)
 
   const tempPath = `${filePath}${DOWNLOAD_TEMP_SUFFIX}`
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
@@ -262,6 +281,7 @@ async function writeResponseBodyToFile(
       assertInstallerByteLength(totalBytes, '下载更新失败：安装包过大')
       assertExpectedByteLength(totalBytes, expectedBytes)
       await handle.writeFile(buffer)
+      reportProgress(totalBytes)
     } else {
       while (true) {
         const { done, value } = await reader.read()
@@ -276,6 +296,7 @@ async function writeResponseBodyToFile(
 
         await handle.write(Buffer.from(value))
         totalBytes = nextTotal
+        reportProgress(totalBytes)
       }
       assertExpectedByteLength(totalBytes, expectedBytes)
     }
@@ -298,6 +319,7 @@ async function fetchInstallerToFile(
   url: string,
   filePath: string,
   expectedBytes: number | undefined,
+  onState: UpdateStateCallback,
   redirectDepth = 0,
 ): Promise<void> {
   if (redirectDepth > MAX_REDIRECTS) {
@@ -325,6 +347,7 @@ async function fetchInstallerToFile(
       nextUrl,
       filePath,
       expectedBytes,
+      onState,
       redirectDepth + 1,
     )
   }
@@ -333,7 +356,7 @@ async function fetchInstallerToFile(
     throw new Error(`下载更新失败：HTTP ${response.status}`)
   }
 
-  await writeResponseBodyToFile(response, filePath, expectedBytes)
+  await writeResponseBodyToFile(response, filePath, expectedBytes, onState)
 }
 
 async function downloadInstaller(
@@ -341,6 +364,7 @@ async function downloadInstaller(
   assetName: string | undefined,
   version: string | undefined,
   expectedBytes: number | undefined,
+  onState: UpdateStateCallback,
 ): Promise<string> {
   const updateDir = join(app.getPath('userData'), 'updates')
   const fileName = buildInstallerFileName(assetName, version)
@@ -351,7 +375,7 @@ async function downloadInstaller(
 
   const filePath = join(updateDir, fileName)
   try {
-    await fetchInstallerToFile(url, filePath, expectedBytes)
+    await fetchInstallerToFile(url, filePath, expectedBytes, onState)
     await assertInstallerFileShape(filePath)
   } catch (error) {
     await fs.rm(filePath, { force: true })
@@ -363,25 +387,33 @@ async function downloadInstaller(
 function startSilentInstaller(
   installerPath: string,
   installPath: string,
-): void {
-  const child = spawn(
-    installerPath,
-    ['--silent-install', installPath, '--silent-update'],
-    {
-      cwd: dirname(installerPath),
-      detached: true,
-      stdio: 'ignore',
-      env: {
-        ...process.env,
-        LIVO_SILENT_INSTALL: installPath,
-        LIVO_SILENT_UPDATE: '1',
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      installerPath,
+      ['--silent-install', installPath, '--silent-update'],
+      {
+        cwd: dirname(installerPath),
+        detached: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          LIVO_SILENT_INSTALL: installPath,
+          LIVO_SILENT_UPDATE: '1',
+        },
       },
-    },
-  )
-  child.unref()
+    )
+    child.once('error', reject)
+    child.once('spawn', () => {
+      child.unref()
+      resolve()
+    })
+  })
 }
 
-export async function installAppUpdate(): Promise<AppUpdateInstallResult> {
+export async function installAppUpdate(
+  onState: UpdateStateCallback = () => {},
+): Promise<AppUpdateInstallResult> {
   const installPath = getCurrentInstallPath()
   if (!installPath) {
     return {
@@ -409,6 +441,7 @@ export async function installAppUpdate(): Promise<AppUpdateInstallResult> {
       updateInfo.installerAssetName,
       updateInfo.latestVersion,
       updateInfo.installerSize,
+      onState,
     )
     const installerExecutablePath =
       await resolveInstallerExecutable(installerPath)
@@ -419,14 +452,14 @@ export async function installAppUpdate(): Promise<AppUpdateInstallResult> {
       version: updateInfo.latestVersion,
     })
 
-    startSilentInstaller(installerExecutablePath, installPath)
+    onState({ status: 'installing' })
+    await startSilentInstaller(installerExecutablePath, installPath)
     setTimeout(() => app.quit(), 250)
     return { success: true }
   } catch (error) {
     logWarn('[update-install] failed to install update', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    }
+    const message = error instanceof Error ? error.message : String(error)
+    onState({ status: 'error', error: message })
+    return { success: false, error: message }
   }
 }
