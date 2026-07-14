@@ -1804,7 +1804,7 @@ export function Sidebar({ width }: { width?: number }) {
         }`}
         style={{ width: width ?? 260 }}
       >
-        <div className="drag-region h-9 flex-shrink-0" />
+        <div className="drag-region sidebar-titlebar-spacer flex-shrink-0" />
 
         {/* View type tabs */}
         <div className="px-2 pb-1 pt-1">
