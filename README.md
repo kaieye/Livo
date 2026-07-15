@@ -130,7 +130,7 @@ pnpm dev                  # 开发模式启动桌面端
 pnpm dev:web              # 开发模式启动 Web 端
 pnpm preview              # 预览已构建的桌面端
 pnpm build                # 构建桌面端
-pnpm build:win            # 构建 Windows win-unpacked 产物
+pnpm build:win            # 构建 Windows NSIS 安装包
 pnpm build:web            # 构建 Web 端
 pnpm typecheck            # 类型检查
 pnpm lint                 # 代码检查

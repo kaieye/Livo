@@ -14,6 +14,7 @@ import {
  */
 
 const TWITTER_USER_ROUTE_RE = /\/(?:twitter|x)\/user\//i
+const NITTER_USER_FEED_RE = /^\/[^/?#]+\/rss\/?$/i
 const BILIBILI_DYNAMIC_ROUTE_RE = /\/bilibili\/user\/dynamic\//i
 const BILIBILI_VIDEO_ROUTE_RE = /\/bilibili\/user\/video\//i
 const BILIBILI_USER_ROUTE_RE = /\/bilibili\/user\/(?:dynamic|video|article)\//i
@@ -26,6 +27,7 @@ export type FeedRouteKind =
   | 'bilibili-dynamic'
   | 'bilibili-video'
   | 'twitter-user'
+  | 'nitter-user'
   | 'generic'
 
 interface FeedRoutePolicy {
@@ -72,6 +74,16 @@ const ROUTE_POLICIES = {
     slow: false,
     deferBootstrap: true,
   },
+  // Public Nitter upstreams are frequently slow or unavailable. Give direct
+  // requests a wider budget and lower batch concurrency so they do not overload
+  // the user's proxy or starve ordinary feeds.
+  'nitter-user': {
+    refreshTimeoutMs: SOCIAL_BOOTSTRAP_REFRESH_TIMEOUT_MS,
+    initialFetchTimeoutMs: SOCIAL_INITIAL_FETCH_TIMEOUT_MS,
+    bootstrapRefreshTimeoutMs: SOCIAL_BOOTSTRAP_REFRESH_TIMEOUT_MS,
+    slow: true,
+    deferBootstrap: true,
+  },
   generic: {
     refreshTimeoutMs: DEFAULT_FEED_REFRESH_TIMEOUT_MS,
     slow: false,
@@ -92,6 +104,7 @@ export function classifyFeedRoute(url: string | undefined): FeedRouteKind {
   if (isInstagramUserFeedUrl(url)) return 'instagram-user'
   if (isBilibiliDynamicFeedUrl(url)) return 'bilibili-dynamic'
   if (isBilibiliVideoFeedUrl(url)) return 'bilibili-video'
+  if (isNitterUserFeedUrl(url)) return 'nitter-user'
   if (isTwitterUserFeedUrl(url)) return 'twitter-user'
   return 'generic'
 }
@@ -107,6 +120,18 @@ export function isInstagramUserFeedUrl(url: string | undefined): boolean {
 
 export function isTwitterUserFeedUrl(url: string | undefined): boolean {
   return TWITTER_USER_ROUTE_RE.test(lower(url))
+}
+
+export function isNitterUserFeedUrl(url: string | undefined): boolean {
+  try {
+    const parsed = new URL(url || '')
+    return (
+      parsed.hostname.toLowerCase().includes('nitter') &&
+      NITTER_USER_FEED_RE.test(parsed.pathname)
+    )
+  } catch {
+    return false
+  }
 }
 
 export function isBilibiliDynamicFeedUrl(url: string | undefined): boolean {

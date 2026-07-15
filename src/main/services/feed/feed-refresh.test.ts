@@ -154,6 +154,22 @@ describe('filterForeignEntries', () => {
     ).toEqual(entries)
   })
 
+  it('keeps Nitter article links even when a built-in feed declares an x.com site URL', () => {
+    const entries = [
+      makeEntry('https://nitter.net/openai/status/1234567890'),
+      makeEntry('https://x.com/openai/status/1234567891'),
+    ]
+
+    expect(
+      filterForeignEntries(
+        entries,
+        'https://x.com/openai',
+        'https://nitter.net/openai',
+        'https://nitter.net/openai/rss',
+      ),
+    ).toEqual(entries)
+  })
+
   it('still filters unrelated domains for regular feeds', () => {
     const ownEntry = makeEntry('https://blog.example.com/post-1')
     const foreignEntry = makeEntry('https://another-site.com/post-2')

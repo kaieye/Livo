@@ -117,4 +117,49 @@ describe('rss-parser RSSHub mirror routes', () => {
     )
     expect(instagramResult.data?.items?.[0]?.title).toBe('instagram-rich-post')
   })
+
+  it('returns a healthy primary Nitter feed without waiting for unavailable fallbacks', async () => {
+    const nitterUrl = 'https://nitter.net/openai/rss'
+    const currentDate = new Date().toUTCString()
+    const healthyNitterFeed = rss(
+      Array.from(
+        { length: 4 },
+        (_, index) => `<item>
+  <title>post-${index}</title>
+  <link>https://x.com/openai/status/${index}</link>
+  <guid>post-${index}</guid>
+  <pubDate>${currentDate}</pubDate>
+  <description><![CDATA[<p>fresh post ${index}</p>]]></description>
+</item>`,
+      ).join('\n'),
+    )
+
+    fetchMock.mockImplementation(
+      async (url: string) =>
+        new Response(url === nitterUrl ? healthyNitterFeed : rss(''), {
+          status: 200,
+        }),
+    )
+
+    const result = await fetchAndParseFeed(nitterUrl)
+    const requestedUrls = fetchMock.mock.calls.map((call) => String(call[0]))
+
+    expect(result.data?.items).toHaveLength(4)
+    expect(requestedUrls).toEqual([nitterUrl])
+  })
+
+  it('retries the requested Nitter URL before reporting it unavailable', async () => {
+    const nitterUrl = 'https://nitter.net/openai/rss'
+    const healthyNitterFeed = rss(item('recovered-post', '<p>fresh post</p>'))
+
+    fetchMock
+      .mockRejectedValueOnce(new Error('transient timeout'))
+      .mockResolvedValueOnce(new Response(healthyNitterFeed, { status: 200 }))
+
+    const result = await fetchAndParseFeed(nitterUrl)
+    const requestedUrls = fetchMock.mock.calls.map((call) => String(call[0]))
+
+    expect(result.data?.items?.[0]?.title).toBe('recovered-post')
+    expect(requestedUrls).toEqual([nitterUrl, nitterUrl])
+  })
 })

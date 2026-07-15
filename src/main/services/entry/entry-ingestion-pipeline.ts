@@ -25,6 +25,7 @@ import { judgeSemanticFilter } from '../ai/ai-filter'
 import {
   isBilibiliUserFeedUrl,
   isInstagramUserFeedUrl,
+  isNitterUserFeedUrl,
   isTwitterUserFeedUrl,
 } from '../feed/feed-route-policy'
 
@@ -81,6 +82,7 @@ export function filterForeignEntries(
 ): Entry[] {
   if (
     isTwitterUserFeedUrl(feedUrl) ||
+    isNitterUserFeedUrl(feedUrl) ||
     isInstagramUserFeedUrl(feedUrl) ||
     isBilibiliUserFeedUrl(feedUrl) ||
     isWechatMpFeedUrl(feedUrl)

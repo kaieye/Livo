@@ -53,6 +53,30 @@ describe('resolveEffectiveView', () => {
     ).toBeNull()
   })
 
+  it('当选中历史 Nitter X 订阅源时，将其提升为社交视图', () => {
+    expect(
+      resolveEffectiveView({
+        activeView: null,
+        selectedFeed: {
+          view: FeedViewType.Articles,
+          url: 'https://nitter.net/elonmusk/rss',
+        },
+      }),
+    ).toBe(FeedViewType.SocialMedia)
+  })
+
+  it('当选中 RSSHub X 用户订阅源时，将其提升为社交视图', () => {
+    expect(
+      resolveEffectiveView({
+        activeView: null,
+        selectedFeed: {
+          view: FeedViewType.Articles,
+          url: 'https://rsshub.app/twitter/user/openai',
+        },
+      }),
+    ).toBe(FeedViewType.SocialMedia)
+  })
+
   it('当 activeView 为 null 且无选中订阅源时，返回 null', () => {
     expect(
       resolveEffectiveView({ activeView: null, selectedFeed: null }),
@@ -111,6 +135,28 @@ describe('shouldUseSocialDetailOverlay', () => {
         selectedEntryFeedView: FeedViewType.SocialMedia,
       }),
     ).toBe(false)
+  })
+
+  it('为历史 Nitter X 订阅源在全部聚合列表中启用推文详情覆盖层', () => {
+    expect(
+      shouldUseSocialDetailOverlay({
+        activeView: null,
+        selectedFeedId: null,
+        selectedEntryFeedView: FeedViewType.Articles,
+        selectedEntryFeedUrl: 'https://nitter.net/elonmusk/rss',
+      }),
+    ).toBe(true)
+  })
+
+  it('为 RSSHub X 用户订阅源在全部聚合列表中启用推文详情覆盖层', () => {
+    expect(
+      shouldUseSocialDetailOverlay({
+        activeView: null,
+        selectedFeedId: null,
+        selectedEntryFeedView: FeedViewType.Articles,
+        selectedEntryFeedUrl: 'https://rsshub.app/twitter/user/openai',
+      }),
+    ).toBe(true)
   })
 
   it('在全部聚合列表中保留普通文章详情', () => {

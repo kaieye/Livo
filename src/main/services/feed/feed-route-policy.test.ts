@@ -23,6 +23,9 @@ describe('feed-route-policy', () => {
     expect(classifyFeedRoute('https://rsshub.app/twitter/user/openai')).toBe(
       'twitter-user',
     )
+    expect(classifyFeedRoute('https://nitter.net/openai/rss')).toBe(
+      'nitter-user',
+    )
     expect(classifyFeedRoute('https://example.com/feed.xml')).toBe('generic')
   })
 
@@ -39,7 +42,9 @@ describe('feed-route-policy', () => {
     expect(getRefreshTimeoutMs('https://rsshub.app/twitter/user/openai')).toBe(
       12000,
     )
+    expect(getRefreshTimeoutMs('https://nitter.net/openai/rss')).toBe(45000)
     expect(isSlowFeedUrl('https://rsshub.app/bilibili/user/video/1')).toBe(true)
+    expect(isSlowFeedUrl('https://nitter.net/openai/rss')).toBe(true)
   })
 
   it('keeps subscribe and bootstrap policies for social and video routes', () => {
@@ -49,6 +54,12 @@ describe('feed-route-policy', () => {
     expect(
       getBootstrapRefreshTimeoutMs('https://rsshub.app/twitter/user/openai'),
     ).toBe(45000)
+    expect(getInitialFetchTimeoutMs('https://nitter.net/openai/rss')).toBe(
+      18000,
+    )
+    expect(getBootstrapRefreshTimeoutMs('https://nitter.net/openai/rss')).toBe(
+      45000,
+    )
     expect(
       getInitialFetchTimeoutMs('https://rsshub.app/bilibili/user/video/1'),
     ).toBe(45000)
@@ -68,6 +79,7 @@ describe('feed-route-policy', () => {
     expect(shouldDeferBootstrap('https://rsshub.app/twitter/user/openai')).toBe(
       true,
     )
+    expect(shouldDeferBootstrap('https://nitter.net/openai/rss')).toBe(true)
     expect(
       shouldDeferBootstrap(
         'https://example.com/feed.xml',

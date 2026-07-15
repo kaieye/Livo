@@ -32,7 +32,9 @@ export function logUserOperation(payload: UserOperationLogPayload): void {
     targetLabel: payload.targetLabel,
     details: payload.details,
   }
-  const message = `[user-operation] ${operation.label}`
+  // Keep console output ASCII-only: Windows dev-console bridges may decode
+  // UTF-8 bytes with the active ANSI code page and garble localized labels.
+  const message = `[user-operation] ${operation.key}`
 
   if (payload.status === 'failed') {
     logError(message, { ...detail, error: formatOperationError(payload.error) })

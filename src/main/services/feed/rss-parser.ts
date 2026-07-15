@@ -169,6 +169,10 @@ const DEFAULT_FETCH_TIMEOUTS = [8000, 12000]
 const DEFAULT_CONDITIONAL_TIMEOUT_MS = 15000
 const FAST_FETCH_TIMEOUTS = [4000, 7000]
 const FAST_CONDITIONAL_TIMEOUT_MS = 7000
+// Nitter is a direct upstream, not an RSSHub fan-out route. Mirror the Harmony
+// client: make two 15s direct attempts before considering it unreachable.
+const NITTER_FETCH_TIMEOUTS = [15000, 15000]
+const NITTER_CONDITIONAL_TIMEOUT_MS = 15000
 
 interface FetchTextOptions {
   attemptTimeouts?: number[]
@@ -344,6 +348,18 @@ function extractTwitterUsernameFromFeedUrl(feedUrl: string): string | null {
     // Ignore invalid URL.
   }
   return null
+}
+
+function isNitterUserFeedUrl(feedUrl: string): boolean {
+  try {
+    const u = new URL(feedUrl)
+    return (
+      u.hostname.toLowerCase().includes('nitter') &&
+      /^\/[^/?#]+\/rss\/?$/i.test(u.pathname)
+    )
+  } catch {
+    return false
+  }
 }
 
 function extractTwitterUserRoutePathAndQuery(feedUrl: string): string | null {
@@ -1155,12 +1171,28 @@ export async function fetchAndParseFeed(
       )
     }
 
-    // Fast path first for responsiveness.
-    const bestFeedFast = await pickBestRsshubFallbackFeed(
-      candidates,
+    // Nitter feeds are direct upstreams. Do not fan a single request out to
+    // unrelated public Nitter/RSSHub hosts: those hosts are frequently blocked
+    // or slow and previously made a healthy primary wait for every fallback.
+    // HarmonyOS uses this same direct, two-attempt, 15-second strategy.
+    const isNitterFeed = isNitterUserFeedUrl(feedUrl)
+    if (isNitterFeed) {
+      const primaryNitterFeed = await parseFeedUrl(feedUrl, {
+        attemptTimeouts: NITTER_FETCH_TIMEOUTS,
+        conditionalTimeoutMs: NITTER_CONDITIONAL_TIMEOUT_MS,
+        signal: options?.signal,
+      })
+      return { data: primaryNitterFeed, notModified: false }
+    }
+
+    // Fast path first for RSSHub and Nitter fallback candidates.
+    const fastCandidates = candidates
+    const fallbackFeedFast = await pickBestRsshubFallbackFeed(
+      fastCandidates,
       true,
       options?.signal,
     )
+    const bestFeedFast = fallbackFeedFast
     // If fast result looks thin/stale, continue with slower merge and choose the better feed.
     if (bestFeedFast && !isLikelyThinOrStaleFeed(bestFeedFast)) {
       return { data: bestFeedFast, notModified: false }
@@ -1168,7 +1200,7 @@ export async function fetchAndParseFeed(
 
     // Slow path retry for unstable / throttled instances.
     const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(
-      candidates,
+      fastCandidates,
       false,
       options?.signal,
     )

@@ -25,25 +25,51 @@ export function isWideLayoutView(view: FeedViewType | null): boolean {
  * Rule: when an explicit `activeView` is set, it always wins. When `activeView`
  * is null (the "All" view) but a wide-layout feed (Social/Videos/Pictures) is
  * selected, fall back to that feed's view so it renders with the proper wide
- * layout. A selected narrow (Articles) feed does NOT promote the effective view.
+ * layout. Historical X feeds that were saved as Articles are also promoted to
+ * the social view when their feed URL identifies a Nitter or RSSHub X user feed.
  */
 export function resolveEffectiveView(input: {
   activeView: FeedViewType | null
-  selectedFeed?: { view?: FeedViewType | null } | null
+  selectedFeed?: { view?: FeedViewType | null; url?: string } | null
 }): FeedViewType | null {
   if (input.activeView !== null) return input.activeView
+
   const feedView = input.selectedFeed?.view ?? null
-  return isWideLayoutView(feedView) ? feedView : null
+  if (isWideLayoutView(feedView)) return feedView
+
+  return isXSocialFeedUrl(input.selectedFeed?.url)
+    ? FeedViewType.SocialMedia
+    : null
+}
+
+function isXSocialFeedUrl(url?: string): boolean {
+  if (!url) return false
+
+  try {
+    const { hostname, pathname } = new URL(url)
+    const host = hostname.toLowerCase()
+
+    if (host.includes('nitter')) {
+      return /^\/[^/]+\/rss\/?$/i.test(pathname)
+    }
+
+    return /^\/(?:twitter|x)\/user\/[a-zA-Z0-9_]+\/?$/i.test(pathname)
+  } catch {
+    return /^.*\/(?:twitter|x)\/user\/[a-zA-Z0-9_]+\/?(?:[?#].*)?$/i.test(url)
+  }
 }
 
 export function shouldUseSocialDetailOverlay(input: {
   activeView: FeedViewType | null
   selectedFeedId: string | null
   selectedEntryFeedView?: FeedViewType | null
+  selectedEntryFeedUrl?: string
 }): boolean {
+  const isSocialFeed =
+    input.selectedEntryFeedView === FeedViewType.SocialMedia ||
+    isXSocialFeedUrl(input.selectedEntryFeedUrl)
+
   return (
-    input.activeView === null &&
-    input.selectedFeedId === null &&
-    input.selectedEntryFeedView === FeedViewType.SocialMedia
+    input.activeView === null && input.selectedFeedId === null && isSocialFeed
   )
 }

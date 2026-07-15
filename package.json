@@ -1,6 +1,6 @@
 {
   "name": "livo",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Livo desktop application.",
   "private": true,
   "main": "./out/main/index.js",
@@ -26,7 +26,7 @@
     "e2e": "pnpm build && playwright test --config config/playwright.config.ts",
     "e2e:web": "playwright test --config config/playwright.config.ts --project=web",
     "e2e:electron": "pnpm build && playwright test --config config/playwright.config.ts --project=electron",
-    "build:win": "electron-vite build --config config/electron.vite.config.ts && electron-builder --config config/electron-builder.config.mjs --win --dir",
+    "build:win": "electron-vite build --config config/electron.vite.config.ts && electron-builder --config config/electron-builder.config.mjs --win nsis",
     "build:mac": "electron-vite build --config config/electron.vite.config.ts && electron-builder --config config/electron-builder.config.mjs --mac",
     "build:linux": "electron-vite build --config config/electron.vite.config.ts && electron-builder --config config/electron-builder.config.mjs --linux",
     "dev:web": "vite --config config/vite.config.web.ts",

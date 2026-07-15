@@ -46,6 +46,11 @@ export async function setupBackgroundEventListeners(): Promise<void> {
     await import('../store/feed-store')
   const { useEntryStore } = await import('../store/entry-store')
   const { buildHomeFeedLoadOptions } = await import('../lib/home-feed-scope')
+  const {
+    invalidateFeedCache,
+    invalidateListCache,
+    invalidateMultipleFeedsCaches,
+  } = await import('../lib/entry-cache')
 
   function reloadEntriesForCurrentScope() {
     const { selectedFeedId, activeView, feeds } = useFeedStore.getState()
@@ -135,6 +140,15 @@ export async function setupBackgroundEventListeners(): Promise<void> {
       '[Queue] Current feeds count AFTER processing:',
       afterFeeds.length,
     )
+
+    if (payload?.feedIds && payload.feedIds.length > 0) {
+      invalidateMultipleFeedsCaches(payload.feedIds)
+    } else if (payload?.feedId) {
+      invalidateFeedCache(payload.feedId)
+    } else if (payload?.hasEntries || payload?.newEntries !== undefined) {
+      // A refresh without an ID may affect any visible feed in the current view.
+      invalidateListCache()
+    }
 
     reloadEntriesForCurrentScope()
   })

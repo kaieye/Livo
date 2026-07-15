@@ -233,6 +233,7 @@ export function Layout() {
       activeView,
       selectedFeedId,
       selectedEntryFeedView: selectedEntryFeed?.view,
+      selectedEntryFeedUrl: selectedEntryFeed?.url,
     })
 
   useEffect(() => {
