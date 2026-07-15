@@ -13,7 +13,6 @@ import { logInfo, logWarn } from './logger'
 import { assertNetworkFetchUrl } from './network-url-policy'
 import { checkForAppUpdates } from './update-check'
 
-const MAX_REDIRECTS = 5
 const MAX_INSTALLER_BYTES = 300 * 1024 * 1024
 const DOWNLOAD_TEMP_SUFFIX = '.download'
 const GITHUB_RELEASE_OWNER = 'kaieye'
@@ -320,37 +319,15 @@ async function fetchInstallerToFile(
   filePath: string,
   expectedBytes: number | undefined,
   onState: UpdateStateCallback,
-  redirectDepth = 0,
 ): Promise<void> {
-  if (redirectDepth > MAX_REDIRECTS) {
-    throw new Error('下载更新失败：重定向次数过多')
-  }
-
   const safeUrl = await assertNetworkFetchUrl(url)
   const response = await session.defaultSession.fetch(safeUrl, {
     headers: {
       Accept: 'application/octet-stream',
       'User-Agent': `Livo/${app.getVersion()}`,
     },
-    redirect: 'manual',
+    redirect: 'follow',
   })
-
-  if (
-    response.status >= 300 &&
-    response.status < 400 &&
-    response.headers.get('location')
-  ) {
-    const nextUrl = new URL(response.headers.get('location') || '', safeUrl)
-      .href
-    await assertNetworkFetchUrl(nextUrl)
-    return fetchInstallerToFile(
-      nextUrl,
-      filePath,
-      expectedBytes,
-      onState,
-      redirectDepth + 1,
-    )
-  }
 
   if (!response.ok) {
     throw new Error(`下载更新失败：HTTP ${response.status}`)

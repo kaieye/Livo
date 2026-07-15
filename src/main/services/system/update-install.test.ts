@@ -157,6 +157,29 @@ describe('installAppUpdate', () => {
     expect(mocks.quit).toHaveBeenCalled()
   })
 
+  it('allows Electron to follow GitHub release redirects', async () => {
+    const body = Buffer.concat([Buffer.from('MZ'), Buffer.alloc(78, 1)])
+    mockUpdateInfo({ installerSize: body.length })
+    mocks.fetch.mockImplementation(
+      async (_url: string, init?: RequestInit): Promise<Response> => {
+        if (init?.redirect === 'manual') {
+          throw new Error('Redirect was cancelled')
+        }
+        return new Response(body, {
+          status: 200,
+          headers: { 'content-length': String(body.length) },
+        })
+      },
+    )
+
+    await expect(installAppUpdate()).resolves.toEqual({ success: true })
+
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      githubInstallerUrl(),
+      expect.objectContaining({ redirect: 'follow' }),
+    )
+  })
+
   it('reports Windows download progress and installation handoff', async () => {
     const body = Buffer.concat([Buffer.from('MZ'), Buffer.alloc(78, 1)])
     mockUpdateInfo({ installerSize: body.length })
