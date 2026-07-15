@@ -69,6 +69,12 @@ export function AboutSettings() {
   const checkForUpdates = useUpdateStore((state) => state.checkForUpdates)
   const installUpdate = useUpdateStore((state) => state.installUpdate)
   const { t } = useTranslation()
+  const displayedVersion = version || updateInfo?.currentVersion || '1.0.0'
+  const isLatestVersion =
+    !checkingUpdates &&
+    updateInfo !== null &&
+    !updateInfo.hasUpdate &&
+    !updateInfo.error
 
   useEffect(() => {
     window.api.app
@@ -120,14 +126,35 @@ export function AboutSettings() {
           </div>
         )}
         <h2 className="text-xl font-bold">Livo</h2>
-        <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-sm">
-          {t('settings.version')} {version || '1.0.0'}
-        </p>
       </div>
 
       <div className="bg-surface-secondary dark:bg-surface-dark-tertiary space-y-3 rounded-xl border p-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium">{t('settings.checkUpdates')}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{t('settings.checkUpdates')}</p>
+            <div
+              className="text-text-secondary dark:text-text-dark-secondary mt-1 flex items-center gap-1.5 whitespace-nowrap text-xs"
+              aria-live="polite"
+            >
+              <span>
+                {t('settings.version')} {displayedVersion}
+              </span>
+              {checkingUpdates && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>{t('settings.checkingUpdates')}</span>
+                </>
+              )}
+              {isLatestVersion && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    {t('settings.updateUnavailable')}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
           {updateInfo?.hasUpdate ? (
             <button
               onClick={() => {
@@ -170,6 +197,11 @@ export function AboutSettings() {
         {updateInfo?.error && (
           <p className="text-xs text-red-500">
             {t('settings.updateCheckFailed')}: {updateInfo.error}
+          </p>
+        )}
+        {updateStatus === 'error' && !updateInfo?.error && !installError && (
+          <p className="text-xs text-red-500">
+            {t('settings.updateCheckFailed')}
           </p>
         )}
         {installError && (

@@ -72,7 +72,7 @@ afterEach(() => {
 })
 
 describe('AboutSettings update card', () => {
-  it('keeps the latest-version state quiet after checking', () => {
+  it('shows the current version and latest-version feedback on the same line', () => {
     Object.assign(mocks.state, {
       info: {
         hasUpdate: false,
@@ -84,14 +84,37 @@ describe('AboutSettings update card', () => {
     })
 
     const html = renderAboutSettings()
+    const statusLine = html.match(
+      /<div[^>]*aria-live="polite"[^>]*>(.*?)<\/div>/,
+    )?.[1]
 
-    expect(html).toContain('settings.checkUpdates')
-    expect(html).not.toContain('settings.updateUnavailable')
+    expect(statusLine).toContain('settings.version')
+    expect(statusLine).toContain('9.9.9')
+    expect(statusLine).toContain('settings.updateUnavailable')
     expect(html).not.toContain('settings.currentVersionLabel')
     expect(html).not.toContain('settings.latestVersionLabel')
     expect(html).not.toContain('settings.updatePublishedAt')
     expect(html).not.toContain('最近检查')
-    expect(html).not.toContain('9.9.9')
+  })
+
+  it('shows checking feedback beside the current version', () => {
+    Object.assign(mocks.state, {
+      info: {
+        hasUpdate: false,
+        currentVersion: '9.9.9',
+      },
+      isChecking: true,
+      updateStatus: 'checking',
+    })
+
+    const html = renderAboutSettings()
+    const statusLine = html.match(
+      /<div[^>]*aria-live="polite"[^>]*>(.*?)<\/div>/,
+    )?.[1]
+
+    expect(statusLine).toContain('settings.version')
+    expect(statusLine).toContain('9.9.9')
+    expect(statusLine).toContain('settings.checkingUpdates')
   })
 
   it('replaces the check action with one update button when an update exists', () => {
@@ -110,13 +133,26 @@ describe('AboutSettings update card', () => {
     const html = renderAboutSettings()
 
     expect(html).toContain('settings.installUpdate')
+    expect(html).toContain('settings.version')
+    expect(html).toContain('9.9.9')
+    expect(html).not.toContain('settings.updateUnavailable')
     expect(html).not.toContain('settings.updateAvailable')
     expect(html).not.toContain('settings.currentVersionLabel')
     expect(html).not.toContain('settings.latestVersionLabel')
     expect(html).not.toContain('settings.updatePublishedAt')
     expect(html).not.toContain('settings.openReleasePage')
-    expect(html).not.toContain('9.9.9')
     expect(html).not.toContain('10.0.0')
     expect(html.match(/<button/g)).toHaveLength(1)
+  })
+
+  it('shows a generic failure message when checking throws before info is set', () => {
+    Object.assign(mocks.state, {
+      info: null,
+      updateStatus: 'error',
+    })
+
+    const html = renderAboutSettings()
+
+    expect(html).toContain('settings.updateCheckFailed')
   })
 })
