@@ -130,7 +130,7 @@ pnpm dev                  # Start desktop development mode
 pnpm dev:web              # Start Web development mode
 pnpm preview              # Preview the built desktop app
 pnpm build                # Build the desktop app
-pnpm build:win            # Build the Windows NSIS installer
+pnpm build:win            # Build the Windows win-unpacked artifact
 pnpm build:web            # Build the Web app
 pnpm typecheck            # Run type checks
 pnpm lint                 # Run lint checks

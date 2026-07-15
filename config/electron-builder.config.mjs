@@ -56,15 +56,9 @@ export default {
     },
   ],
   win: {
-    target: ['nsis'],
+    target: ['dir'],
     icon: 'resources/yuanjiao-Livo.ico',
     executableName: 'Livo',
-  },
-  nsis: {
-    artifactName: 'Livo-Setup-${version}-win-${arch}.${ext}',
-    oneClick: false,
-    allowToChangeInstallationDirectory: true,
-    installerLanguages: ['en_US', 'zh_CN'],
   },
   mac: {
     target: ['dmg', 'zip'],
