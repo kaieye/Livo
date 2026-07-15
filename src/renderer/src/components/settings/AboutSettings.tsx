@@ -4,13 +4,6 @@ import { Github } from 'lucide-react'
 import { openExternalUrlSafe } from '../../services/external-url'
 import { useUpdateStore } from '../../store/update-store'
 
-function formatPublishedAt(value: string | undefined): string {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString()
-}
-
 const ICON_CACHE_KEY = 'livo-about-icon'
 
 /**
@@ -73,7 +66,6 @@ export function AboutSettings() {
   const installError = useUpdateStore((state) => state.installError)
   const updateStatus = useUpdateStore((state) => state.updateStatus)
   const downloadProgress = useUpdateStore((state) => state.downloadProgress)
-  const lastCheckedAt = useUpdateStore((state) => state.lastCheckedAt)
   const checkForUpdates = useUpdateStore((state) => state.checkForUpdates)
   const installUpdate = useUpdateStore((state) => state.installUpdate)
   const { t } = useTranslation()
@@ -135,110 +127,55 @@ export function AboutSettings() {
 
       <div className="bg-surface-secondary dark:bg-surface-dark-tertiary space-y-3 rounded-xl border p-4">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium">{t('settings.checkUpdates')}</p>
-            <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
-              {t('settings.currentVersionLabel')}: {version || '1.0.0'}
-            </p>
-            {lastCheckedAt ? (
-              <p className="text-text-tertiary text-xs">
-                最近检查：{new Date(lastCheckedAt).toLocaleString()}
-              </p>
-            ) : null}
-          </div>
-          <button
-            onClick={() => void handleCheckUpdates()}
-            disabled={checkingUpdates}
-            className="rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-white/70 disabled:opacity-60 dark:hover:bg-black/10"
-          >
-            {checkingUpdates
-              ? t('settings.checkingUpdates')
-              : t('settings.checkUpdates')}
-          </button>
+          <p className="text-sm font-medium">{t('settings.checkUpdates')}</p>
+          {updateInfo?.hasUpdate ? (
+            <button
+              onClick={() => {
+                if (
+                  updateInfo.releaseUrl &&
+                  (updateInfo.canInstall === false || updateStatus === 'error')
+                ) {
+                  void openExternalUrlSafe(updateInfo.releaseUrl)
+                  return
+                }
+                void installUpdate()
+              }}
+              disabled={
+                isInstallingUpdate ||
+                (updateInfo.canInstall === false && !updateInfo.releaseUrl)
+              }
+              className="bg-accent rounded-lg px-3 py-2 text-sm text-white transition-colors hover:opacity-90 disabled:opacity-60"
+            >
+              {updateStatus === 'downloading'
+                ? `下载中 ${Math.round(downloadProgress ?? 0)}%`
+                : updateStatus === 'installing' || updateStatus === 'downloaded'
+                  ? '正在重启安装…'
+                  : isInstallingUpdate
+                    ? t('settings.installingUpdate')
+                    : t('settings.installUpdate')}
+            </button>
+          ) : (
+            <button
+              onClick={() => void handleCheckUpdates()}
+              disabled={checkingUpdates}
+              className="rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-white/70 disabled:opacity-60 dark:hover:bg-black/10"
+            >
+              {checkingUpdates
+                ? t('settings.checkingUpdates')
+                : t('settings.checkUpdates')}
+            </button>
+          )}
         </div>
 
-        {updateInfo && (
-          <div className="space-y-2 text-sm">
-            <p
-              className={
-                updateInfo.error
-                  ? 'text-red-500'
-                  : updateInfo.hasUpdate
-                    ? 'text-accent'
-                    : 'text-text-secondary dark:text-text-dark-secondary'
-              }
-            >
-              {updateInfo.error
-                ? `${t('settings.updateCheckFailed')}: ${updateInfo.error}`
-                : updateInfo.hasUpdate
-                  ? t('settings.updateAvailable')
-                  : t('settings.updateUnavailable')}
-            </p>
-            {!updateInfo.error && (
-              <div className="text-text-secondary dark:text-text-dark-secondary space-y-1 text-xs">
-                <p>
-                  {t('settings.currentVersionLabel')}:{' '}
-                  {updateInfo.currentVersion}
-                </p>
-                {updateInfo.latestVersion && (
-                  <p>
-                    {t('settings.latestVersionLabel')}:{' '}
-                    {updateInfo.latestVersion}
-                  </p>
-                )}
-                {updateInfo.publishedAt && (
-                  <p>
-                    {t('settings.updatePublishedAt')}:{' '}
-                    {formatPublishedAt(updateInfo.publishedAt)}
-                  </p>
-                )}
-              </div>
-            )}
-            {updateInfo.hasUpdate && (
-              <div className="flex flex-wrap gap-2">
-                {updateInfo.canInstall && updateStatus !== 'error' && (
-                  <button
-                    onClick={() => void installUpdate()}
-                    disabled={isInstallingUpdate}
-                    className="bg-accent rounded-lg px-3 py-2 text-sm text-white transition-colors hover:opacity-90 disabled:opacity-60"
-                  >
-                    {updateStatus === 'downloading'
-                      ? `下载中 ${Math.round(downloadProgress ?? 0)}%`
-                      : updateStatus === 'installing'
-                        ? '正在重启安装…'
-                        : isInstallingUpdate
-                          ? t('settings.installingUpdate')
-                          : t('settings.installUpdate')}
-                  </button>
-                )}
-                {updateInfo.releaseUrl && (
-                  <button
-                    onClick={() =>
-                      void openExternalUrlSafe(updateInfo.releaseUrl!)
-                    }
-                    className="rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-white/70 dark:hover:bg-black/10"
-                  >
-                    {updateInfo.canInstall && updateStatus !== 'error'
-                      ? t('settings.openReleasePage')
-                      : '下载 DMG 手动更新'}
-                  </button>
-                )}
-              </div>
-            )}
-            {updateStatus === 'downloading' && (
-              <div className="bg-surface-tertiary dark:bg-surface-dark-secondary h-1.5 overflow-hidden rounded-full">
-                <div
-                  className="bg-accent h-full rounded-full transition-[width]"
-                  style={{ width: `${downloadProgress ?? 0}%` }}
-                />
-              </div>
-            )}
-            {installError && (
-              <p className="text-xs text-red-500">
-                {t('settings.updateInstallFailed')}: {installError}
-              </p>
-            )}
-          </div>
+        {updateInfo?.error && (
+          <p className="text-xs text-red-500">
+            {t('settings.updateCheckFailed')}: {updateInfo.error}
+          </p>
+        )}
+        {installError && (
+          <p className="text-xs text-red-500">
+            {t('settings.updateInstallFailed')}: {installError}
+          </p>
         )}
       </div>
 
