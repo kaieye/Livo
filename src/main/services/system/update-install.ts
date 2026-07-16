@@ -361,29 +361,110 @@ async function downloadInstaller(
   return filePath
 }
 
+function toPowerShellSingleQuoted(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+/**
+ * Quote one Windows command-line argument. Start-Process joins an ArgumentList
+ * array with spaces, so pass the complete command line as one string and quote
+ * the install directory ourselves. This specifically preserves paths such as
+ * C:\Program Files\Livo.
+ */
+export function quoteWindowsCommandArgument(value: string): string {
+  if (value.length === 0) return '""'
+  if (!/[\s"]/u.test(value)) return value
+
+  return `"${value
+    .replace(/(\\*)"/gu, '$1$1\\"')
+    .replace(/(\\*)$/u, '$1$1')}"`
+}
+
+export function buildElevatedInstallerCommand(
+  installerPath: string,
+  installPath: string,
+): string {
+  const installerArguments = [
+    '--silent-install',
+    installPath,
+    '--silent-update',
+  ]
+    .map(quoteWindowsCommandArgument)
+    .join(' ')
+
+  // Use -EncodedCommand rather than a temporary .ps1 file. This makes the
+  // launch independent of the system ANSI code page and avoids corrupting
+  // Chinese Windows account or directory names.
+  const script = [
+    '$ErrorActionPreference = "Stop"',
+    `$installerPath = ${toPowerShellSingleQuoted(installerPath)}`,
+    `$installerArguments = ${toPowerShellSingleQuoted(installerArguments)}`,
+    'try {',
+    '  $installer = Start-Process -FilePath $installerPath -ArgumentList $installerArguments -Verb RunAs -PassThru',
+    '  if ($null -eq $installer) { exit 1223 }',
+    '  exit 0',
+    '} catch {',
+    '  [Console]::Error.WriteLine($_.Exception.Message)',
+    '  exit 1',
+    '}',
+    '',
+  ].join('\r\n')
+
+  return Buffer.from(script, 'utf16le').toString('base64')
+}
+
+/**
+ * The Livo installer is an administrator-level portable package. Do the UAC
+ * handoff once, on that outer package, then let the elevated portable wrapper
+ * extract and run the custom installer. The previous portable -> PowerShell ->
+ * portable relaunch inside the installer raced the wrapper's temporary-folder
+ * cleanup and was the reason updates exited without replacing the app.
+ */
 function startSilentInstaller(
   installerPath: string,
   installPath: string,
 ): Promise<void> {
+  const encodedCommand = buildElevatedInstallerCommand(
+    installerPath,
+    installPath,
+  )
+
   return new Promise((resolve, reject) => {
+    const stderrChunks: Buffer[] = []
     const child = spawn(
-      installerPath,
-      ['--silent-install', installPath, '--silent-update'],
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-EncodedCommand',
+        encodedCommand,
+      ],
       {
         cwd: dirname(installerPath),
-        detached: true,
-        stdio: 'ignore',
-        env: {
-          ...process.env,
-          LIVO_SILENT_INSTALL: installPath,
-          LIVO_SILENT_UPDATE: '1',
-        },
+        detached: false,
+        windowsHide: false,
+        stdio: ['ignore', 'ignore', 'pipe'],
       },
     )
+    child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk))
     child.once('error', reject)
-    child.once('spawn', () => {
-      child.unref()
-      resolve()
+    child.once('exit', (code) => {
+      if (code === 0) {
+        resolve()
+        return
+      }
+      const stderr = Buffer.concat(stderrChunks).toString('utf8').trim()
+      if (code === 1223) {
+        reject(new Error('用户取消了管理员权限请求'))
+        return
+      }
+      reject(
+        new Error(
+          stderr || `请求管理员权限失败（PowerShell 退出码 ${code ?? 'unknown'}）`,
+        ),
+      )
     })
   })
 }

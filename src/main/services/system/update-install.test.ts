@@ -52,7 +52,11 @@ vi.mock('./update-check', () => ({
   checkForAppUpdates: mocks.checkForAppUpdates,
 }))
 
-import { installAppUpdate } from './update-install'
+import {
+  buildElevatedInstallerCommand,
+  installAppUpdate,
+  quoteWindowsCommandArgument,
+} from './update-install'
 
 const originalPlatform = process.platform
 
@@ -84,6 +88,28 @@ function mockUpdateInfo(
   })
 }
 
+describe('Windows elevated installer command', () => {
+  it('quotes Program Files and trailing backslashes safely', () => {
+    expect(quoteWindowsCommandArgument('C:\\Program Files\\Livo')).toBe(
+      '"C:\\Program Files\\Livo"',
+    )
+    expect(quoteWindowsCommandArgument('C:\\Livo Files\\')).toBe(
+      '"C:\\Livo Files\\\\"',
+    )
+  })
+
+  it('uses an encoded native UAC command without temporary script files', () => {
+    const encoded = buildElevatedInstallerCommand(
+      'C:\\Users\\Chos1nz\\Livo 安装程序.exe',
+      'C:\\Program Files\\Livo',
+    )
+    const command = Buffer.from(encoded, 'base64').toString('utf16le')
+    expect(command).toContain('Start-Process -FilePath $installerPath')
+    expect(command).toContain('-Verb RunAs')
+    expect(command).toContain('--silent-install "C:\\Program Files\\Livo" --silent-update')
+  })
+})
+
 describe('installAppUpdate', () => {
   let userDataPath: string
   let exePath: string
@@ -102,11 +128,11 @@ describe('installAppUpdate', () => {
     })
     mocks.spawn.mockImplementation(() => {
       const child = {
-        once: vi.fn((event: string, listener: (error?: Error) => void) => {
-          if (event === 'spawn') queueMicrotask(() => listener())
+        once: vi.fn((event: string, listener: (code?: number | null) => void) => {
+          if (event === 'exit') queueMicrotask(() => listener(0))
           return child
         }),
-        unref: vi.fn(),
+        stderr: { on: vi.fn() },
       }
       return child
     })
@@ -145,13 +171,20 @@ describe('installAppUpdate', () => {
     expect(existsSync(join(updateDir, 'next'))).toBe(false)
     expect(existsSync(join(updateDir, 'Livo-Setup-old.exe'))).toBe(false)
     expect(mocks.spawn).toHaveBeenCalledWith(
-      installerPath,
-      ['--silent-install', dirname(exePath), '--silent-update'],
+      'powershell.exe',
+      expect.arrayContaining(['-EncodedCommand']),
       expect.objectContaining({
         cwd: updateDir,
-        detached: true,
+        detached: false,
       }),
     )
+    const encodedCommand = mocks.spawn.mock.calls[0][1].at(-1)
+    const command = Buffer.from(encodedCommand, 'base64').toString('utf16le')
+    expect(command).toContain(`$installerPath = '${installerPath}'`)
+    expect(command).toContain(
+      `--silent-install ${dirname(exePath)} --silent-update`,
+    )
+    expect(command).toContain('-Verb RunAs')
 
     vi.advanceTimersByTime(250)
     expect(mocks.quit).toHaveBeenCalled()
@@ -218,7 +251,7 @@ describe('installAppUpdate', () => {
           }
           return child
         }),
-        unref: vi.fn(),
+        stderr: { on: vi.fn() },
       }
       return child
     })
