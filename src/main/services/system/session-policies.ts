@@ -1,6 +1,16 @@
-import { session } from 'electron'
+import { ipcMain, session } from 'electron'
 
 const LOGIN_PARTITIONS_WITH_PERMISSION_POLICY = ['persist:wechat-mp']
+
+/**
+ * 当前正在阅读的文章 URL，由渲染层在切换文章时设置。
+ * 用于构建跨域图片请求的 Referer，绕过防盗链。
+ */
+let currentArticleUrl: string | null = null
+
+export function setCurrentArticleUrl(url: string | null): void {
+  currentArticleUrl = url
+}
 
 function registerPermissionDenyPolicy(targetSession: Electron.Session): void {
   targetSession.setPermissionRequestHandler(
@@ -11,9 +21,40 @@ function registerPermissionDenyPolicy(targetSession: Electron.Session): void {
   targetSession.setPermissionCheckHandler(() => false)
 }
 
+function getImageReferer(imageUrl: string): string | null {
+  // 平台特定 Referer（优先级最高）
+  if (imageUrl.includes('twimg.com') || imageUrl.includes('x.com')) {
+    return 'https://twitter.com/'
+  }
+  if (
+    /cdninstagram\.com|fbcdn\.net|instagram\.com|picnob\.info|picnob\.com|pixnoy\.com|piokok\.com|pixwox\.com|dumpor\.com/i.test(
+      imageUrl,
+    ) ||
+    /https?:\/\/[^/]*scontent[^/]*\./i.test(imageUrl)
+  ) {
+    return 'https://www.instagram.com/'
+  }
+  if (imageUrl.includes('hdslb.com')) {
+    return 'https://www.bilibili.com/'
+  }
+
+  // 使用当前文章 URL 作为 Referer
+  if (currentArticleUrl) {
+    try {
+      return new URL(currentArticleUrl).origin + '/'
+    } catch {
+      // invalid URL, fall through
+    }
+  }
+
+  // 没有可用的 Referer
+  return null
+}
+
 /**
  * Register Chromium session-level network policies:
- * - Referer spoofing for platforms that hotlink-protect media (Twitter/X, Instagram, Bilibili)
+ * - Set Referer to current article URL for images (bypasses most hotlink protection)
+ * - Targeted Referer spoofing for specific platforms (Twitter/X, Instagram, Bilibili)
  * - User-Agent stripping for YouTube (removes Electron/Livo signatures)
  * - Cache-Control hardening for media resources (images → 7d, other media → 1d)
  * - Permission denial for default and login sessions
@@ -24,56 +65,27 @@ export function registerSessionPolicies(): void {
     registerPermissionDenyPolicy(session.fromPartition(partition))
   }
 
+  // Listen for article URL updates from renderer
+  ipcMain.on('set-current-article-url', (_event, url: string | null) => {
+    setCurrentArticleUrl(url)
+  })
+
   session.defaultSession.webRequest.onBeforeSendHeaders(
-    {
-      urls: [
-        '*://*.twimg.com/*',
-        '*://pbs.twimg.com/*',
-        '*://video.twimg.com/*',
-        '*://*.x.com/*',
-        '*://*.cdninstagram.com/*',
-        '*://*.fbcdn.net/*',
-        '*://*.instagram.com/*',
-        '*://*.picnob.info/*',
-        '*://*.picnob.com/*',
-        '*://*.pixnoy.com/*',
-        '*://*.piokok.com/*',
-        '*://*.pixwox.com/*',
-        '*://*.dumpor.com/*',
-        '*://media.picnob.info/*',
-        '*://media.picnob.com/*',
-        '*://media.pixnoy.com/*',
-        '*://media.piokok.com/*',
-        '*://*.hdslb.com/*',
-        '*://*.youtube.com/*',
-        '*://*.youtube-nocookie.com/*',
-        '*://*.googlevideo.com/*',
-        '*://*.ytimg.com/*',
-        '*://accounts.google.com/*',
-      ],
-    },
+    { urls: ['*://*/*'] },
     (details, callback) => {
+      if (details.resourceType === 'image') {
+        const referer = getImageReferer(details.url)
+        if (referer) {
+          details.requestHeaders['Referer'] = referer
+          details.requestHeaders['referer'] = referer
+        } else {
+          delete details.requestHeaders['Referer']
+          delete details.requestHeaders['referer']
+        }
+      }
+
+      // YouTube User-Agent stripping (removes Electron/Livo signatures)
       const url = details.url
-      if (url.includes('twimg.com') || url.includes('x.com')) {
-        details.requestHeaders['Referer'] = 'https://twitter.com/'
-        details.requestHeaders['referer'] = 'https://twitter.com/'
-      }
-
-      if (
-        /cdninstagram\.com|fbcdn\.net|instagram\.com|picnob\.info|picnob\.com|pixnoy\.com|piokok\.com|pixwox\.com|dumpor\.com/i.test(
-          url,
-        ) ||
-        /https?:\/\/[^/]*scontent[^/]*\./i.test(url)
-      ) {
-        details.requestHeaders['Referer'] = 'https://www.instagram.com/'
-        details.requestHeaders['referer'] = 'https://www.instagram.com/'
-      }
-
-      if (url.includes('hdslb.com')) {
-        details.requestHeaders['Referer'] = 'https://www.bilibili.com/'
-        details.requestHeaders['referer'] = 'https://www.bilibili.com/'
-      }
-
       if (
         url.includes('youtube.com') ||
         url.includes('youtube-nocookie.com') ||

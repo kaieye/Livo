@@ -42,6 +42,7 @@ export interface EntryWriteResult {
 export interface IEntryRepository {
   getEntryById(id: string): Entry | undefined
   insertEntry(entry: Entry): boolean
+  insertEntryWithId(entry: Entry): string | null
   insertEntries(entries: Entry[]): number
   insertEntriesWithResult(entries: Entry[]): EntryWriteResult
   replaceEntriesForFeed(feedId: string, entries: Entry[]): number
@@ -126,6 +127,11 @@ export class EntryRepository implements IEntryRepository {
     return this.upsertEntry(entry).added
   }
 
+  insertEntryWithId(entry: Entry): string | null {
+    const result = this.upsertEntry(entry)
+    return result.added || result.changed ? result.entryId : null
+  }
+
   insertEntries(entries: Entry[]): number {
     return this.insertEntriesWithResult(entries).addedCount
   }
@@ -198,8 +204,7 @@ export class EntryRepository implements IEntryRepository {
           readProgress: (row.read_progress ?? undefined) as number | undefined,
           isListened: row.is_listened === 1,
           listenProgress: (row.listen_progress ?? undefined) as
-            | number
-            | undefined,
+            number | undefined,
         }
         const key = makeKeepKey(entry)
         const existing = stateByKey.get(key)
@@ -645,7 +650,7 @@ export class EntryRepository implements IEntryRepository {
   private upsertEntry(
     entry: Entry,
     feedCache?: Map<string, Entry[]>,
-  ): { added: boolean; changed: boolean } {
+  ): { added: boolean; changed: boolean; entryId: string } {
     // 匹配阶段使用轻量行（截断正文、跳过大列），命中后再按 id 取完整行合并。
     // 批量写入时通过 feedCache 复用同一 feed 的轻量行，避免每条都重读全表。
     // 去重/合并的决策（insert / merge / noop）由 entry-write-plan 的纯函数
@@ -654,18 +659,18 @@ export class EntryRepository implements IEntryRepository {
     const plan = planEntryWrite(entry, liteRows)
 
     if (plan.type === 'noop') {
-      return { added: false, changed: false }
+      return { added: false, changed: false, entryId: '' }
     }
 
     if (plan.type === 'merge') {
       const existing = this.getEntryById(plan.targetId)
-      if (!existing) return { added: false, changed: false }
+      if (!existing) return { added: false, changed: false, entryId: '' }
       const changed = plan.applyMerge(existing)
       if (changed) {
         this.persistEntry(existing)
         EntryRepository.replaceCachedEntry(liteRows, existing)
       }
-      return { added: false, changed }
+      return { added: false, changed, entryId: existing.id }
     }
 
     this.db
@@ -714,6 +719,6 @@ export class EntryRepository implements IEntryRepository {
         entry.createdAt,
       )
     feedCache?.get(entry.feedId)?.push(entry)
-    return { added: true, changed: true }
+    return { added: true, changed: true, entryId: entry.id }
   }
 }
