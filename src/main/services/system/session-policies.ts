@@ -50,6 +50,8 @@ export function registerSessionPolicies(): void {
         '*://*.googlevideo.com/*',
         '*://*.ytimg.com/*',
         '*://accounts.google.com/*',
+        '*://*.csdnimg.cn/*',
+        '*://*.csdn.net/*',
       ],
     },
     (details, callback) => {
@@ -72,6 +74,11 @@ export function registerSessionPolicies(): void {
       if (url.includes('hdslb.com')) {
         details.requestHeaders['Referer'] = 'https://www.bilibili.com/'
         details.requestHeaders['referer'] = 'https://www.bilibili.com/'
+      }
+
+      if (url.includes('csdnimg.cn') || url.includes('csdn.net')) {
+        details.requestHeaders['Referer'] = 'https://blog.csdn.net/'
+        details.requestHeaders['referer'] = 'https://blog.csdn.net/'
       }
 
       if (
