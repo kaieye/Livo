@@ -60,6 +60,7 @@ vi.mock('../../database', () => ({
     entries: {
       getEntryById: mocks.getEntryById,
       insertEntry: mocks.insertEntry,
+      insertEntryWithId: vi.fn(() => 'mock-entry-id'),
       updateEntry: mocks.updateEntry,
     },
   }),
