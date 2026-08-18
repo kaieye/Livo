@@ -228,19 +228,21 @@ async function syncItems(
         }
       } else {
         const entry = buildEntryFromFeverItem(item, localFeedId)
-        getDb().entries.insertEntry(entry)
-        newEntries++
-        getDb().fever.upsertFeverItemMapping({
-          accountId: account.id,
-          feverItemId: item.id,
-          feverFeedId: item.feedId,
-          localFeedId,
-          localEntryId: entry.id,
-          remoteIsRead: item.isRead === 1,
-          remoteIsStarred: item.isSaved === 1,
-          isActive: true,
-          lastSeenAt: now,
-        })
+        const actualEntryId = getDb().entries.insertEntryWithId(entry)
+        if (actualEntryId) {
+          newEntries++
+          getDb().fever.upsertFeverItemMapping({
+            accountId: account.id,
+            feverItemId: item.id,
+            feverFeedId: item.feedId,
+            localFeedId,
+            localEntryId: actualEntryId,
+            remoteIsRead: item.isRead === 1,
+            remoteIsStarred: item.isSaved === 1,
+            isActive: true,
+            lastSeenAt: now,
+          })
+        }
       }
       itemsSynced++
     }
