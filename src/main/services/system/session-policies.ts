@@ -13,7 +13,8 @@ function registerPermissionDenyPolicy(targetSession: Electron.Session): void {
 
 /**
  * Register Chromium session-level network policies:
- * - Referer spoofing for platforms that hotlink-protect media (Twitter/X, Instagram, Bilibili)
+ * - Generic cross-origin Referer removal for images (bypasses most hotlink protection)
+ * - Targeted Referer spoofing for specific platforms (Twitter/X, Instagram, Bilibili)
  * - User-Agent stripping for YouTube (removes Electron/Livo signatures)
  * - Cache-Control hardening for media resources (images → 7d, other media → 1d)
  * - Permission denial for default and login sessions
@@ -25,37 +26,36 @@ export function registerSessionPolicies(): void {
   }
 
   session.defaultSession.webRequest.onBeforeSendHeaders(
-    {
-      urls: [
-        '*://*.twimg.com/*',
-        '*://pbs.twimg.com/*',
-        '*://video.twimg.com/*',
-        '*://*.x.com/*',
-        '*://*.cdninstagram.com/*',
-        '*://*.fbcdn.net/*',
-        '*://*.instagram.com/*',
-        '*://*.picnob.info/*',
-        '*://*.picnob.com/*',
-        '*://*.pixnoy.com/*',
-        '*://*.piokok.com/*',
-        '*://*.pixwox.com/*',
-        '*://*.dumpor.com/*',
-        '*://media.picnob.info/*',
-        '*://media.picnob.com/*',
-        '*://media.pixnoy.com/*',
-        '*://media.piokok.com/*',
-        '*://*.hdslb.com/*',
-        '*://*.youtube.com/*',
-        '*://*.youtube-nocookie.com/*',
-        '*://*.googlevideo.com/*',
-        '*://*.ytimg.com/*',
-        '*://accounts.google.com/*',
-        '*://*.csdnimg.cn/*',
-        '*://*.csdn.net/*',
-      ],
-    },
+    { urls: ['*://*/*'] },
     (details, callback) => {
       const url = details.url
+      const referer =
+        details.requestHeaders['Referer'] ||
+        details.requestHeaders['referer'] ||
+        ''
+
+      // Generic cross-origin Referer removal for image resources
+      // This bypasses most hotlink protection without per-site configuration
+      if (
+        details.resourceType === 'image' &&
+        referer &&
+        !referer.startsWith(url)
+      ) {
+        try {
+          const requestOrigin = new URL(url).origin
+          const refererOrigin = new URL(referer).origin
+          if (requestOrigin !== refererOrigin) {
+            delete details.requestHeaders['Referer']
+            delete details.requestHeaders['referer']
+          }
+        } catch {
+          // Invalid URL, remove Referer to be safe
+          delete details.requestHeaders['Referer']
+          delete details.requestHeaders['referer']
+        }
+      }
+
+      // Targeted Referer spoofing for platforms that need specific Referer values
       if (url.includes('twimg.com') || url.includes('x.com')) {
         details.requestHeaders['Referer'] = 'https://twitter.com/'
         details.requestHeaders['referer'] = 'https://twitter.com/'
@@ -76,11 +76,7 @@ export function registerSessionPolicies(): void {
         details.requestHeaders['referer'] = 'https://www.bilibili.com/'
       }
 
-      if (url.includes('csdnimg.cn') || url.includes('csdn.net')) {
-        details.requestHeaders['Referer'] = 'https://blog.csdn.net/'
-        details.requestHeaders['referer'] = 'https://blog.csdn.net/'
-      }
-
+      // YouTube User-Agent stripping (removes Electron/Livo signatures)
       if (
         url.includes('youtube.com') ||
         url.includes('youtube-nocookie.com') ||
