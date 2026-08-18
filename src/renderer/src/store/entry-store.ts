@@ -595,8 +595,12 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     if (!entry) {
       if (!get().selectedEntry && !get().isSelectedEntryHydrating) return
       set({ selectedEntry: null, isSelectedEntryHydrating: false })
+      window.api.setArticleUrl?.(null)
       return
     }
+
+    // Notify main process of article URL for image Referer
+    window.api.setArticleUrl?.(entry.url || null)
 
     const selectedEntry = getInitialSelectedEntry(entry)
     const cachedEntry = getCachedEntryDetail(entry.id)

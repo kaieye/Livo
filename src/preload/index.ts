@@ -61,8 +61,7 @@ import type {
 } from '../shared/types'
 
 type AgentRunResponse =
-  | ({ success: true } & AgentRunSummary)
-  | { success: false; error: string }
+  ({ success: true } & AgentRunSummary) | { success: false; error: string }
 
 type AgentToolEventPayload = { requestId: string } & AgentToolExecutionEvent
 
@@ -334,12 +333,7 @@ const api = {
     search: (
       query: string,
       platform?:
-        | 'all'
-        | 'youtube'
-        | 'bilibili'
-        | 'x'
-        | 'instagram'
-        | 'wechat-mp',
+        'all' | 'youtube' | 'bilibili' | 'x' | 'instagram' | 'wechat-mp',
     ) => invokeIpc(IPC.DISCOVER_SEARCH, query, platform),
     searchWechatMp: (
       query: string,
@@ -619,6 +613,11 @@ const api = {
     connect: () => invokeIpc(IPC.WS_CONNECT),
     disconnect: () => invokeIpc(IPC.WS_DISCONNECT),
     status: () => invokeIpc(IPC.WS_STATUS),
+  },
+
+  // Fire-and-forget: notify main process of current article URL for image Referer
+  setArticleUrl: (url: string | null) => {
+    ipcRenderer.send('set-current-article-url', url)
   },
 
   // Events

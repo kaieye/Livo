@@ -2948,6 +2948,8 @@ export function createWebAPI(): ElectronAPI {
       status: async () => ({ connected: false }),
     },
 
+    setArticleUrl: () => {},
+
     actions: {
       sync: async () => ({ success: true }),
     },
